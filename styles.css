@@ -668,3 +668,24 @@ td a.btn-quiet{text-decoration:none;color:var(--ink);display:inline-block}
 #scope-dialog{width:min(520px,calc(100vw - 32px))}
 #scope-dialog .presets{margin:10px 0 14px}
 #scope-dialog .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* All opportunities: evidence, confidence and warnings under each row */
+tr.sub>td{padding:0 12px 10px;border-top:0}
+.opp-d>summary{cursor:pointer;font-size:12.5px;color:var(--signal-ink,#4338CA);font-weight:600;padding:2px 0;width:max-content}
+.opp-d>summary:focus-visible{outline:2px solid #4F46E5;outline-offset:2px;border-radius:4px}
+.opp-g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:10px;padding:14px 16px;background:var(--bg,#F8FAFC);border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.5}
+.opp-g h4{margin:0 0 6px;font-size:12.5px;font-weight:650}
+.opp-g h4:not(:first-child){margin-top:12px}
+.opp-g p{margin:0 0 6px}
+.opp-g ul{margin:0 0 6px;padding-left:18px}
+.opp-g ul.why{list-style:none;padding-left:0}
+.opp-g ul.why li{display:flex;gap:8px;align-items:baseline;margin-bottom:3px}
+.opp-g ul.why b{min-width:30px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+.opp-g ul.why b.up{color:var(--gain,#15803D)}
+.opp-g ul.why b.down{color:var(--risk,#B91C1C)}
+@media (max-width:900px){.opp-g{grid-template-columns:1fr}}
+@media (max-width:900px){tr.sub .opp-g{position:sticky;left:0;width:calc(100vw - 80px);box-sizing:border-box}}
+.rep-t{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 18px}
+.rep-t th,.rep-t td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.rep-t th{font-size:12px;color:var(--muted);font-weight:600}
+.rep-t .r{text-align:right;white-space:nowrap}
+@media print{.rep-t{font-size:11px}.rep-t tr{break-inside:avoid}}

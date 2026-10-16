@@ -113,9 +113,47 @@ function writeComparisonExports(dir) {
     assert.equal(real.length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('All opportunities: totals match the dashboard, filters, evidence and CSV export work', async () => {
+    await page.goto(base + 'app.html?demo'); await toApp();
+    const headline = (await text('.hero h1, .v-hero h1, #view h1')).match(/\d[\d.,]*K?–[\d.,]+K?/);
+    await go('#opps');
+    assert.equal(await text('#view h1'), 'All opportunities');
+    const growth = await text('.strip .stat.gain b');
+    assert.ok(headline && growth.includes(headline[0]), `growth ${growth} matches headline ${headline && headline[0]}`);
+    const navCount = await text('.nav a[data-view="opps"] .count');
+    const rows0 = parseInt((await text('#t-opp-meta')).replace(/,/g, ''), 10);
+    assert.equal(String(rows0), navCount.replace(/,/g, ''), 'nav count = rows');
+    await page.selectOption('select[data-tf="t-opp"][data-key="lvl"]', 'High');
+    const levels = await page.$$eval('#t-opp tbody tr:not(.sub) td:nth-child(4) .tag', t => t.map(x => x.textContent));
+    assert.ok(levels.length && levels.every(l => l === 'High'), 'confidence filter');
+    await page.selectOption('select[data-tf="t-opp"][data-key="lvl"]', '');
+    await page.click('#t-opp .opp-d summary');
+    assert.ok(/Confidence: (High|Medium|Low) \(\d+\/100\)/.test(await text('#t-opp .opp-d[open]')), 'evidence opens with a scored confidence');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-tx="t-opp"]')]);
+    const csvText = fs.readFileSync(await dl.path(), 'utf8');
+    assert.ok(/Opportunity.*Measured.*Clicks \/ month \(est\.\).*Confidence.*Effort.*Suggested action/.test(csvText.split('\n')[0]), 'CSV header');
+    assert.equal(csvText.trim().split('\n').length - 1, rows0, 'every row exported');
+  });
+
+  await testAsync('Losing ground: a brand-new page in the current export renders as new', async () => {
+    const mk = (pages, start) => { const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Date', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(Array.from({ length: 30 }, (_, i) => { const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return [d.toISOString().slice(0, 10), 100, 4000, 0.025, 6]; }))), 'Chart');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Top queries', 'Clicks', 'Impressions', 'CTR', 'Position'], ['blue widgets', 40, 1000, 0.04, 5], ['red widgets', 30, 900, 0.033, 6]]), 'Queries');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Top pages', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(pages)), 'Pages'); return wb; };
+    const base10 = Array.from({ length: 10 }, (_, i) => ['https://example.com/p' + i, 20, 800, 0.025, 6]);
+    const a = path.join(dir, 'example.com-old.xlsx'), b = path.join(dir, 'example.com-new.xlsx');
+    XLSX.writeFile(mk(base10, '2026-01-01'), a);
+    XLSX.writeFile(mk(base10.concat([['https://example.com/launch', 300, 5000, 0.06, 3]]), '2026-02-01'), b);
+    errors.length = 0;
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', [a, b]); await toApp(); await go('#decay');
+    const row = await page.$$eval('#t-dr tbody tr', t => t.map(x => x.textContent.replace(/\s+/g, ' ')).find(x => x.includes('/launch')) || '');
+    assert.ok(/new/.test(row) && /300/.test(row), 'new page listed: ' + row);
+    assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'queries', 'ai']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'queries', 'ai']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);

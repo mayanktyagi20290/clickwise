@@ -327,31 +327,63 @@
     // ── Losing ground (content decay) ──
     let decay = null;
     if (D.prevP && D.prevP.length) {
-      const prevMap = new Map(D.prevP.map(r => [r.p, r]));
+      // Periods of different length are compared like for like: the previous period's clicks and
+      // impressions are scaled to this period's length (CTR and position are rates, so they are not).
+      const prevDays = D0.prevDays || (D.prevC && D.prevC.length) || spanDays(D0.prevStart, D0.prevEnd) || days;
+      const scale = Math.abs(days / prevDays - 1) > 0.02 ? days / prevDays : 1;
+      const norm = r => scale === 1 ? r : { ...r, clicks: r.clicks * scale, impr: r.impr * scale };
+      // A row missing from a list that hit its row limit is unknown, not zero: it can only be below the
+      // smallest row in the list (exports are sorted by clicks). It is then counted at that bound.
+      const cap = D0.rowCap || (D0.source === 'file' ? 1000 : null);
+      const truncP = !!cap && D0.P.length >= cap, truncQ = !!cap && D0.Q.length >= cap;
+      const minOf = rows => rows.reduce((m, r) => Math.min(m, r.clicks), Infinity);
+      const minP = truncP ? minOf(D0.P) : 0, minQ = truncQ ? minOf(D0.Q) : 0;
+      const absent = (trunc, min) => trunc ? { clicks: min, impr: null, ctr: null, pos: null, bound: true } : { clicks: 0, impr: 0, ctr: 0, pos: 0, gone: true };
+      const deltas = (pr, cu) => ({ clicks: change(cu.clicks, pr.clicks), impr: cu.impr == null ? null : change(cu.impr, pr.impr), ctr: cu.ctr == null || !cu.impr ? null : cu.ctr - pr.ctr, pos: cu.pos && pr.pos ? cu.pos - pr.pos : null });
+      const prevP = D.prevP.map(norm);
+      const prevMap = new Map(prevP.map(r => [r.p, r]));
       const curMap = new Map(P.map(r => [r.p, r]));
-      const minPrev = Math.max(5, pct(D.prevP.map(r => r.clicks), 0.6));
-      const pages = [];
+      const minPrev = Math.max(5, pct(prevP.map(r => r.clicks), 0.6));
+      const pages = [], slipPages = [];
       prevMap.forEach((pr, url) => {
-        if (isExcluded(url) || pr.clicks < minPrev) return;
-        const cu = curMap.get(url) || { clicks: 0, impr: 0, ctr: 0, pos: 0 };
+        if (isExcluded(url)) return;
+        const cu = curMap.get(url) || absent(truncP, minP);
         const ch = change(cu.clicks, pr.clicks);
-        if (ch !== null && ch <= -25) pages.push({ p: url, path: pathOf(url), prev: pr, cur: cu, lost: pr.clicks - cu.clicks, ch, posDelta: cu.pos && pr.pos ? cu.pos - pr.pos : null, reason: decayReason(pr, cu) });
+        const row = { p: url, path: pathOf(url), prev: pr, cur: cu, lost: Math.max(0, pr.clicks - cu.clicks), ch, posDelta: cu.pos && pr.pos ? cu.pos - pr.pos : null, deltas: deltas(pr, cu), uncertain: !!cu.bound, reason: decayReason(pr, cu, minP) };
+        if (pr.clicks >= minPrev && ch !== null && ch <= -25) pages.push(row);
+        else if (!cu.bound && !cu.gone && pr.impr >= pageFloor && cu.impr) {
+          // early warnings: clicks have not fallen a quarter yet, but rank, demand or CTR is slipping
+          const why = slipWhy(pr, cu);
+          if (why.length) slipPages.push({ ...row, why, imprLost: Math.max(0, pr.impr - cu.impr) });
+        }
       });
       pages.sort((a, b) => b.lost - a.lost);
-      const qMinPrev = Math.max(5, pct((D.prevQ || []).map(r => r.clicks), 0.7));
-      const queries = (D.prevQ || []).filter(pr => !isBrand(pr.q) && pr.clicks >= qMinPrev);
+      slipPages.sort((a, b) => b.prev.impr - a.prev.impr);
+      const prevQ = (D.prevQ || []).map(norm);
+      const qMinPrev = Math.max(5, pct(prevQ.map(r => r.clicks), 0.7));
       const curQMap = new Map(Q.map(r => [r.q, r]));
-      const qDecay = queries.map(pr => {
-        const cu = curQMap.get(pr.q) || { clicks: 0, impr: 0, ctr: 0, pos: 0 };
-        return { q: pr.q, prev: pr, cur: cu, lost: pr.clicks - cu.clicks, ch: change(cu.clicks, pr.clicks), reason: decayReason(pr, cu) };
-      }).filter(r => r.ch !== null && r.ch <= -30).sort((a, b) => b.lost - a.lost);
+      const qDecay = [], slipQueries = [];
+      prevQ.forEach(pr => {
+        if (isBrand(pr.q)) return;
+        const cu = curQMap.get(pr.q) || absent(truncQ, minQ);
+        const row = { q: pr.q, prev: pr, cur: cu, lost: Math.max(0, pr.clicks - cu.clicks), ch: change(cu.clicks, pr.clicks), deltas: deltas(pr, cu), uncertain: !!cu.bound, reason: decayReason(pr, cu, minQ) };
+        if (pr.clicks >= qMinPrev && row.ch !== null && row.ch <= -30) qDecay.push(row);
+        else if (!cu.bound && !cu.gone && pr.impr >= imprFloor && cu.impr) { const why = slipWhy(pr, cu); if (why.length) slipQueries.push({ ...row, why }); }
+      });
+      qDecay.sort((a, b) => b.lost - a.lost);
+      slipQueries.sort((a, b) => b.prev.impr - a.prev.impr);
+      // The same rule in reverse: a page missing from a previous list that hit its row limit was not
+      // necessarily new; it had at most the smallest previous row, so its gain is counted from there.
+      const prevCap = D0.prevRowCap || (D0.source === 'file' ? 1000 : null);
+      const truncPrevP = !!prevCap && D.prevP.length >= prevCap;
+      const minPrevRow = truncPrevP ? minOf(prevP) : 0;
       const rising = [];
       curMap.forEach((cu, url) => {
-        const pr = prevMap.get(url);
-        if (cu.clicks >= minPrev && (!pr || change(cu.clicks, pr.clicks) >= 40)) rising.push({ p: url, path: pathOf(url), cur: cu, prev: pr || null, won: cu.clicks - (pr ? pr.clicks : 0) });
+        const pr = prevMap.get(url) || (truncPrevP ? { clicks: minPrevRow, impr: null, ctr: null, pos: null, bound: true } : null);
+        if (cu.clicks >= minPrev && (!pr || change(cu.clicks, pr.clicks) >= 40)) rising.push({ p: url, path: pathOf(url), cur: cu, prev: pr || null, won: cu.clicks - (pr ? pr.clicks : 0), uncertain: !!(pr && pr.bound) });
       });
       rising.sort((a, b) => b.won - a.won);
-      decay = { pages, queries: qDecay, rising, lost: sum(pages, 'lost') };
+      decay = { pages, queries: qDecay, rising, slipping: { pages: slipPages, queries: slipQueries }, lost: sum(pages, 'lost'), scale, prevDays, truncated: { pages: truncP, queries: truncQ, prevPages: truncPrevP } };
     }
     let trend = null;
     if (D.C && D.C.length >= 14) {
@@ -403,7 +435,7 @@
       });
       return [...m.entries()].map(([k, rows]) => {
         const a = agg(rows);
-        const bench = expCtr(a.pos);
+        const bench = expAt(a.pos);
         // status: what this section needs next
         const status = a.pos > 10 ? 'work' : a.ctr < bench * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= bench * 0.8 ? 'strong' : 'steady';
         return { key: k, rows: rows.sort((x, y) => y.clicks - x.clicks), ...a, bench, status };
@@ -514,7 +546,7 @@
     const method = { days, start: D0.start || null, end: D0.end || null, assumedDays: !D0.days, curve: curve.points, sitePositions: curve.sitePositions, ...EST };
 
     return {
-      Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
+      Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor, pageFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
       prevSite, intents, sections1, sections2, tiers, potential, potentialMonthly, plan, signals, posDist, ctrByPos, coverage, method, curve, pageCurve, setAside, pageFlags,
       brandRx: brandRegex(S.brand), isBrand, isExcluded, data: D, ignored: ign
@@ -522,7 +554,8 @@
   }
   const STEMSTOP = new Set('a an the for and or to in of on at by with from is are how what best top near me my your vs'.split(' '));
 
-  function decayReason(pr, cu) {
+  function decayReason(pr, cu, min) {
+    if (cu.bound) return `not in this export's rows any more, so at most ${fmtN(min)} clicks now (the export lists only its top rows)`;
     if (!cu.impr) return 'no longer shows in search';
     const imprCh = change(cu.impr, pr.impr);
     if (cu.pos && pr.pos && cu.pos - pr.pos > 2) return `position fell ${pr.pos.toFixed(1)} → ${cu.pos.toFixed(1)}`;
@@ -530,6 +563,16 @@
     if (cu.ctr < pr.ctr * 0.7) return `CTR fell ${pr.ctr.toFixed(1)}% → ${cu.ctr.toFixed(1)}% at similar rank`;
     return 'mixed: smaller drops in rank and CTR';
   }
+  // Signals that a page or search is starting to slip before its clicks fall far.
+  function slipWhy(pr, cu) {
+    const out = [];
+    if (cu.pos && pr.pos && cu.pos - pr.pos >= 2 && cu.pos > 3) out.push(`position ${pr.pos.toFixed(1)} → ${cu.pos.toFixed(1)}`);
+    const ic = change(cu.impr, pr.impr);
+    if (ic !== null && ic <= -40) out.push(`impressions down ${Math.abs(ic).toFixed(0)}%`);
+    if (pr.ctr >= 1 && cu.ctr <= pr.ctr * 0.7 && cu.pos && pr.pos && Math.abs(cu.pos - pr.pos) < 1) out.push(`CTR ${pr.ctr.toFixed(1)}% → ${cu.ctr.toFixed(1)}% at the same position`);
+    return out;
+  }
+  function spanDays(a, b) { if (!a || !b) return null; const n = Math.round((new Date(b) - new Date(a)) / 864e5) + 1; return n > 0 ? n : null; }
 
   function fmtN(n) {
     if (n == null || isNaN(n)) return '—';

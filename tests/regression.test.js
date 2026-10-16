@@ -82,4 +82,13 @@ test('filters work on the export', () => {
   assert.ok(v.some(e => /comparison period/.test(e)), 'needs comparison period, explained');
 });
 
+test('opportunity engine: growth equals the headline, no invented pages, inferred causes not High', () => {
+  const O = W.CW_OPPS.build(A, D);
+  assert.near(O.totals.growth.lo, A.potential.lo, 1e-6, 'low'); assert.near(O.totals.growth.hi, A.potential.hi, 1e-6, 'high');
+  assert.equal(O.totals.recovery.n, 0, 'no comparison period in this export');
+  assert.ok(O.items.every(it => !it.landing), 'an Excel export has no query-page rows, so no ranking page is named');
+  assert.ok(O.items.filter(it => it.type === 'answer-box').every(it => it.confidence.level === 'Medium' || it.confidence.level === 'Low'), 'answer boxes capped');
+  assert.ok(O.warnings.some(w => /top 1,000/.test(w)) && O.warnings.some(w => /not attributed/.test(w)), 'row limit and unattributed clicks disclosed');
+  assert.ok(O.items.length > 300, `${O.items.length} items`);
+});
 process.exitCode = report('regression') ? 1 : 0;

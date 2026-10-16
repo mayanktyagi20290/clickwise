@@ -395,6 +395,54 @@
     </div>`;
   }
 
+  // ── All opportunities: one ranked list with evidence, impact, confidence and effort ──
+  V.opps = (A, D) => {
+    const O = A.opps;
+    if (!O) return { html: head('All opportunities', '') + '<p class="empty">Not available for this data.</p>' };
+    const lvlTag = l => `<span class="tag ${l === 'High' ? 'gain' : l === 'Medium' ? 'watch' : ''}">${esc(l)}</span>`;
+    const KIND = { growth: 'growth', recovery: 'recovery', stake: 'at stake', none: '' };
+    const rows = O.items.map(it => ({ ...it, label: it.subject.label, lo: it.impact.lo, hi: it.impact.hi, score: it.confidence.score, lvl: it.confidence.level, effortN: { Low: 1, Medium: 2, High: 3 }[it.effort.level], kind: it.impact.kind }));
+    const m = it => it.measured.clicks == null ? `not in the export (≤ ${fmtN(it.measured.upTo)} clicks)` : `#${it.measured.pos ? it.measured.pos.toFixed(1) : '—'} · ${fmtN(it.measured.impr)} impr. · ${pctf(it.measured.ctr)} CTR`;
+    const impactCell = it => it.impact.kind === 'none' ? '<span class="flat">Watch</span>'
+      : `<span class="${it.impact.kind === 'growth' ? 'gainv' : 'lossv'}">${range(it.impact.lo, it.impact.hi)}</span><br><small class="flat">${esc(KIND[it.impact.kind])}${it.impact.counted ? '' : ' · not in total'}</small>`;
+    const subj = it => it.subject.kind === 'page' ? urlCell(it.subject.url, it.subject.label) : serp(it.subject.label);
+    const list = a => a.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    const sub = it => `<tr class="sub"><td colspan="6"><details class="opp-d"><summary>Evidence, confidence and warnings</summary>
+        <div class="opp-g">
+          <div><h4>Why it was picked</h4><p>${esc(it.reason)}</p>${list(it.evidence)}${it.previous ? `<p class="flat">Measured ${esc(O.period.start || '')} – ${esc(O.period.end || '')} against ${esc(O.period.prevStart || 'the previous period')}${O.period.prevEnd ? ' – ' + esc(O.period.prevEnd) : ''}.</p>` : ''}</div>
+          <div><h4>Impact (estimate)</h4><p>${esc(it.impact.note)}.${it.impact.basis ? ' ' + esc(it.impact.basis) + '.' : ''}</p>${it.impact.overlap ? `<p class="flat">${esc(it.impact.overlap)}.</p>` : ''}
+            <h4>Confidence: ${esc(it.confidence.level)} (${it.confidence.score}/100)</h4><ul class="why">${it.confidence.why.map(w => `<li><b class="${w.points >= 0 ? 'up' : 'down'}">${w.points > 0 ? '+' : ''}${w.points}</b> ${esc(w.text)}</li>`).join('')}</ul></div>
+          <div><h4>What to do</h4><p>${esc(it.action)}</p><p><span class="tag">${esc(it.effort.level)} effort</span> ${esc(it.effort.why)}</p>
+            ${it.warnings.length ? `<h4>Warnings</h4>${list(it.warnings)}` : ''}<p><a href="#${esc(it.view)}">Open ${esc(TYPE_VIEW[it.view] || 'the list')}</a></p></div>
+        </div></details></td></tr>`;
+    const cols = [
+      { k: 'label', l: 'Opportunity', cls: 'q', f: it => `<span class="tag">${esc(it.typeLabel)}</span><br>${subj(it)}`, csv: it => it.subject.url || it.subject.label },
+      { k: 'typeLabel', l: 'Type', sort: false, csv: it => it.typeLabel, f: () => '', hide: true },
+      { k: 'measuredS', l: 'Measured', sort: false, f: it => `<small>${m(it)}</small>`, csv: it => m(it) },
+      { k: 'lo', l: 'Clicks / month (est.)', r: 1, f: impactCell, csv: it => it.impact.kind === 'none' ? '' : `${Math.round(it.impact.lo)}–${Math.round(it.impact.hi)} ${KIND[it.impact.kind]}${it.impact.counted ? '' : ' (not in total)'}` },
+      { k: 'score', l: 'Confidence', f: it => lvlTag(it.confidence.level) + `<br><small class="flat">${it.confidence.score}/100</small>`, csv: it => `${it.confidence.level} (${it.confidence.score}): ${it.confidence.why.map(w => (w.points > 0 ? '+' : '') + w.points + ' ' + w.text).join('; ')}` },
+      { k: 'effortN', l: 'Effort', f: it => `<span class="tag">${esc(it.effort.level)}</span>`, csv: it => it.effort.level },
+      { k: 'action', l: 'Suggested action', sort: false, f: it => `<small>${esc(it.action)}</small>`, csv: it => it.action + (it.warnings.length ? ' | Warnings: ' + it.warnings.join(' ') : '') }
+    ].filter(c => !c.hide);
+    const types = [...new Set(O.items.map(it => it.type))];
+    const g = O.totals.growth, r = O.totals.recovery;
+    const per = O.period;
+    const html = head('All opportunities', `Every recommendation in one list, ranked by its conservative estimate. Measured over ${per.assumed ? 'an assumed ' + per.days + ' days' : `${per.days} days (${esc(per.start)} to ${esc(per.end)})`}${per.prevStart ? `, compared with ${esc(per.prevStart)} to ${esc(per.prevEnd)}` : ''}. Metrics are measured; clicks a month are estimates.`) +
+      `<div class="strip">${stat(O.items.length.toLocaleString(), 'opportunities', '')}${stat(range(g.lo, g.hi), `clicks a month of growth (${g.n} searches, each counted once)`, 'gain')}${r.n ? stat(range(r.lo, r.hi), `clicks a month that could come back (${r.n} pages)`, 'risk') : ''}${stat(O.byLevel.High.toLocaleString(), 'high confidence', 'gain')}</div>` +
+      (O.warnings.length ? `<div class="note"><b>About this data.</b><ul>${O.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '') +
+      `<section class="panel">${table('t-opp', cols, rows, { sort: 'lo', file: 'opportunities', searchKeys: ['label'], placeholder: 'Filter by search or page', pageSize: 25, sub,
+        filters: [
+          { key: 'type', label: 'Type', options: types.map(t => [t, O.TYPES[t].label]), test: (it, v) => it.type === v },
+          { key: 'lvl', label: 'Confidence', options: [['High', 'High'], ['Medium', 'Medium'], ['Low', 'Low']], test: (it, v) => it.lvl === v },
+          { key: 'eff', label: 'Effort', options: [['Low', 'Low'], ['Medium', 'Medium'], ['High', 'High']], test: (it, v) => it.effort.level === v },
+          { key: 'kind', label: 'Impact', options: [['growth', 'Growth'], ['recovery', 'Recovery'], ['stake', 'At stake'], ['none', 'Warnings only']], test: (it, v) => it.kind === v }
+        ],
+        empty: 'No opportunities match these filters.' })}</section>
+      <div class="note"><b>Reading the numbers.</b> Growth is counted once per search: when the same search appears under several types, the largest estimate is the one added up, and page-title estimates are never added because they overlap the searches on that page. Recovery assumes 30–80% of lost clicks return. Competing pages and early warnings carry no total. Confidence is a score from fixed rules (data volume, period, where expected CTR comes from, and known results-page effects); open a row to see every reason.</div>${methodNote(A)}`;
+    return { html, mount: () => drawTable('t-opp') };
+  };
+  const TYPE_VIEW = { quickwins: 'Almost page one', ctr: 'Titles to rewrite', ai: 'AI search visibility', decay: 'Losing ground', cannibal: 'Competing pages' };
+
   V.plan = (A) => ({ html: head('Action plan', 'Every recommendation, ranked by its conservative (low) estimate of clicks per month. Ranges overlap between actions, so do not add them up.') +
     `<section class="panel">${ledger(A.plan)}</section>${methodNote(A)}` });
 
@@ -460,17 +508,21 @@
           <li>Or connect Search Console with “Compare with the previous period” ticked.</li></ul></div>` +
         (t ? `<section class="panel"><div class="panel-h"><h2>First half vs second half of this range</h2></div><div class="panel-b"><div class="strip">${stat((t.clicks >= 0 ? '▲ ' : '▼ ') + Math.abs(t.clicks).toFixed(1) + '%', 'clicks', t.clicks >= 0 ? 'gain' : 'risk')}${stat((t.impr >= 0 ? '▲ ' : '▼ ') + Math.abs(t.impr).toFixed(1) + '%', 'impressions', t.impr >= 0 ? 'gain' : 'risk')}${stat((t.ctr >= 0 ? '▲ ' : '▼ ') + Math.abs(t.ctr).toFixed(2) + ' pts', 'CTR', t.ctr >= 0 ? 'gain' : 'risk')}</div></div></section>` : '') };
     }
-    const pcols = [C.page, { k: 'prevC', l: 'Clicks before', r: 1, f: r => fmtN(r.prev.clicks), csv: r => r.prev.clicks }, { k: 'curC', l: 'Clicks now', r: 1, f: r => fmtN(r.cur.clicks), csv: r => r.cur.clicks }, { k: 'ch', l: 'Change', r: 1, f: r => `<span class="lossv">${r.ch.toFixed(0)}%</span>` }, { k: 'reason', l: 'Likely cause', sort: false }];
+    const pcols = [C.page, { k: 'prevC', l: 'Clicks before', r: 1, f: r => fmtN(r.prev.clicks), csv: r => r.prev.clicks }, { k: 'curC', l: 'Clicks now', r: 1, f: r => fmtN(r.cur.clicks), csv: r => r.cur.clicks }, { k: 'ch', l: 'Change', r: 1, f: r => `<span class="lossv">${r.ch.toFixed(0)}%</span>` }, { k: 'reason', l: 'Likely cause', sort: false, f: r => esc(r.reason) + (r.uncertain ? ' <span class="tag watch" title="The current export stops at its row limit, so this row\'s current clicks are only known to be below the smallest row listed">upper bound</span>' : ''), csv: r => r.reason }];
+    const slip = dc.slipping || { pages: [], queries: [] };
+    const scol = { k: 'whyS', l: 'What is slipping', sort: false, f: r => r.why.map(w => `<span class="tag watch">${esc(w)}</span>`).join(' '), csv: r => r.why.join('; ') };
     dc.pages.forEach(r => { r.prevC = r.prev.clicks; r.curC = r.cur.clicks; });
     dc.queries.forEach(r => { r.prevC = r.prev.clicks; r.curC = r.cur.clicks; });
     dc.rising.forEach(r => { r.curC = r.cur.clicks; r.prevC = r.prev ? r.prev.clicks : 0; });
     const html = head('Losing ground', `Compared with ${D.prevStart ? esc(D.prevStart) + (D.prevEnd ? ' – ' + esc(D.prevEnd) : '') : 'the previous period in your export'}. Pages that lost at least a quarter of their clicks, with the most likely cause.`) +
-      (D.compareNote ? `<div class="note warn">${esc(D.compareNote)}</div>` : '') +
-      `<div class="strip">${stat(dc.pages.length, 'pages losing clicks', 'risk')}${stat('−' + fmtN(dc.lost), 'clicks lost across those pages', 'risk')}${stat(dc.rising.length, 'pages gaining', 'gain')}</div>
+      (D.compareNote ? `<div class="note warn">${esc(D.compareNote)}</div>` : dc.scale !== 1 ? `<div class="note">The previous period has ${dc.prevDays} days and this one ${A.days}, so its clicks and impressions were scaled to ${A.days} days before comparing.</div>` : '') +
+      `<div class="strip">${stat(dc.pages.length, 'pages losing clicks', 'risk')}${stat('−' + fmtN(dc.lost), 'clicks lost across those pages', 'risk')}${stat(dc.rising.length, 'pages gaining', 'gain')}${stat(slip.pages.length + slip.queries.length, 'early warnings (rank, impressions or CTR)', 'watch')}</div>
       <section class="panel"><div class="panel-h"><h2>Pages losing clicks</h2></div>${table('t-dp', pcols, dc.pages, { sort: 'lost', file: 'losing-ground-pages', searchKeys: ['path'], empty: 'No page lost more than 25% of its clicks.' })}</section>
       <section class="panel"><div class="panel-h"><h2>Queries losing clicks</h2></div>${table('t-dq', [C.q, pcols[1], pcols[2], pcols[3], pcols[4]], dc.queries, { sort: 'lost', file: 'losing-ground-queries' })}</section>
-      <section class="panel"><div class="panel-h"><h2>Pages gaining</h2><p>Worth studying: what changed here can often be copied to the decaying pages.</p></div>${table('t-dr', [C.page, pcols[1], pcols[2], { k: 'won', l: 'Clicks won', r: 1, f: r => gainCell(r.won) }], dc.rising, { sort: 'won', file: 'gaining-pages', searchKeys: ['path'] })}</section>`;
-    return { html, mount: () => { drawTable('t-dp'); drawTable('t-dq'); drawTable('t-dr'); } };
+      <section class="panel"><div class="panel-h"><h2>Early warnings</h2><p>Clicks have not fallen a quarter yet, but position, impressions or CTR moved the wrong way. Check these before they show up above.</p></div>${table('t-ds', [C.page, { k: 'prevI', l: 'Impressions before', r: 1, f: r => fmtN(r.prev.impr), csv: r => Math.round(r.prev.impr) }, { k: 'curI', l: 'Impressions now', r: 1, f: r => fmtN(r.cur.impr), csv: r => r.cur.impr }, scol], slip.pages.map(r => ({ ...r, prevI: r.prev.impr, curI: r.cur.impr })), { sort: 'prevI', file: 'early-warnings-pages', searchKeys: ['path'], pageSize: 20, empty: 'No pages slipping.' })}
+        ${slip.queries.length ? `<h3 class="sub-h">Searches</h3>${table('t-dsq', [C.q, { k: 'prevI', l: 'Impressions before', r: 1, f: r => fmtN(r.prev.impr), csv: r => Math.round(r.prev.impr) }, { k: 'curI', l: 'Impressions now', r: 1, f: r => fmtN(r.cur.impr), csv: r => r.cur.impr }, scol], slip.queries.map(r => ({ ...r, prevI: r.prev.impr, curI: r.cur.impr })), { sort: 'prevI', file: 'early-warnings-searches', pageSize: 20 })}` : ''}</section>
+      <section class="panel"><div class="panel-h"><h2>Pages gaining</h2><p>Worth studying: what changed here can often be copied to the decaying pages.</p></div>${table('t-dr', [C.page, { k: 'prevC', l: 'Clicks before', r: 1, f: r => !r.prev ? '<span class="flat">new</span>' : r.uncertain ? `≤ ${fmtN(r.prev.clicks)} <span class="tag watch" title="The earlier export stops at its row limit, so this page\'s earlier clicks are only known to be below the smallest row listed">upper bound</span>` : fmtN(r.prev.clicks), csv: r => r.prev ? (r.uncertain ? '<=' : '') + Math.round(r.prev.clicks) : 0 }, pcols[2], { k: 'won', l: 'Clicks won', r: 1, f: r => gainCell(r.won) + (r.uncertain ? '<br><small class="flat">at least</small>' : ''), csv: r => Math.round(r.won) }], dc.rising, { sort: 'won', file: 'gaining-pages', searchKeys: ['path'] })}</section>`;
+    return { html, mount: () => { ['t-dp', 't-dq', 't-ds', 't-dsq', 't-dr'].forEach(id => drawTable(id)); } };
   };
 
   V.ai = (A) => {
@@ -539,7 +591,8 @@
 
 
   // ── Folder deep dive ──
-  function statusOf(a) { const b = expCtr(a.pos); return a.pos > 10 ? 'work' : a.ctr < b * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= b * 0.8 ? 'strong' : 'steady'; }
+  // Same rule and same expected CTR (the site's own curve) as the Site sections list in engine.js.
+  function statusOf(a, A) { const b = A.curve.at(a.pos); return a.pos > 10 ? 'work' : a.ctr < b * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= b * 0.8 ? 'strong' : 'steady'; }
   const segsOf = path => path.split('/').filter(Boolean);
   V.section = (A, D, key) => {
     const agg = window.CW.agg;
@@ -547,7 +600,7 @@
     const inSec = r => key === '/' ? r.path === '/' : (r.path === key.replace(/\/$/, '') || r.path.startsWith(key));
     const pages = A.P.filter(inSec).sort((a, b) => b.clicks - a.clicks);
     if (!pages.length) return { html: head('Folder not found', `No pages under ${esc(key)} in this data.`) + '<p><a href="#sections">Back to all sections</a></p>' };
-    const tot = agg(pages); const status = statusOf(tot);
+    const tot = agg(pages); const status = statusOf(tot, A);
     const urlSet = new Set(pages.map(r => r.p));
 
     // sub-folders one level down; pages sitting directly in this folder stay in the page list
@@ -556,7 +609,7 @@
       const sg = segsOf(r.path);
       if (sg.length > depth + 1) { const k = '/' + sg.slice(0, depth + 1).join('/') + '/'; if (!kids.has(k)) kids.set(k, []); kids.get(k).push(r); }
     });
-    const sub = [...kids.entries()].map(([k, rows]) => { const a = agg(rows); return { key: k, rows, ...a, status: statusOf(a) }; }).sort((a, b) => b.clicks - a.clicks);
+    const sub = [...kids.entries()].map(([k, rows]) => { const a = agg(rows); return { key: k, rows, ...a, status: statusOf(a, A) }; }).sort((a, b) => b.clicks - a.clicks);
 
     // previous period for this folder
     let prevTot = null;
@@ -593,7 +646,7 @@
       <section class="tiles" aria-label="Folder performance">
         <div class="tile t-blue"><div class="tile-v">${fmtN(tot.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">${(tot.clicks / Math.max(1, A.P.reduce((s3, r) => s3 + r.clicks, 0)) * 100).toFixed(1)}% of all page clicks</div>${d(tot.clicks, prevTot && prevTot.clicks)}</div>
         <div class="tile t-green"><div class="tile-v">${fmtN(tot.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">${pages.length} pages</div>${d(tot.impr, prevTot && prevTot.impr)}</div>
-        <div class="tile t-amber"><div class="tile-v">${pctf(tot.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Benchmark ~${expCtr(tot.pos).toFixed(1)}%</div>${d(tot.ctr, prevTot && prevTot.ctr, false, 'pt')}</div>
+        <div class="tile t-amber"><div class="tile-v">${pctf(tot.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Expected ~${A.curve.at(tot.pos).toFixed(1)}% at this position</div>${d(tot.ctr, prevTot && prevTot.ctr, false, 'pt')}</div>
         <div class="tile t-red"><div class="tile-v">${tot.pos.toFixed(1)}</div><div class="tile-l">Avg. position</div><div class="tile-s">Weighted by impressions</div>${d(tot.pos, prevTot && prevTot.pos, true)}</div>
       </section>
 

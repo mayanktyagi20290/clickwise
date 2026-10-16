@@ -131,7 +131,7 @@
       if (older.end >= newer.start) { startError(`The two exports overlap (${older.start} to ${older.end} and ${newer.start} to ${newer.end}). Export two separate periods, for example the last 3 months and the 3 months before.`); return; }
       cur = newer;
       cur.prevQ = older.Q; cur.prevP = older.P; cur.prevC = older.C; cur.prevStart = older.start; cur.prevEnd = older.end;
-      if (Math.abs(older.C.length - newer.C.length) > 3) note = `The two periods have different lengths (${newer.C.length} and ${older.C.length} days), so changes are not like-for-like.`;
+      if (Math.abs(older.C.length - newer.C.length) > 3) note = `The two periods have different lengths (${newer.C.length} and ${older.C.length} days). The earlier period's clicks and impressions were scaled to ${newer.C.length} days so the changes compare like for like.`;
     }
     const first = files[0];
     const host = (cur.P[0] && hostOf(cur.P[0].p)) || (first.name.match(/([a-z0-9-]+\.[a-z.]{2,})/i) || [])[1] || 'Your site';
@@ -297,7 +297,9 @@
         prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
         Dev: dev.map(r => mapRow(r, ['d'])), QP: null, prevQ: null, prevP: null, prevC: null,
-        pending: { qp: true, prev: compare, more: more.q || more.p }
+        pending: { qp: true, prev: compare, more: more.q || more.p },
+        // a list that reached this many rows may be missing smaller rows (used when comparing periods)
+        rowCap: more.q || more.p ? FIRST : CFG.maxRows
       };
       loaded(data);
       // Step 2, in the background: query-page pairs, the comparison period and any rows beyond 25,000.
@@ -380,10 +382,10 @@
     const jobs = [job('query-page pairs', pull(o.site, o.start, o.end, ['query', 'page'], CFG.maxQueryPageRows, '', 0, true), rows => { data.QP = rows.map(r => mapRow(r, ['q', 'p'])); })];
     if (o.compare) jobs.push(job('previous period', Promise.all([
       pull(o.site, o.ps, o.pe, ['date'], 1000, '', 0, true), pull(o.site, o.ps, o.pe, ['query'], CFG.maxRows, '', 0, true), pull(o.site, o.ps, o.pe, ['page'], CFG.maxRows, '', 0, true)
-    ]), ([c, q, p]) => { data.prevC = c.map(r => mapRow(r, ['d'])); data.prevQ = q.map(r => mapRow(r, ['q'])); data.prevP = p.map(r => mapRow(r, ['p'])); }));
+    ]), ([c, q, p]) => { data.prevC = c.map(r => mapRow(r, ['d'])); data.prevQ = q.map(r => mapRow(r, ['q'])); data.prevP = p.map(r => mapRow(r, ['p'])); data.prevRowCap = CFG.maxRows; }));
     if (o.more.q || o.more.p) jobs.push(job('more rows', Promise.all([
       o.more.q ? pull(o.site, o.start, o.end, ['query'], CFG.maxRows, '', o.FIRST, true) : [], o.more.p ? pull(o.site, o.start, o.end, ['page'], CFG.maxRows, '', o.FIRST, true) : []
-    ]), ([q, p]) => { data.Q = data.Q.concat(q.map(r => mapRow(r, ['q']))); data.P = data.P.concat(p.map(r => mapRow(r, ['p']))); }));
+    ]), ([q, p]) => { data.Q = data.Q.concat(q.map(r => mapRow(r, ['q']))); data.P = data.P.concat(p.map(r => mapRow(r, ['p']))); data.rowCap = CFG.maxRows; }));
     status(label());
     await Promise.all(jobs);
     if (id === LOAD && !data.failed) { status('All data loaded'); setTimeout(() => { if (id === LOAD && $('top-loading').textContent === 'All data loaded') status(''); }, 4000); }
@@ -415,7 +417,8 @@
   });
   const splitTerms = v => v.split(',').map(s => s.trim()).filter(Boolean);
 
-  const analyse = () => window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints });
+  // The opportunity engine builds one ranked list (evidence, impact, confidence, effort) on top of the analysis.
+  const analyse = () => { const a = window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints }); a.opps = window.CW_OPPS.build(a, D); return a; };
   function launch() {
     A = analyse();
     $('top-site').textContent = D.site + (D.source === 'demo' ? ' (sample)' : '');
@@ -435,7 +438,7 @@
   }
   function fmtDate(s) { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
   function counts() {
-    const n = { quickwins: A.quickWins.length, ctr: A.ctrPages.length, cannibal: A.cannibal.filter(c => c.sev !== 'low').length, decay: A.decay ? A.decay.pages.length : null, ai: A.ai.overview.length };
+    const n = { opps: A.opps ? A.opps.items.length : null, quickwins: A.quickWins.length, ctr: A.ctrPages.length, cannibal: A.cannibal.filter(c => c.sev !== 'low').length, decay: A.decay ? A.decay.pages.length : null, ai: A.ai.overview.length };
     document.querySelectorAll('.nav a').forEach(a => {
       const v = a.dataset.view; let c = a.querySelector('.count');
       if (n[v] == null) { if (c) c.remove(); return; }

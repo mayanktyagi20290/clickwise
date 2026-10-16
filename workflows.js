@@ -27,7 +27,7 @@
     { id: 'quickwins', name: 'Find SEO quick wins', icon: 'bolt', tone: 'orange', featured: true,
       finds: 'Searches close to the top 3 and page-one results that earn fewer clicks than they should, merged into one prioritised to-do list.',
       needs: ['queries', 'pages'], better: ['qp'],
-      conditions: ['Non-branded searches ranking 4–20 with above-median impressions', 'Page-one pages and searches under 60% of the clicks this site normally earns at their position', 'Top-5 searches that may be answered on the results page', 'One estimate per search; page estimates shown but not added to the total', 'Findings with thin data removed'],
+      conditions: ['Non-branded searches ranking 4–20 with above-median impressions', 'Page-one pages and searches under 60% of the clicks this site normally earns at their position', 'Top-5 searches that may be answered on the results page', 'One estimate per search; page estimates shown but not added to the total', 'Low-confidence findings left out (see All opportunities for them)'],
       output: 'A ranked action list with a low–high clicks-per-month estimate, confidence and effort.',
       steps: ['Analyse query and page performance', 'Find ranking and CTR opportunities', 'Remove duplicates and low-confidence findings', 'Prioritise by estimated clicks', 'Build the action plan'] },
     { id: 'brand', name: 'Split branded and non-branded searches', icon: 'star', tone: 'violet',
@@ -82,34 +82,29 @@
   const byId = id => TEMPLATES.find(w => w.id === id);
 
   // ── runners ──
-  // One entry per query (the strongest of ranking, CTR or answer-box estimates) and one per page.
-  // Page estimates overlap the searches that land on them, so only query estimates are totalled.
+  // Quick wins come straight from the opportunity engine, so a search has the same estimate,
+  // confidence and effort here as in All opportunities. One entry per search (its largest estimate)
+  // plus page titles; page estimates overlap the searches that land on them and are not totalled.
+  // Low-confidence findings are left out of this workflow (they stay in All opportunities).
+  const KIND = { striking: 'Ranking', 'ctr-query': 'CTR', 'answer-box': 'Answer box?', 'ctr-page': 'Page title' };
   function quickWins(A) {
-    const floor = A.imprFloor;
-    const best = new Map();
-    const add = (r, kind, why, action, effort) => {
-      const o = best.get(r.q);
-      if (o && (o.gainHi > r.gainHi || (o.gainHi === r.gainHi && o.gainLo >= r.gainLo))) return;
-      best.set(r.q, { kind, item: r.q, isQuery: true, why, action, gainLo: r.gainLo, gainHi: r.gainHi, gain: r.gainLo, impr: r.impr, effort, serp: r.serp, capped: r.capped });
-    };
-    A.quickWins.forEach(r => add(r, 'Ranking', `Position ${r.pos.toFixed(1)} with ${fmtN(r.impr)} impressions`, r.pos > 10 ? 'Move to page one: expand the content, add internal links, match the title to the search' : 'Climb towards the top 3: tighten the title, answer the search near the top, add internal links', 'Medium'));
-    A.ctrQueries.forEach(r => add(r, 'CTR', `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, ~${r.bench.toFixed(1)}% expected`, r.serp ? 'Check the results page first: an answer box or AI Overview may be taking the click' : 'Rewrite the title and description for this search', 'Low'));
-    A.ai.overview.forEach(r => add(r, 'Answer box?', `Top-5 ranking but ${r.ctr.toFixed(1)}% CTR`, 'Check the results page; lead with a 40–60 word answer and give a reason to click', 'Medium'));
-    const queries = [...best.values()];
-    const pages = A.ctrPages.map(r => ({ kind: 'Page title', item: r.path, url: r.p, why: `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, ~${r.bench.toFixed(1)}% expected`, action: 'Rewrite the title and meta description' + (r.top && r.top.length ? ` around “${r.top[0]}”` : ''), gainLo: r.gainLo, gainHi: r.gainHi, gain: r.gainLo, impr: r.impr, effort: 'Low', overlap: true, serp: r.serp, capped: r.capped }));
-    const all = queries.concat(pages);
-    const kept = all.filter(r => r.impr >= floor * 2 && r.gainHi >= 1);
-    kept.forEach(r => {
-      r.confidence = r.serp || r.capped ? 'Low' : r.impr >= floor * 6 ? 'High' : 'Medium';
-      r.conf = { High: 3, Medium: 2, Low: 1 }[r.confidence];
-      r.note = [r.serp ? 'results-page feature likely' : '', r.capped ? 'capped: unusually large' : '', r.overlap ? 'overlaps search estimates; not in total' : ''].filter(Boolean).join('; ');
-    });
+    const O = A.opps || window.CW_OPPS.build(A, A.data);
+    const all = O.items.filter(it => (it.impact.kind === 'growth' && it.subject.kind === 'query' && it.impact.counted) || it.type === 'ctr-page')
+      .map(it => {
+        const page = it.subject.kind === 'page', f = it.flags || {};
+        return { kind: KIND[it.type], item: it.subject.label, url: it.subject.url, isQuery: !page, why: it.reason, action: it.action,
+          gainLo: it.impact.lo, gainHi: it.impact.hi, gain: it.impact.lo, impr: it.measured.impr, effort: it.effort.level, overlap: page,
+          serp: f.serp, capped: f.capped, confidence: it.confidence.level, conf: { High: 3, Medium: 2, Low: 1 }[it.confidence.level], score: it.confidence.score,
+          note: [f.serp ? 'results-page feature likely' : '', f.capped ? 'capped: unusually large' : '', page ? 'overlaps search estimates; not in total' : ''].filter(Boolean).join('; ') };
+      }).filter(r => r.gainHi >= 1);
+    const kept = all.filter(r => r.confidence !== 'Low');
     kept.sort((a, b) => b.gainLo - a.gainLo || b.conf - a.conf || b.gainHi - a.gainHi);
     const counted = kept.filter(r => !r.overlap);
     const lo = counted.reduce((s, r) => s + r.gainLo, 0), hi = counted.reduce((s, r) => s + r.gainHi, 0);
+    const dropped = all.length - kept.length;
     return {
-      summary: kept.length ? `Found ${kept.length} quick wins (${counted.length} searches, ${kept.length - counted.length} page titles). The searches could add about ${fmtN(lo)}–${fmtN(hi)} clicks a month; page-title estimates overlap those searches and are not added.` : 'No quick wins with enough data in this range. Try a longer date range.',
-      stats: [{ v: kept.length, l: 'quick wins', tone: 'gain' }, { v: '+' + fmtN(lo) + '–' + fmtN(hi), l: 'clicks a month (estimate, searches only)', tone: 'gain' }, { v: all.length - kept.length, l: 'thin-data findings removed', tone: '' }],
+      summary: kept.length ? `Found ${kept.length} quick wins with medium or high confidence (${counted.length} searches, ${kept.length - counted.length} page titles). The searches could add about ${fmtN(lo)}–${fmtN(hi)} clicks a month; page-title estimates overlap those searches and are not added.${dropped ? ` ${dropped} low-confidence finding${dropped === 1 ? ' is' : 's are'} left out here and listed in All opportunities.` : ''}` : 'No quick wins with enough data in this range. Try a longer date range.',
+      stats: [{ v: kept.length, l: 'quick wins', tone: 'gain' }, { v: '+' + fmtN(lo) + '–' + fmtN(hi), l: 'clicks a month (estimate, searches only)', tone: 'gain' }, { v: dropped, l: 'low-confidence findings left out', tone: '' }],
       total: { lo, hi },
       table: { cols: 'quickwins', rows: kept, sort: 'gain' },
       plan: A.plan.slice(0, 5)
@@ -184,6 +179,9 @@
         dClicks: p ? ch(nb.clicks, p.nb.clicks) : null, dImpr: p ? ch(nb.impr, p.nb.impr) : null,
         potential: A.potential, method: A.method, coverage: A.coverage, site: A.site, plan: A.plan.slice(0, 5),
         declines: A.decay ? A.decay.pages.slice(0, 5) : null, rising: A.decay ? A.decay.rising.slice(0, 3) : null,
+        // the ten highest-value opportunities with medium or high confidence, from the opportunity engine
+        top: (A.opps || window.CW_OPPS.build(A, D)).items.filter(it => it.confidence.level !== 'Low' && it.impact.kind !== 'none').slice(0, 10),
+        recovery: (A.opps || window.CW_OPPS.build(A, D)).totals.recovery,
         quick: A.quickWins.slice(0, 5), ai: { overview: A.ai.overview.length, aiMode: A.ai.aiMode.length, readiness: A.readiness },
         brandShare: A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0, start: D.start, end: D.end, sample: D.source === 'demo'
       },
