@@ -38,7 +38,9 @@
     answer: { label: 'Answer box or AI Overview?', types: ['answer-box'] },
     decline: { label: 'Losing clicks', types: ['decline-page', 'decline-query'] },
     cannibal: { label: 'Competing pages', types: ['cannibal'] },
-    slipping: { label: 'Early warning', types: ['slipping-page'] }
+    slipping: { label: 'Early warning', types: ['slipping-page'] },
+    gap: { label: 'Content gap', types: ['content-gap'] },
+    link: { label: 'Internal link to add', types: ['internal-link'] }
   };
   const OPP_OF = {}; Object.entries(OPP).forEach(([k, o]) => (o.types || []).forEach(t => { OPP_OF[t] = k; }));
   const GROWTH = new Set(['striking', 'ctr', 'answer']);
@@ -478,6 +480,9 @@
     take(/\b(?:the )?(?:top|first|biggest|largest) (\d{1,5})\b(?=\s+(?:[\p{L}-]+\s+){0,2}(?:opportunit\w*|pages?|urls?|quer(?:y|ies)|keywords?|searches|results|wins?|titles?|terms?|articles?|posts?)\b)/gu, (m, n) => { limit = Math.min(10000, Math.max(1, +n)); });
 
     // goals answered by the opportunity engine
+    // content gaps and internal links come from the Content assistant (content.js)
+    take(/\b(?:content gaps?|topic gaps?|missing (?:content|topics?|pages?)|topics? (?:to|i should|we should) (?:write|cover|create)|new (?:content|pages?|articles?) to (?:write|create)|what (?:should|to) (?:i |we )?write(?: about)?)\b/g, () => { opp('gap'); target = 'query'; });
+    take(/\b(?:internal(?:ly)? link(?:s|ing)?(?: opportunit\w+| suggestions?| ideas?)?|pages? to link(?: to)?|where to link|link building internally)\b/g, () => { opp('link'); target = 'page'; });
     // "content opportunities": improvements to pages that already rank. New-topic gaps need the Content assistant.
     take(/\b(?:content|seo|search) (?:opportunit\w+|ideas?|gaps?|wins?)\b|\bcontent to (?:improve|update|refresh)\b/g, () => { opp('growth'); notes.push('content'); });
     // "compared with the previous period" is what a decline means; keep it, and check the data has one
@@ -671,7 +676,8 @@
       const known = placeOf(searcherPlace);
       questions.push({ kind: 'place', text: `Find searches that mention ${searcherPlace} instead?`, options: [{ label: `Searches that mention ${searcherPlace}`, patch: { target: 'query', add: [known ? { f: 'place', op: 'is', v: known } : { f: 'text', op: 'word', v: searcherPlace.toLowerCase() }] } }, { label: 'No, leave it out', patch: {} }] });
     }
-    if (byCountry) issues.push({ kind: 'country', text: 'Searches by country are not loaded in Clickwise yet.', alternative: 'Country totals for the whole site are on the Dashboard when your export includes them. To group searches that mention places, ask for “keywords grouped by city”.' });
+    if (A.contentPending && uniq.some(c => c.f === 'opp' && (c.v === 'gap' || c.v === 'link'))) issues.push({ kind: 'pending', text: 'Content gaps and internal links are still being worked out in the background, so nothing matches yet.', alternative: 'Ask again in a moment.' });
+        if (byCountry) issues.push({ kind: 'country', text: 'Searches by country are not loaded in Clickwise yet.', alternative: 'Country totals for the whole site are on the Dashboard when your export includes them. To group searches that mention places, ask for “keywords grouped by city”.' });
     if (uniq.some(c => c.f === 'place') && !searcherPlace) notes.push('place-mention');
     if (notes.includes('compare') && !R.hasPrev && !uniq.some(c => c.f === 'clickChange')) issues.push({ kind: 'compare', text: 'A comparison with the previous period was asked for, but this data has no previous period.', alternative: 'Upload an export made with Date › Compare, or two exports together, or connect Search Console with “Compare with the previous period” ticked.' });
     if (uniq.some(c => c.f === 'opp' && (c.v === 'decline' || c.v === 'slipping')) && !R.hasPrev) issues.push({ kind: 'compare', text: 'Losing clicks and early warnings need a comparison period.', alternative: 'Upload an export made with Date › Compare, or two exports together, or connect Search Console with “Compare with the previous period” ticked.' });

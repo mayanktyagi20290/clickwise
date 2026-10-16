@@ -719,3 +719,29 @@ td.act{min-width:240px}
 .saved-t td.nm .btn-link{font-size:12.5px;margin-left:4px}
 .ov-ask{margin:0 0 16px;background:var(--surface)}
 .ov-ask>svg{width:18px;height:18px;color:var(--signal);flex:none;fill:none;stroke:currentColor;stroke-width:1.8}
+/* Content & links */
+.ct-mode{margin:-6px 0 14px;font-size:13px}
+.ct-lead{font-size:13.5px;color:var(--ink-2);margin:0 2px 12px;max-width:80ch}
+.ct-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
+.ct-tabs a{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--ink-2);text-decoration:none;background:var(--surface)}
+.ct-tabs a.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ct-tabs a .count{font-size:11.5px;opacity:.75}
+.ct-crawl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px}
+.ct-up{cursor:pointer}
+.ct-sub{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:10px;padding:12px 14px;background:var(--bg,#F8FAFC);border:1px solid var(--line);border-radius:10px;font-size:13px}
+.ct-sub h4{margin:0 0 6px;font-size:12.5px}
+.ct-sub ul{margin:0;padding-left:18px;columns:1}
+.ct-briefs{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+.ct-blist{display:grid;gap:4px;max-height:70vh;overflow:auto}
+.ct-blist a{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--ink);text-decoration:none;border:1px solid transparent}
+.ct-blist a small{display:block;color:var(--muted);font-size:11.5px;overflow-wrap:anywhere}
+.ct-blist a.on{background:var(--signal-soft);border-color:var(--signal)}
+.ct-brief h3{font-size:14px;margin:18px 0 6px}
+.ct-brief ul{margin:0;padding-left:20px;font-size:13.5px;line-height:1.6}
+.ct-bh{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.ct-bh h2{margin:0 0 4px;font-size:18px}
+.ct-title{font-size:16px;font-weight:600;margin:0}
+@media (max-width:900px){.ct-briefs{grid-template-columns:1fr}.ct-blist{max-height:none;grid-auto-flow:column;grid-auto-columns:minmax(200px,1fr);overflow-x:auto}.ct-sub{grid-template-columns:1fr}}
+.ct-bh{flex-wrap:wrap}
+.ct-bh>div{min-width:0;overflow-wrap:anywhere}
+.ct-briefs>*{min-width:0}

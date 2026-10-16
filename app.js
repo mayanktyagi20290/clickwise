@@ -423,7 +423,57 @@
   const splitTerms = v => v.split(',').map(s => s.trim()).filter(Boolean);
 
   // The opportunity engine builds one ranked list (evidence, impact, confidence, effort) on top of the analysis.
-  const analyse = () => { const a = window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints }); a.opps = window.CW_OPPS.build(a, D); return a; };
+  // Content assistant first (topics, gaps, links), then the opportunity engine, which lists both.
+  // A crawler's link export is kept in memory for this site only: never stored, gone on reload.
+  const INLINKS = {};
+  // On large sites topic grouping takes seconds, so it runs in a Web Worker: the dashboard shows at once and
+  // Content & links (and the gaps and links in All opportunities) fill in when it finishes. A newer analysis
+  // cancels the older job. Without Worker support it runs here, after the page has painted.
+  const BIG = 10000;
+  let CJOB = 0, worker = null;
+  const contentStatus = t => { const el = $('top-content'); el.textContent = t; el.hidden = !t; };
+  function contentDone(id, content) {
+    if (id !== CJOB || !A) return;
+    // a new object, so per-analysis caches (e.g. filter rows) are rebuilt with the new opportunities
+    const next = Object.assign({}, A, { content, contentPending: false });
+    next.opps = window.CW_OPPS.build(next, D);
+    A = next; contentStatus('');
+    const y = window.scrollY; counts();
+    const base = (location.hash.slice(1) || 'overview').split('?')[0];
+    if (['content', 'opps', 'filters', 'workflows', 'overview'].includes(base) || base.startsWith('wf=')) { route(); window.scrollTo(0, y); }
+    document.dispatchEvent(new CustomEvent('cw:content-ready'));
+  }
+  function contentJob(a) {
+    const id = ++CJOB, inlinks = INLINKS[D.site] || null;
+    contentStatus(`Grouping ${a.NBQ.length.toLocaleString()} searches into topics…`);
+    const fallback = () => setTimeout(() => { if (id === CJOB) contentDone(id, window.CW_CONTENT.build(A, D, { brand: S.brand, inlinks })); }, 50);
+    if (worker) { worker.terminate(); worker = null; }
+    if (!window.Worker) { fallback(); return; }
+    try {
+      const v = (document.querySelector('script[src^="content.js"]').getAttribute('src').match(/v=(\d+)/) || [])[1] || '0';
+      worker = new Worker('content-worker.js?v=' + v);
+      worker.onmessage = e => { if (e.data.error) { fallback(); return; } contentDone(e.data.id, e.data.content); };
+      worker.onerror = ev => { ev.preventDefault(); fallback(); };
+      worker.postMessage({ id, D, S: { ...S, utilityHints: CFG.utilityHints }, inlinks });
+    } catch (e) { fallback(); }
+  }
+  const analyse = () => {
+    const a = window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints });
+    if (a.NBQ.length > BIG) { a.content = null; a.contentPending = true; contentJob(a); }
+    else { CJOB++; contentStatus(''); a.content = window.CW_CONTENT.build(a, D, { brand: S.brand, inlinks: INLINKS[D.site] || null }); }
+    a.opps = window.CW_OPPS.build(a, D);
+    return a;
+  };
+  const recalc = () => { if (!D || !A) return; const y = window.scrollY; A = analyse(); counts(); route(); window.scrollTo(0, y); };
+  document.addEventListener('cw:inlinks', e => {
+    const d = e.detail || {};
+    if (d.clear) { delete INLINKS[D.site]; recalc(); return; }
+    const host = window.CW_CONTENT.normUrl((D.P[0] && D.P[0].p) || '').split('/')[0];
+    const r = window.CW_CONTENT.parseLinks(d.text, host);
+    if (!r.ok) { document.dispatchEvent(new CustomEvent('cw:inlinks-error', { detail: r.error })); return; }
+    INLINKS[D.site] = { links: r.links, name: String(d.name || 'links.csv').slice(0, 120), rows: r.rows, skipped: r.skipped };
+    recalc();
+  });
   function launch() {
     A = analyse();
     $('top-site').textContent = D.site + (D.source === 'demo' ? ' (sample)' : '');
@@ -443,7 +493,7 @@
   }
   function fmtDate(s) { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
   function counts() {
-    const n = { opps: A.opps ? A.opps.items.length : null, quickwins: A.quickWins.length, ctr: A.ctrPages.length, cannibal: A.cannibal.filter(c => c.sev !== 'low').length, decay: A.decay ? A.decay.pages.length : null, ai: A.ai.overview.length };
+    const n = { content: A.content ? A.content.gaps.length + A.content.links.length : null, opps: A.opps ? A.opps.items.length : null, quickwins: A.quickWins.length, ctr: A.ctrPages.length, cannibal: A.cannibal.filter(c => c.sev !== 'low').length, decay: A.decay ? A.decay.pages.length : null, ai: A.ai.overview.length };
     document.querySelectorAll('.nav a').forEach(a => {
       const v = a.dataset.view; let c = a.querySelector('.count');
       if (n[v] == null) { if (c) c.remove(); return; }

@@ -175,7 +175,8 @@
       notes.includes('date-ok') ? `Dates: your request matches the loaded range (${esc(rangeLabel(D))}).` : notes.includes('date') && !(p.issues || []).some(x => x.kind === 'dates') ? `Dates: this uses the range you loaded (${esc(rangeLabel(D))}).` : '',
       notes.includes('device-ok') ? `Device: this analysis already covers ${esc(String(D.filters.device).toLowerCase())} only.` : '',
       notes.includes('place-mention') ? 'Places are matched in the words of the search. Search Console doesn\'t say where the searcher was.' : '',
-      notes.includes('content') ? 'Content opportunities here are improvements to pages that already rank (searches close to page one, low CTR, answer boxes). Finding topics with no page yet needs the Content assistant, which is not built yet.' : '',
+      notes.includes('content') ? 'Content opportunities here are improvements to pages that already rank (searches close to page one, low CTR, answer boxes). Topics with no good page yet are in <a href="#content?tab=gaps">Content gaps</a>.' : '',
+      spec.conds.some(c => c.f === 'opp' && (c.v === 'gap' || c.v === 'link')) ? `From <a href="#content">Content &amp; links</a>, which shows the evidence and drafts briefs.` : '',
       notes.includes('compare') && R.hasPrev ? `Compared with ${esc(D.prevStart || 'the previous period')}${D.prevEnd ? ' to ' + esc(D.prevEnd) : ''}${A.decay && A.decay.scale !== 1 ? `, scaled to ${A.days} days` : ''}.` : '',
             notes.includes('cannibal') ? `Competing pages are listed by the search they compete for${A.cannibalMode === 'stem' ? '; without a Search Console connection they are estimated from similar wording' : ''}.` : '',
       spec.conds.some(c => ['opp', 'gain', 'confidence'].includes(c.f)) ? '<a href="#opps">Opportunity</a> kinds, estimates and confidence come from All opportunities, so the numbers match everywhere.' : ''
@@ -401,7 +402,7 @@
     declineQ: [C.q, before, now, chg, cause],
     cannibal: [C.q, { k: 'pagesN', l: 'Competing pages', sort: false, f: r => r.pages.map(p => `${urlCell(p.p, CW.pathOf(p.p))} <small class="flat">${p.share.toFixed(0)}% · #${p.pos.toFixed(1)}</small>`).join('<br>'), csv: r => r.pages.map(p => p.p).join(' | ') }, C.impr, C.pos, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? fmtN(r.loss) : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
     cannibalEst: [{ k: 'q', l: 'Similar searches', cls: 'q', f: r => (r.variants || []).slice(0, 4).map(v => `${esc(v.q)} <small class="flat">#${v.pos.toFixed(1)}</small>`).join('<br>'), csv: r => (r.variants || []).map(v => v.q).join(' | ') }, C.impr, { k: 'spread', l: 'Position spread', r: 1, f: r => r.spread.toFixed(1) }, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? fmtN(r.loss) : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
-    links: [{ k: 'path', l: 'Page to strengthen', cls: 'u', f: r => urlCell(r.p, r.path), csv: r => r.p }, C.pos, C.impr, { k: 'anchor', l: 'Suggested anchor text', f: r => r.anchor ? `“${esc(r.anchor)}”` : '<span class="flat">Use the page’s main topic</span>' }, { k: 'src', l: 'Link to it from', sort: false, f: r => r.sources.map(s => urlCell(s.p, s.path)).join('<br>'), csv: r => r.sources.map(s => s.p).join(' | ') }],
+    links: [{ k: 'path', l: 'Page to strengthen', cls: 'u', f: r => urlCell(r.p, r.path), csv: r => r.p }, C.pos, C.impr, { k: 'anchor', l: 'Suggested anchor text', f: r => r.anchor ? `“${esc(r.anchor)}”` : '<span class="flat">Use the page’s main topic</span>' }, { k: 'src', l: 'Link to it from', sort: false, f: r => r.sources.map(s => `${urlCell(s.p, s.path)}${s.why ? `<br><small class="flat">${esc(s.why)}</small>` : ''}`).join('<br>'), csv: r => r.sources.map(s => s.p).join(' | ') }],
     queries: [C.q, C.clicks, C.impr, C.ctr, C.pos],
     setAside: [C.page, C.impr, C.ctr, C.pos, { k: 'why', l: 'Why it was set aside', sort: false, f: r => `${esc(r.flag.reason)}${r.flag.certain ? '' : ' <span class="tag">unconfirmed</span>'}`, csv: r => r.flag.reason }, { k: 'inc', l: '', sort: false, csv: false, f: r => `<button type="button" class="btn-quiet" data-keep="${esc(r.p)}">Include</button>` }]
   };
@@ -456,7 +457,7 @@
         (out.plan && out.plan.length ? `<section class="panel"><div class="panel-h"><h2>Action plan</h2><p>The same findings grouped into a few bigger tasks.</p></div>${ledger(out.plan)}</section>` : '') +
         (id === 'cannibal' ? '<div class="note"><b>Before you change anything.</b> Search for each query and check whether both pages really serve the same intent. Merge with a 301 only when they do; otherwise make each page target a clearly different angle.</div>' : '') +
         (id === 'quickwins' ? methodNote(A) : '') +
-        (id === 'links' ? '<div class="note"><b>How the sources are chosen.</b> Your best-ranking pages in the same folder, or the strongest pages on the site when the folder has none. Search Console has no link data, so check what already links to each page before adding more.</div>' : '');
+        (id === 'links' ? `<div class="note"><b>How the sources are chosen.</b> ${A.content && A.content.mode === 'search' ? 'Each source already ranks on page one for a search in the same topic as the target, and the anchor text is the target\'s own search.' : 'Without search-to-page data, sources are the strongest pages in the same folder.'} ${A.content && A.content.inlinks ? 'Links that already exist in your crawler export were removed.' : 'Search Console has no link data: <a href="#content?tab=links">upload a crawler export</a> to drop links that already exist.'}</div>` : '');
       mount = () => { if (t) drawTable('t-wf'); if (out.extra) drawTable('t-wf-x'); };
     }
     return { html: top + body, mount: () => { saveMount(); mount(); } };
@@ -483,6 +484,10 @@
           <div><h3>Biggest declines</h3>${r.declines ? li(r.declines, x => `<li>${urlCell(x.p, x.path)} — ${fmtN(x.prev.clicks)} → ${fmtN(x.cur.clicks)} clicks <span class="flat">(${esc(x.reason)})</span></li>`) : '<p class="flat">Needs a comparison period.</p>'}</div>
           <div><h3>Closest to the top 3</h3>${li(r.quick, x => `<li>${esc(x.q)} — position ${x.pos.toFixed(1)}, ${fmtN(x.impr)} impressions, ${range(x.gainLo, x.gainHi)} clicks a month</li>`)}</div>
         </div>
+        ${r.content && (r.content.nGaps || r.content.nLinks) ? `<div class="grid-2 even">
+          <div><h3>Content gaps (${r.content.nGaps})</h3>${li(r.content.gaps, g => `<li>${esc(g.label)} — ${fmtN(g.impr)} impressions <span class="flat">(${esc(g.evidence[0])})</span></li>`)}</div>
+          <div><h3>Internal links to add (${r.content.nLinks})</h3>${li(r.content.links, l => `<li>${urlCell(l.p, l.path)} ← ${l.sources.map(x => esc(x.path)).join(', ')}${l.anchor ? ` <span class="flat">anchor “${esc(l.anchor)}”</span>` : ''}</li>`)}</div>
+        </div>` : ''}
         <h3>AI search</h3>
         <p>${r.ai.overview} top-5 searches get far fewer clicks than this site usually earns at that position (possible answer boxes or AI Overviews); ${r.ai.aiMode} top-3 searches get almost none. Directional AI-search readiness: <b>${r.ai.readiness}%</b>.</p>
         ${methodNote(A)}

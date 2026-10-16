@@ -132,27 +132,17 @@
     };
   }
 
+  // Internal links come from the Content assistant (content.js): sources that rank for the same topic, anchor
+  // text from the target's own search, and links that already exist removed when a crawler export is loaded.
   function links(A) {
-    const R = F.rows(A);
-    const D = A.data || {};
-    const median = Math.max(20, Math.round(CW.pct(A.P.map(r => r.impr).filter(v => v > 0), 0.5)));
-    const topQ = new Map();
-    (D.QP || []).forEach(r => { if (A.isBrand(r.q)) return; const cur = topQ.get(r.p); if (!cur || r.impr > cur.impr) topQ.set(r.p, r); });
-    const pages = R.page.filter(r => !r.gone);
-    const strongBy = new Map();
-    pages.filter(r => r.pos > 0 && r.pos <= 6 && r.clicks > 0).forEach(r => { if (!strongBy.has(r.folder)) strongBy.set(r.folder, []); strongBy.get(r.folder).push(r); });
-    strongBy.forEach(a => a.sort((x, y) => y.clicks - x.clicks));
-    const siteStrong = pages.filter(r => r.pos > 0 && r.pos <= 6 && r.clicks > 0).sort((a, b) => b.clicks - a.clicks);
-    const targets = pages.filter(r => r.pos >= 5 && r.pos <= 20 && r.impr >= median && r.path !== '/').sort((a, b) => b.impr - a.impr).slice(0, 200).map(r => {
-      const same = (strongBy.get(r.folder) || []).filter(s => s.p !== r.p);
-      const src = (same.length ? same : siteStrong.filter(s => s.p !== r.p)).slice(0, 3);
-      const q = topQ.get(r.p);
-      return { ...r, sources: src, sameFolder: same.length > 0, anchor: q ? q.q : null };
-    }).filter(r => r.sources.length);
+    if (!A.content && A.contentPending) return { summary: 'Still grouping searches into topics in the background. Open this workflow again in a moment.', stats: [] };
+    const K = A.content || window.CW_CONTENT.build(A, A.data, {});
+    const rows = K.links.map(l => ({ ...l, pos: l.target ? l.target.pos : l.pos, impr: l.impr }));
+    const bySearch = rows.filter(r => r.evidence === 'search').length;
     return {
-      summary: targets.length ? `${targets.length} page${targets.length === 1 ? '' : 's'} rank on the edge of page one and could use links from your stronger pages. Search Console has no link data, so check what already links to each page first.` : 'No pages on positions 5–20 with enough impressions.',
-      stats: [{ v: targets.length, l: 'pages to link to', tone: 'gain' }, { v: targets.filter(t => t.sameFolder).length, l: 'with sources in the same section', tone: '' }, { v: targets.filter(t => t.anchor).length, l: 'with anchor text from real searches', tone: '' }],
-      table: { cols: 'links', rows: targets, sort: 'impr' }
+      summary: rows.length ? `${rows.length} page${rows.length === 1 ? '' : 's'} rank on the edge of page one and could use links from pages that already rank for the same topic.${K.inlinks ? ` ${K.alreadyLinked} suggested link${K.alreadyLinked === 1 ? ' was' : 's were'} dropped because ${K.alreadyLinked === 1 ? 'it already exists' : 'they already exist'}.` : ' Search Console has no link data, so check what already links to each page first.'}` : 'No pages on positions 4–20 with a related page that already ranks on page one.',
+      stats: [{ v: rows.length, l: 'pages to link to', tone: 'gain' }, { v: bySearch, l: 'with sources from the same topic', tone: '' }, { v: rows.filter(r => r.anchor).length, l: 'with anchor text from real searches', tone: '' }].concat(K.inlinks ? [{ v: K.alreadyLinked, l: 'already linked, removed', tone: '' }] : []),
+      table: { cols: 'links', rows, sort: 'impr' }
     };
   }
 
@@ -182,6 +172,7 @@
         // the ten highest-value opportunities with medium or high confidence, from the opportunity engine
         top: (A.opps || window.CW_OPPS.build(A, D)).items.filter(it => it.confidence.level !== 'Low' && it.impact.kind !== 'none').slice(0, 10),
         recovery: (A.opps || window.CW_OPPS.build(A, D)).totals.recovery,
+        content: A.content ? { gaps: A.content.gaps.slice(0, 5), links: A.content.links.slice(0, 5), nGaps: A.content.gaps.length, nLinks: A.content.links.length } : null,
         quick: A.quickWins.slice(0, 5), ai: { overview: A.ai.overview.length, aiMode: A.ai.aiMode.length, readiness: A.readiness },
         brandShare: A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0, start: D.start, end: D.end, sample: D.source === 'demo'
       },

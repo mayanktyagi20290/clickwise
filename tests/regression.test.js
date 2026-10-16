@@ -91,4 +91,16 @@ test('opportunity engine: growth equals the headline, no invented pages, inferre
   assert.ok(O.warnings.some(w => /top 1,000/.test(w)) && O.warnings.some(w => /not attributed/.test(w)), 'row limit and unattributed clicks disclosed');
   assert.ok(O.items.length > 300, `${O.items.length} items`);
 });
+test('content assistant on a real export: export mode, nothing invented, totals unchanged', () => {
+  const C = W.CW_CONTENT.build(A, D, { brand: S.brand });
+  assert.equal(C.mode, 'export', 'an export has no query-page rows');
+  const known = new Set(D.P.map(r => r.p));
+  const urls = [].concat(C.gaps.filter(g => g.target).map(g => g.target.p), C.improvements.map(i => i.p), C.links.flatMap(l => [l.p].concat(l.sources.map(s => s.p))));
+  assert.ok(urls.every(u => known.has(u)), 'every URL is in the export');
+  assert.ok(C.links.every(l => l.evidence === 'folder' && !l.anchor), 'no anchors without search-to-page data');
+  const all = C.topics.flatMap(t => t.rows.map(r => r.q));
+  assert.equal(all.length, new Set(all).size, 'each search in one topic');
+  A.content = C; const O = W.CW_OPPS.build(A, D); delete A.content;
+  assert.near(O.totals.growth.hi, A.potential.hi, 1e-6, 'growth still equals the headline');
+});
 process.exitCode = report('regression') ? 1 : 0;

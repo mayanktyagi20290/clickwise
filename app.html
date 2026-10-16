@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=22">
+<link rel="stylesheet" href="styles.css?v=25">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -111,6 +111,7 @@
       <a href="#ctr" data-view="ctr" class="hot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg><span>Titles to rewrite</span></a>
       <a href="#cannibal" data-view="cannibal" class="hot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Competing pages</span></a>
       <a href="#decay" data-view="decay" class="hot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 17-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/></svg><span>Losing ground</span></a>
+      <a href="#content" data-view="content"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-1.5z"/><path d="M8 7h6M8 11h8"/></svg><span>Content &amp; links</span></a>
       <p class="nav-group">Automation</p>
       <a href="#workflows" data-view="workflows"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg><span>Workflows</span></a>
       <a href="#filters" data-view="filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span>Goal builder</span></a>
@@ -141,6 +142,7 @@
           <button type="button" class="tag scope-tag" id="top-scope" hidden></button>
           <span class="tag watch" id="top-sample" hidden title="Numbers are generated for a fictional site">Sample data</span>
           <span class="tag loading" id="top-loading" role="status" aria-live="polite" hidden></span>
+          <span class="tag loading" id="top-content" role="status" aria-live="polite" hidden></span>
         </div>
         <div class="top-actions">
           <button type="button" class="btn-dark" id="btn-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>Print report</button>
@@ -204,14 +206,16 @@
   </form>
 </dialog>
 
-<script src="config.js?v=22"></script>
-<script src="engine.js?v=22"></script>
-<script src="demo.js?v=22"></script>
-<script src="opportunities.js?v=22"></script>
-<script src="filters.js?v=22"></script>
-<script src="workflows.js?v=22"></script>
-<script src="views.js?v=22"></script>
-<script src="automation.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="config.js?v=25"></script>
+<script src="engine.js?v=25"></script>
+<script src="demo.js?v=25"></script>
+<script src="opportunities.js?v=25"></script>
+<script src="content.js?v=25"></script>
+<script src="filters.js?v=25"></script>
+<script src="workflows.js?v=25"></script>
+<script src="views.js?v=25"></script>
+<script src="automation.js?v=25"></script>
+<script src="content-view.js?v=25"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

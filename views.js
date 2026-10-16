@@ -435,6 +435,7 @@
     const per = O.period;
     const html = head('All opportunities', `Every recommendation in one list, ranked by its conservative estimate. Measured over ${per.assumed ? 'an assumed ' + per.days + ' days' : `${per.days} days (${esc(per.start)} to ${esc(per.end)})`}${per.prevStart ? `, compared with ${esc(per.prevStart)} to ${esc(per.prevEnd)}` : ''}. Metrics are measured; clicks a month are estimates.`) +
       `<div class="strip">${stat(O.items.length.toLocaleString(), 'opportunities', '')}${stat(range(g.lo, g.hi), `clicks a month of growth (${g.n} searches, each counted once)`, 'gain')}${r.n ? stat(range(r.lo, r.hi), `clicks a month that could come back (${r.n} pages)`, 'risk') : ''}${stat(O.byLevel.High.toLocaleString(), 'high confidence', 'gain')}</div>` +
+      (A.contentPending ? '<div class="note" role="status">Content gaps and internal links are still being worked out in the background; they appear in this list by themselves.</div>' : '') +
       (O.warnings.length ? `<div class="note"><b>About this data.</b><ul>${O.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '') +
       `<section class="panel">${table('t-opp', cols, rows, { sort: 'lo', file: 'opportunities', searchKeys: ['label'], placeholder: 'Filter by search or page', pageSize: 25, sub,
         filters: [
@@ -447,7 +448,7 @@
       <div class="note"><b>Reading the numbers.</b> Growth is counted once per search: when the same search appears under several types, the largest estimate is the one added up, and page-title estimates are never added because they overlap the searches on that page. Recovery assumes 30–80% of lost clicks return. Competing pages and early warnings carry no total. Confidence is a score from fixed rules (data volume, period, where expected CTR comes from, and known results-page effects); open a row to see every reason.</div>${methodNote(A)}`;
     return { html, mount: () => drawTable('t-opp') };
   };
-  const TYPE_VIEW = { quickwins: 'Almost page one', ctr: 'Titles to rewrite', ai: 'AI search visibility', decay: 'Losing ground', cannibal: 'Competing pages' };
+  const TYPE_VIEW = { quickwins: 'Almost page one', ctr: 'Titles to rewrite', ai: 'AI search visibility', decay: 'Losing ground', cannibal: 'Competing pages', 'content?tab=gaps': 'Content gaps', 'content?tab=links': 'Internal links' };
 
   V.plan = (A) => ({ html: head('Action plan', 'Every recommendation, ranked by its conservative (low) estimate of clicks per month. Ranges overlap between actions, so do not add them up.') +
     `<section class="panel">${ledger(A.plan)}</section>${methodNote(A)}` });

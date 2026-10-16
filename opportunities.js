@@ -14,7 +14,9 @@
     'decline-page': { label: 'Page losing clicks', view: 'decay' },
     'decline-query': { label: 'Search losing clicks', view: 'decay' },
     'slipping-page': { label: 'Early warning', view: 'decay' },
-    cannibal: { label: 'Competing pages', view: 'cannibal' }
+    cannibal: { label: 'Competing pages', view: 'cannibal' },
+    'content-gap': { label: 'Content gap', view: 'content?tab=gaps' },
+    'internal-link': { label: 'Internal link', view: 'content?tab=links' }
   };
   // What an impact number means. Only "growth" and "recovery" have totals, and each counts an item once.
   const IMPACT = {
@@ -222,6 +224,35 @@
       effort: { level: 'Medium', why: 'Merge or rewrite, plus redirects' },
       warnings: exact ? [] : ['Estimated: connect Search Console to confirm which pages compete.']
     }));
+
+    // ── content gaps and internal links (content.js): advice with evidence, never a click estimate ──
+    const C = A.content;
+    if (C) {
+      const GAP = { unranked: 'Nothing in this topic reaches page one', homepage: 'Only the homepage ranks', scattered: 'Split across several pages about it', diluted: 'Split between the matching page and unrelated ones', nomatch: 'No page is about this topic', questions: 'Question searches without a good answer' };
+      C.gaps.forEach(g => add({
+        type: 'content-gap', subject: { kind: 'query', label: g.label },
+        measured: { clicks: g.clicks, impr: g.impr, ctr: g.impr ? g.clicks / g.impr * 100 : 0, pos: g.pos },
+        reason: `${g.kinds.map(k => GAP[k]).join('; ')}. Topic of ${g.topic.n} search${g.topic.n === 1 ? '' : 'es'} led by “${g.label}”.`,
+        evidence: g.evidence.concat(g.topic.rows.slice(0, 5).map(r => `“${r.q}”: ${fmtN(r.impr)} impressions at ${p1(r.pos)}`)),
+        impact: { kind: 'none', lo: 0, hi: 0 },
+        confidence: conf([g.impr >= C.gapFloor * 5 ? [15, `${fmtN(g.impr)} impressions: clear demand on this site`] : g.impr >= C.gapFloor * 2 ? [5, `${fmtN(g.impr)} impressions`] : [-5, `${fmtN(g.impr)} impressions: modest demand`],
+          g.kinds.some(k => ['scattered', 'diluted', 'nomatch', 'homepage'].includes(k)) ? [10, 'Measured: Search Console reports which pages rank for these searches'] : [0, 'From positions only']], [69, 'Capped at Medium: whether a new or expanded page will rank is not known in advance']),
+        action: g.action,
+        effort: g.kinds.some(k => ['unranked', 'nomatch', 'homepage'].includes(k)) && !g.target ? { level: 'High', why: 'A new page' } : { level: 'Medium', why: g.kinds.includes('scattered') ? 'Merge pages and redirect' : 'Expand an existing page' },
+        warnings: ['Demand here is impressions this site already gets, not the total searches for the topic.'].concat(g.needsQP ? ['Connect Search Console to see which of your pages rank for this topic.'] : [])
+      }));
+      C.links.forEach(l => add({
+        type: 'internal-link', subject: { kind: 'page', label: l.path, url: l.p },
+        measured: l.target ? { clicks: l.target.clicks, impr: l.target.impr, ctr: l.target.ctr, pos: l.target.pos } : metrics(A.P.find(r => r.p === l.p) || { clicks: 0, impr: l.impr, ctr: 0, pos: l.pos }),
+        reason: l.target ? `Ranks at ${p1(l.target.pos)} for “${l.anchor}” (${fmtN(l.target.impr)} impressions); ${l.sources.length} page${l.sources.length === 1 ? '' : 's'} on the same topic already rank on page one.` : `Ranks at ${p1(l.pos)} with ${fmtN(l.impr)} impressions; stronger pages in the same folder could link to it.`,
+        evidence: l.sources.map(s => `${s.path} ${s.why}`),
+        impact: { kind: 'none', lo: 0, hi: 0 },
+        confidence: conf([l.evidence === 'search' ? [10, 'Sources rank for searches in the same topic'] : [-20, 'Sources chosen by folder only: the export has no search-to-page data'], l.verified ? [10, 'Checked against your crawler export: these links do not exist yet'] : [-5, 'Not checked against existing links (upload a crawler export to check)']], l.evidence === 'search' ? null : [44, 'Capped at Low: relevance is guessed from the folder']),
+        action: `Add a link to ${l.path} from ${l.sources.map(s => s.path).join(', ')}${l.anchor ? ` with anchor text like “${l.anchor}”` : ', using the page\'s main topic as anchor text'}, in the body text where it fits.`,
+        effort: { level: 'Low', why: 'Edit a few existing pages' },
+        warnings: l.verified ? [] : ['Search Console has no link data: some of these links may already exist.']
+      }));
+    }
 
     items.forEach(it => { it.rank = (it.impact.lo || 0); });
     items.sort((a, b) => b.impact.lo - a.impact.lo || b.confidence.score - a.confidence.score || b.impact.hi - a.impact.hi);

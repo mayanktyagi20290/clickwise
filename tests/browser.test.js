@@ -206,6 +206,35 @@ function writeComparisonExports(dir) {
     assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Content & links: tabs, a brief, and a crawler export that removes a link that exists', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await go('#content');
+    assert.equal(await text('#view h1'), 'Content & links');
+    for (const tab of ['topics', 'gaps', 'improve', 'links', 'briefs']) {
+      await go('#content?tab=' + tab);
+      const n = parseInt(await text(`.ct-tabs a[href$="tab=${tab}"] .count`), 10);
+      if (tab !== 'briefs') { const meta = parseInt((await text('#view [id$="-meta"]')).replace(/,/g, ''), 10); assert.equal(meta, n, tab + ': tab count = rows'); }
+    }
+    assert.ok(/Suggested title/.test(await text('.ct-brief')) && /fixed rules/.test(await text('.ct-brief')), 'brief explains how it was made');
+    await go('#content?tab=links');
+    const before = parseInt((await text('#t-ct-l-meta')).replace(/,/g, ''), 10);
+    const [target, source] = await page.$eval('#t-ct-l tbody tr', tr => [tr.querySelector('td a').href, tr.querySelectorAll('td')[2].querySelector('a').href]);
+    const csv = path.join(dir, 'inlinks.csv');
+    fs.writeFileSync(csv, `"Type","Source","Destination","Anchor"\n"Hyperlink","${source}","${target}","existing"\n`);
+    await page.setInputFiles('#ct-file', csv); await page.waitForTimeout(400);
+    assert.ok(/1 link between your pages/.test(await text('.ct-crawl')) && /already exist|already exists/.test(await text('.ct-crawl')), await text('.ct-crawl'));
+    const after = parseInt((await text('#t-ct-l-meta')).replace(/,/g, ''), 10);
+    assert.ok(after <= before, `rows ${before} → ${after}`);
+    assert.ok(/Not linked yet/.test(await text('#t-ct-l')), 'suggestions now marked as checked');
+    // a file without the right columns is refused with a reason
+    const bad = path.join(dir, 'bad.csv'); fs.writeFileSync(bad, 'Query,Clicks\nfoo,1\n');
+    await page.click('#ct-clear'); await page.waitForTimeout(300);
+    await page.setInputFiles('#ct-file', bad); await page.waitForTimeout(400);
+    assert.ok(/source and destination columns/.test(await text('.ct-crawl')), await text('.ct-crawl'));
+    assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('Losing ground: a brand-new page in the current export renders as new', async () => {
     const mk = (pages, start) => { const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Date', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(Array.from({ length: 30 }, (_, i) => { const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return [d.toISOString().slice(0, 10), 100, 4000, 0.025, 6]; }))), 'Chart');
@@ -224,7 +253,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'queries', 'ai']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=links', 'content?tab=briefs', 'queries', 'ai']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);
@@ -486,6 +515,50 @@ function writeComparisonExports(dir) {
     assert.ok(/sample data/.test(await text('#scope-fixed-msg')), 'explains sample data');
     assert.ok(await page.isVisible('#scope-new') && !(await page.isVisible('#scope-go')), 'offers a new analysis');
     await page.click('#scope-cancel');
+  });
+
+  await testAsync('large site: topics are grouped in the background without freezing the page', async () => {
+    // a fake Search Console with 30,000 searches over 2,000 pages
+    const mods = ['best', 'price', 'review', 'online', 'india', 'for women', 'for men', 'near me', 'cheap', 'how to clean', 'size guide', 'sale', 'discount', '2026', 'waterproof'];
+    const Q = [], QP = [];
+    for (let i = 0; Q.length < 30000; i++) mods.forEach((m, j) => { if (Q.length >= 30000) return; const q = `product${i} ${['shoes', 'boots', 'tent'][i % 3]} ${m}`; const impr = 100 + (i * 7 + j) % 400, pos = 3 + (i + j) % 25, clicks = Math.round(impr * Math.max(0.2, 12 - pos) / 200); Q.push({ keys: [q], clicks, impressions: impr, ctr: clicks / impr, position: pos }); if (QP.length < 25000) QP.push({ keys: [q, 'https://big.test/p' + (i % 2000)], clicks, impressions: impr, ctr: clicks / impr, position: pos }); });
+    const P = Array.from({ length: 2000 }, (_, i) => ({ keys: ['https://big.test/p' + i], clicks: 40, impressions: 3000, ctr: 0.013, position: 8 }));
+    const C = Array.from({ length: 90 }, (_, i) => { const d = new Date(Date.UTC(2026, 6, 1 + i)); return { keys: [d.toISOString().slice(0, 10)], clicks: 3000, impressions: 400000, ctr: 0.0075, position: 9 }; });
+    const ctx4 = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    await ctx4.route('**/*', async r => {
+      const u = r.request().url();
+      const lib = Object.keys(LOCAL).find(k => u.includes('cdnjs') && u.endsWith(k));
+      if (lib) return r.fulfill({ path: LOCAL[lib], contentType: 'text/javascript' });
+      if (u.startsWith(base)) return r.continue();
+      if (u.includes('searchconsole.googleapis.com')) {
+        if (u.endsWith('/sites')) return r.fulfill({ json: { siteEntry: [{ siteUrl: 'sc-domain:big.test', permissionLevel: 'siteOwner' }] } });
+        const b = JSON.parse(r.request().postData() || '{}'), k = b.dimensions.join(',');
+        const all = k === 'query' ? Q : k === 'page' ? P : k === 'date' ? C : k === 'query,page' ? QP : k === 'device' ? [] : [];
+        return r.fulfill({ json: { rows: all.slice(b.startRow || 0, (b.startRow || 0) + b.rowLimit) } });
+      }
+      return r.fulfill({ status: 204, body: '' });
+    });
+    const p4 = await ctx4.newPage();
+    const errs = []; p4.on('pageerror', e => errs.push(e.message));
+    await p4.addInitScript(() => { window.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => setTimeout(() => c.callback({ access_token: 'test', expires_in: 3600 }), 10) }), revoke: () => { } } } }; });
+    await p4.goto(base + 'app.html'); await p4.click('#btn-connect');
+    await p4.waitForFunction(() => document.querySelector('#pick-site').value.includes('big.test'));
+    await p4.uncheck('#pick-compare'); await p4.click('#pick-go');
+    await p4.waitForSelector('#setup:not([hidden]), #app:not([hidden])', { timeout: 30000 });
+    if (await p4.isVisible('#setup')) await p4.click('#setup-form button[type=submit]');
+    await p4.waitForSelector('#app:not([hidden])');
+    const pendingAtStart = await p4.evaluate(() => !document.getElementById('top-content').hidden && /Grouping/.test(document.getElementById('top-content').textContent));
+    // how long the main thread is blocked while topics are grouped (timers every 50 ms)
+    const lag = await p4.evaluate(async () => { let max = 0, last = performance.now(); for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 50)); const now = performance.now(); max = Math.max(max, now - last - 50); last = now; if (document.getElementById('top-content').hidden && i > 5) break; } return Math.round(max); });
+    await p4.waitForFunction(() => document.getElementById('top-content').hidden, null, { timeout: 60000 });
+    await p4.evaluate(() => { location.hash = '#content?tab=topics'; }); await p4.waitForTimeout(400);
+    const topics = parseInt((await p4.$eval('.ct-tabs a[href$="tab=topics"] .count', e => e.textContent)).replace(/,/g, ''), 10);
+    assert.ok(pendingAtStart, 'dashboard shown while topics were still being grouped');
+    assert.ok(lag < 1000, `main thread blocked at most ${lag} ms while grouping`);
+    assert.ok(topics >= 1500, `${topics} topics`);
+    assert.equal(errs.length, 0, 'JS errors: ' + errs.join(' | '));
+    console.log(`    (large site: longest main-thread block while grouping ${lag} ms, ${topics} topics)`);
+    await ctx4.close();
   });
 
   await testAsync('Excel export with a Page filter shows which folder it covers', async () => {

@@ -12,6 +12,8 @@ Generic for any website — no site-specific logic.
 | `styles.css` | Shared design tokens + app styles (light/dark) |
 | `config.js` | **Edit this**: app name, Google OAuth client ID, row limits, utility-page hints |
 | `engine.js` | Analysis engine (pure functions) |
+| `content.js` | Content assistant: topic clusters, content gaps, page improvements, internal links, crawler link exports, briefs (pure functions) |
+| `content-view.js` | Content & links screen |
 | `opportunities.js` | Opportunity engine: one ranked list with evidence, impact, confidence, effort and warnings (pure functions) |
 | `filters.js` | Goal builder engine: validated filter specs, plain-English parser with clarifying questions and data checks, safe text matching (pure functions) |
 | `workflows.js` | One-click workflow templates and their runners (pure functions) |
@@ -48,6 +50,7 @@ With Search Console connected, type a folder (`/blog/`) or a full URL in **Only 
 
 - **Overview** — headline monthly click potential, non-brand KPIs vs previous period, top 3 actions, trend, brand split, sections
 - **All opportunities** — every recommendation in one ranked list: the search or page, what was measured (and against which period), why it was picked, an estimated impact range, a confidence level with every reason behind it, the suggested action and its effort, and data warnings. Filter by type, confidence, effort and impact; export to CSV
+- **Content & links** — topics (searches grouped by shared words and, with Search Console connected, by the page they rank with), content gaps (topics with enough impressions where nothing reaches page one, only the homepage ranks, impressions are split across pages about the topic or between the matching page and unrelated ones, or question searches go unanswered), pages to improve (searches each page ranks 4–20 for), internal links (sources already rank on page one for the same topic; anchor text is the target's own search) and briefs drafted by fixed rules from real searches. Upload a crawler's link export (Screaming Frog All Inlinks, or any CSV with source and destination columns) to drop links that already exist; it stays in memory. Nothing is invented: every URL, search and number comes from the data, and impressions are the site's own, not market demand. Without query-page data (an export) it falls back to searches alone and folder-based link sources, and says so
 - **Action plan** — every recommendation ranked by clicks/month, printable
 - **Almost page one** — non-brand queries at positions 4–20, gain if moved to top 3 / top 7
 - **Titles to rewrite** — page-one pages/queries under benchmark CTR, with each page's top searches (API)
@@ -72,6 +75,7 @@ npm run test:fast           # unit + regression only, no browser
 - `tests/unit.test.js` — metrics, monthly scaling, brand matching, CTR calibration, outlier caps, results-page flags, de-duplication, sitelink and utility pages, parser, validation, special characters.
 - `tests/opportunities.test.js` — opportunity engine: growth total equals the headline, each search counted once, recovery maths, confidence rules and determinism, period scaling, row-limit bounds, early warnings, ranking-page evidence, data warnings, empty data.
 - `tests/goals.test.js` — Goal builder: supported requests (including the brief's example), opportunity goals matching the engine, clarifying questions, data the loaded analysis cannot answer, contradictions and invalid goals, literal text matching, preview vs run, run records, saved goals, comparison scaling.
+- `tests/content.test.js` — content assistant: clustering rules, determinism and speed (100,000 searches), each gap rule, page improvements, link sources and anchors, no invented URLs or anchors, crawler exports (Screaming Frog, tab/semicolon, quotes, BOM, wrong files), export-only mode, briefs from real searches, totals unchanged, Goal builder and links workflow.
 - `tests/regression.test.js` — an anonymised real 3-month export: site totals, coverage, non-brand figures and estimate sanity checks. The fixture holds a real site's numbers, so it is **gitignored** and the suite skips without it. Create one locally with `node tools/anonymize-export.js <export.xlsx> <brand> tests/fixtures/real-export-anon.json`.
 - `tests/browser.test.js` — Playwright: every screen and workflow on sample data, mobile width, Excel and CSV upload, set-aside pages, print, CSV export safety, Forget this site.
 - `tools/anonymize-export.js` turns any Performance export into a fixture (numbers kept; query words, URLs and brand replaced).
