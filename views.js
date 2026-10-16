@@ -97,7 +97,7 @@
     Chart.defaults.font.family = cssVar('--body') || 'system-ui';
     Chart.defaults.color = cssVar('--muted');
     Chart.defaults.borderColor = cssVar('--line-soft');
-    CHARTS.push(new Chart(el, cfg));
+    const c = new Chart(el, cfg); CHARTS.push(c); return c;
   }
 
   // ── section header ──
@@ -119,9 +119,27 @@
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
     warn: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
-    bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>'
+    bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+    down: '<path d="m22 17-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
+    rocket: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2z"/>',
+    spark: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
+    chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    scale: '<path d="M16 16l3-8 3 8c-.9.7-1.9 1-3 1s-2.1-.3-3-1zM2 16l3-8 3 8c-.9.7-1.9 1-3 1s-2.1-.3-3-1zM7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.8 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.2.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    ghost: '<path d="M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/>',
+    alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+    cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/>',
+    star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+    chev: '<path d="m6 9 6 6 6-6"/>'
   };
   const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+  // Collapsible card header: coloured icon, title, description, count pill, chevron
+  const accHead = (icon, tone, title, desc, pill, pillTone) => `<summary><span class="ico ${tone}">${svg(icon)}</span><div><h3>${esc(title)}</h3><p>${esc(desc)}</p></div><span class="pill ${pillTone || tone}">${esc(pill)}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true">${ICON.chev}</svg></summary>`;
   function tileDelta(cur, prev, invert, unit) {
     if (prev == null || !isFinite(prev) || prev === 0) return '';
     const d = unit === 'pt' ? cur - prev : (cur - prev) / prev * 100;
@@ -132,20 +150,20 @@
     const nb = A.totNB, p = A.prev;
     const bench = expCtr(nb.pos);
     return `<section class="tiles" aria-label="Non-branded performance">
-      <div class="tile t-blue"><div class="tile-i">${svg('clicks')}</div><div class="tile-l">Non-brand clicks</div><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries tracked</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
-      <div class="tile t-green"><div class="tile-i">${svg('eye')}</div><div class="tile-l">Impressions</div><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-s">Times you appeared in search</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
-      <div class="tile t-amber"><div class="tile-i">${svg('pulse')}</div><div class="tile-l">Average CTR</div><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
-      <div class="tile t-red"><div class="tile-i">${svg('target')}</div><div class="tile-l">Average position</div><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-s">${nb.pos <= 5 ? 'Excellent — top 5' : nb.pos <= 10 ? 'Solid — page one' : 'Needs work — page two'}</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
+      <div class="tile t-blue"><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-l">Non-brand clicks</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries tracked</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
+      <div class="tile t-green"><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-l">Total impressions</div><div class="tile-s">Times you appeared in search</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
+      <div class="tile t-amber"><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-l">Average CTR</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
+      <div class="tile t-red"><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">${nb.pos <= 5 ? 'Excellent — top 5' : nb.pos <= 10 ? 'Solid — page one' : 'Needs work — page two'}</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
     </section>`;
   }
   function signalBox(cls, icon, title, items, empty) {
     return `<section class="sig ${cls}"><h2>${svg(icon)}${esc(title)}</h2>${items.length ? items.map(i => `<a href="#${i.view}"><span class="sl" title="${esc(i.l)}">${esc(i.l)}</span><span class="sv">${esc(i.v)}</span></a>`).join('') : `<p class="none">${esc(empty)}</p>`}</section>`;
   }
   const STATUS = { strong: 'Strong', ctr: 'Fix CTR', work: 'Needs work', steady: 'Steady' };
-  function sectionCards(list) {
+  function sectionCards(list, cls) {
     if (!list.length) return '<p class="empty">No pages found.</p>';
     const max = Math.max(...list.map(s => s.clicks), 1);
-    return `<div class="cards">${list.map(s => `
+    return `<div class="cards ${cls || ''}">${list.map(s => `
       <article class="card s-${s.status}">
         <div class="card-top"><span class="card-n" title="${esc(s.key)}">${esc(s.key)}</span><span class="badge b-${s.status}">${STATUS[s.status]}</span></div>
         <div class="card-v">${fmtN(s.clicks)}</div>
@@ -154,15 +172,58 @@
       </article>`).join('')}</div>`;
   }
 
+  // Aggregate the daily series by day / week / month
+  function rollup(C, unit) {
+    const c = C.slice().sort((a, b) => a.d.localeCompare(b.d));
+    if (unit === 'day') return c.map(r => ({ l: r.d.slice(5), clicks: r.clicks, impr: r.impr }));
+    const m = new Map();
+    c.forEach(r => {
+      const d = new Date(r.d + 'T00:00:00');
+      let k;
+      if (unit === 'week') { const w = new Date(d); w.setDate(d.getDate() - ((d.getDay() + 6) % 7)); k = w.toISOString().slice(5, 10); }
+      else k = d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+      const o = m.get(k) || { l: k, clicks: 0, impr: 0 }; o.clicks += r.clicks; o.impr += r.impr; m.set(k, o);
+    });
+    return [...m.values()];
+  }
+  function gscIndexUrl(D) {
+    const res = D.siteUrl || ('sc-domain:' + D.site);
+    return 'https://search.google.com/search-console/index?resource_id=' + encodeURIComponent(res);
+  }
+  const INDEX_CHECKS = [
+    ['Not found (404)', 'Broken URLs Google still tries to crawl'],
+    ['Page with redirect', 'Internal links pointing at redirects'],
+    ['Alternate page with proper canonical', 'Duplicates correctly pointing elsewhere'],
+    ['Blocked by robots.txt', 'Pages you may have blocked by mistake'],
+    ["Excluded by 'noindex' tag", 'Check none of these should rank'],
+    ['Discovered – currently not indexed', 'Google knows the URL but has not crawled it'],
+    ['Crawled – currently not indexed', 'Often thin or duplicate content'],
+    ['Server error (5xx)', 'Pages failing when Googlebot visits']
+  ];
+  const miniTable = (rows, key, label) => rows.length ? `<table><thead><tr><th>${label}</th><th class="r">Clicks</th><th class="r">Impr.</th><th class="r">Pos.</th></tr></thead><tbody>${rows.map(r => `<tr><td class="${key === 'q' ? 'q' : 'u'}">${key === 'q' ? serp(r.q) : urlCell(r.p, r.path)}</td><td class="r">${fmtN(r.clicks)}</td><td class="r">${fmtN(r.impr)}</td><td class="r">${posTag(r.pos)}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No data.</p>';
+
   V.overview = (A, D) => {
     const brandShare = A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0;
+    const topQ = A.NBQ.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
+    const topP = A.P.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const html = `
       <section class="banner">
         <div><h1>${esc(D.site)} could gain about <b class="num">${fmtN(A.potentialMonthly)}</b> more clicks a month from searches it already ranks for.</h1>
         <p>From ${A.quickWins.length.toLocaleString()} queries on positions 4–20 and ${A.ctrQueries.length.toLocaleString()} page-one queries with below-benchmark CTR. Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded.</p></div>
         <a class="btn-primary" href="#plan">See the action plan</a>
       </section>
-      ${tiles(A)}
+
+      <section class="panel">
+        ${tiles(A)}
+        ${D.C && D.C.length ? `<div class="panel-b">
+          <div class="chart-bar">
+            <div class="legend"><span><i style="background:var(--signal)"></i>Clicks</span><span><i style="background:var(--sky)"></i>Impressions</span></div>
+            <div class="seg" role="group" aria-label="Group by"><button type="button" data-unit="day" class="on">Day</button><button type="button" data-unit="week">Week</button><button type="button" data-unit="month">Month</button></div>
+          </div>
+          <div class="chart-box"><canvas id="ch-trend" aria-label="Clicks and impressions over time"></canvas></div>
+        </div>` : '<p class="empty" style="padding:16px 20px">This export has no date data. Connect Search Console or include the Dates sheet to see the trend.</p>'}
+      </section>
+
       <div class="signals">
         ${signalBox('sig-good', 'check', "What's going well", A.signals.good, 'Not enough data yet.')}
         ${signalBox('sig-bad', 'warn', 'Needs attention', A.signals.bad, 'Nothing urgent found.')}
@@ -174,32 +235,71 @@
         ${ledger(A.plan, 3)}
       </section>
 
+      <div class="grid-2 even">
+        <section class="panel">
+          <div class="panel-h"><h2>Position distribution</h2><p>Non-branded queries by ranking band. The 4–10 and 11–20 bars are your quickest gains.</p></div>
+          <div class="panel-b"><div class="chart-box sm"><canvas id="ch-dist" aria-label="Queries by position band"></canvas></div></div>
+        </section>
+        <section class="panel">
+          <div class="panel-h"><h2>CTR by position</h2><p>Your click-through rate at each position against the typical benchmark.</p></div>
+          <div class="panel-b"><div class="chart-box sm"><canvas id="ch-ctrpos" aria-label="CTR by position versus benchmark"></canvas></div></div>
+        </section>
+      </div>
+
+      <div class="grid-2 even">
+        <section class="panel"><div class="panel-h"><h2>Top non-branded queries</h2><a href="#queries">All queries</a></div><div class="panel-b flush">${miniTable(topQ, 'q', 'Query')}</div></section>
+        <section class="panel"><div class="panel-h"><h2>Top pages</h2><a href="#pages">All pages</a></div><div class="panel-b flush">${miniTable(topP, 'p', 'Page')}</div></section>
+      </div>
+
       <div class="grid-2">
         <section class="panel">
-          <div class="panel-h"><h2>Daily clicks and impressions</h2><p>All searches, including branded.</p></div>
-          <div class="panel-b">${D.C && D.C.length ? '<div class="chart-box"><canvas id="ch-trend" aria-label="Daily clicks and impressions"></canvas></div>' : '<p class="empty">This export has no date data. Connect Search Console or include the Dates sheet.</p>'}</div>
+          <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Strong, Steady, Fix CTR (ranks but under-clicked), or Needs work (mostly page two).</p></div>
+          <div class="panel-b cards-wrap">${sectionCards(A.sections1.filter(x => x.key !== '/').slice(0, 6), 'two')}</div>
         </section>
         <section class="panel">
           <div class="panel-h"><h2>Where clicks come from</h2></div>
           <div class="panel-b">
             <div class="chart-box sm"><canvas id="ch-split" aria-label="Branded versus non-branded clicks"></canvas></div>
-            ${D.Dev && D.Dev.length ? `<table style="margin-top:12px"><tbody>${D.Dev.map(d => `<tr><td>${esc(d.d.charAt(0) + d.d.slice(1).toLowerCase())}</td><td class="r">${fmtN(d.clicks)} clicks</td><td class="r">${pctf(d.ctr)} CTR</td></tr>`).join('')}</tbody></table>` : ''}
+            ${D.Dev && D.Dev.length ? `<table style="margin-top:10px"><tbody>${D.Dev.map(d => `<tr><td>${esc(d.d.charAt(0) + d.d.slice(1).toLowerCase())}</td><td class="r">${fmtN(d.clicks)} clicks</td><td class="r">${pctf(d.ctr)} CTR</td></tr>`).join('')}</tbody></table>` : ''}
+            ${A.anon && A.anon.hidden > 0 ? `<p class="anon"><b>${A.anon.share.toFixed(0)}% of clicks</b> (${fmtN(A.anon.hidden)}) came from anonymous queries Google doesn't report individually.</p>` : ''}
           </div>
         </section>
       </div>
 
-      <section class="panel">
-        <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Badges show what each section needs next: Strong, Steady, Fix CTR (ranks but under-clicked), or Needs work (mostly page two).</p></div>
-        <div class="panel-b cards-wrap">${sectionCards(A.sections1.filter(x => x.key !== '/').slice(0, 8))}</div>
-      </section>`;
+      <div class="stack">
+        <details class="acc">
+          ${accHead('alert', 'orange', 'Indexing issues to check', 'Pages Google is not indexing. Review each reason in Search Console › Indexing › Pages.', 'Open checklist', 'orange')}
+          <div class="acc-tip"><b>Tip:</b> open the Pages report, then click a reason to see the affected URLs.</div>
+          <div class="idx">${INDEX_CHECKS.map(([t, d]) => `<a href="${esc(gscIndexUrl(D))}" target="_blank" rel="noopener"><span>${esc(t)}<br><small>${esc(d)}</small></span>${svg('chev').replace('viewBox', 'style="transform:rotate(-90deg);width:16px;height:16px;flex:none" viewBox')}</a>`).join('')}</div>
+        </details>
+      </div>`;
     const mount = () => {
       if (D.C && D.C.length) {
-        const c = D.C.slice().sort((a, b) => a.d.localeCompare(b.d));
-        chart('ch-trend', { type: 'line', data: { labels: c.map(r => r.d.slice(5)), datasets: [
-          { label: 'Clicks', data: c.map(r => r.clicks), borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-          { label: 'Impressions', data: c.map(r => r.impr), borderColor: cssVar('--good'), backgroundColor: cssVar('--good'), tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], yAxisID: 'y1' }
-        ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { position: 'left', ticks: { callback: v => fmtN(v) } }, y1: { position: 'right', grid: { display: false }, ticks: { callback: v => fmtN(v) } } } } });
+        const draw = unit => {
+          const r = rollup(D.C, unit);
+          return { labels: r.map(x => x.l), clicks: r.map(x => x.clicks), impr: r.map(x => x.impr) };
+        };
+        const d0 = draw('day');
+        const ch = chart('ch-trend', { type: 'line', data: { labels: d0.labels, datasets: [
+          { label: 'Clicks', data: d0.clicks, borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5, yAxisID: 'y' },
+          { label: 'Impressions', data: d0.impr, borderColor: cssVar('--sky'), backgroundColor: 'transparent', tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2, yAxisID: 'y1' }
+        ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { position: 'left', title: { display: true, text: 'Clicks', color: cssVar('--signal') }, ticks: { color: cssVar('--signal'), callback: v => fmtN(v) } }, y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Impressions', color: cssVar('--sky') }, ticks: { color: cssVar('--sky'), callback: v => fmtN(v) } } } } });
+        document.querySelectorAll('.seg [data-unit]').forEach(b => b.addEventListener('click', () => {
+          document.querySelectorAll('.seg [data-unit]').forEach(x => x.classList.toggle('on', x === b));
+          if (!ch) return;
+          const d = draw(b.dataset.unit);
+          ch.data.labels = d.labels; ch.data.datasets[0].data = d.clicks; ch.data.datasets[1].data = d.impr;
+          ch.data.datasets.forEach(ds => ds.pointRadius = b.dataset.unit === 'day' ? 0 : 3);
+          ch.update();
+        }));
       }
+      chart('ch-dist', { type: 'bar', data: { labels: A.posDist.map(b => b.label), datasets: [
+        { label: 'Queries', data: A.posDist.map(b => b.n), backgroundColor: [cssVar('--good'), cssVar('--signal'), cssVar('--watch'), cssVar('--orange'), cssVar('--risk')], borderRadius: 6, yAxisID: 'y' }
+      ] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: x => { const b = A.posDist[x.dataIndex]; return [` ${b.n} queries`, ` ${fmtN(b.clicks)} clicks · ${fmtN(b.impr)} impr.`]; } } } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Position' } }, y: { ticks: { precision: 0 } } } } });
+      chart('ch-ctrpos', { type: 'line', data: { labels: A.ctrByPos.map(p => p.pos), datasets: [
+        { label: 'Your CTR', data: A.ctrByPos.map(p => p.actual), borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal'), spanGaps: true, tension: .3, pointRadius: 3, borderWidth: 2 },
+        { label: 'Benchmark', data: A.ctrByPos.map(p => p.bench), borderColor: cssVar('--muted'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: .3 }
+      ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: x => ` ${x.dataset.label}: ${x.raw == null ? '—' : x.raw.toFixed(1) + '%'}` } } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Position' } }, y: { ticks: { callback: v => v + '%' } } } } });
       chart('ch-split', { type: 'doughnut', data: { labels: ['Non-branded', 'Branded'], datasets: [{ data: [A.totNB.clicks, A.totB.clicks], backgroundColor: [cssVar('--signal'), cssVar('--watch')], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: x => ` ${x.label}: ${fmtN(x.raw)} clicks` } } } } });
     };
     return { html, mount };
@@ -287,14 +387,14 @@
   V.ai = (A) => {
     const ai = A.ai;
     const groups = [
-      { id: 'ov', title: 'Likely answered by AI Overviews', desc: 'Top-5 rankings with CTR under a third of benchmark. Something on the results page is answering the query before the click.', rows: ai.overview, tip: 'Open a few in Google. If an AI Overview appears, make sure your page is cited: lead with a short direct answer, use clear headings that mirror the question, and add original data the overview cannot summarise.', gain: true },
-      { id: 'am', title: 'AI Mode candidates', desc: 'Positions 1–3 with almost no clicks (under 0.5% CTR). Typical when a full AI answer replaces the results page.', rows: ai.aiMode, tip: 'These are the hardest to win back with titles alone. Aim to be a cited source: original data, clear definitions, and a named author with credentials.' },
-      { id: 'zp', title: 'Zero-click pages', desc: 'Page-one URLs with impressions but under 0.5% CTR.', rows: ai.zeroPages, tip: 'Check whether the page answers the query fully in the snippet. If so, add a reason to click: a tool, a download, a comparison table, or deeper detail.', page: true },
-      { id: 'qs', title: 'Question searches', desc: 'The format AI answers and People Also Ask boxes draw from.', rows: ai.questions, tip: 'Answer each question in 40–60 words directly under a heading phrased as the question. Group related questions into an FAQ section with FAQPage markup.' },
-      { id: 'cv', title: 'Conversational searches (7+ words)', desc: 'Long, natural-language searches — the way people prompt ChatGPT, Perplexity and Gemini.', rows: ai.conversational, tip: 'These show the follow-up questions your audience has. Cover them as sections of a pillar page rather than separate thin pages.' },
-      { id: 'cp', title: 'Comparisons and alternatives', desc: 'Searches weighing two options. AI engines love citing structured comparison tables.', rows: ai.compare, tip: 'Give each comparison a table with clear criteria, a verdict, and who each option suits.' },
-      { id: 'fr', title: 'Freshness-sensitive searches', desc: 'Queries with a year or words like “latest”. AI engines prefer recently updated sources.', rows: ai.fresh, tip: 'Show a visible “Updated on” date, refresh numbers each year, and include the year in the title where it fits.' },
-      { id: 'sn', title: 'Holding position one', desc: 'Queries where you already rank first. These are your most likely AI citations — protect them.', rows: ai.snippets, tip: 'Keep these pages updated and fast. Add Organization and author markup so engines can attribute the answer to you.' }
+      { id: 'ov', icon: 'spark', tone: 'amber', title: 'Likely answered by AI Overviews', desc: 'Top-5 rankings with CTR under a third of benchmark. Something on the results page is answering the query before the click.', rows: ai.overview, tip: 'Open a few in Google. If an AI Overview appears, make sure your page is cited: lead with a short direct answer, use clear headings that mirror the question, and add original data the overview cannot summarise.', gain: true },
+      { id: 'am', icon: 'alert', tone: 'red', title: 'AI Mode candidates', desc: 'Positions 1–3 with almost no clicks (under 0.5% CTR). Typical when a full AI answer replaces the results page.', rows: ai.aiMode, tip: 'These are the hardest to win back with titles alone. Aim to be a cited source: original data, clear definitions, and a named author with credentials.' },
+      { id: 'zp', icon: 'ghost', tone: 'violet', title: 'Zero-click pages', desc: 'Page-one URLs with impressions but under 0.5% CTR.', rows: ai.zeroPages, tip: 'Check whether the page answers the query fully in the snippet. If so, add a reason to click: a tool, a download, a comparison table, or deeper detail.', page: true },
+      { id: 'qs', icon: 'help', tone: 'indigo', title: 'Question searches', desc: 'The format AI answers and People Also Ask boxes draw from.', rows: ai.questions, tip: 'Answer each question in 40–60 words directly under a heading phrased as the question. Group related questions into an FAQ section with FAQPage markup.' },
+      { id: 'cv', icon: 'chat', tone: 'teal', title: 'Conversational searches (7+ words)', desc: 'Long, natural-language searches — the way people prompt ChatGPT, Perplexity and Gemini.', rows: ai.conversational, tip: 'These show the follow-up questions your audience has. Cover them as sections of a pillar page rather than separate thin pages.' },
+      { id: 'cp', icon: 'scale', tone: 'orange', title: 'Comparisons and alternatives', desc: 'Searches weighing two options. AI engines love citing structured comparison tables.', rows: ai.compare, tip: 'Give each comparison a table with clear criteria, a verdict, and who each option suits.' },
+      { id: 'fr', icon: 'clock', tone: 'amber', title: 'Freshness-sensitive searches', desc: 'Queries with a year or words like “latest”. AI engines prefer recently updated sources.', rows: ai.fresh, tip: 'Show a visible “Updated on” date, refresh numbers each year, and include the year in the title where it fits.' },
+      { id: 'sn', icon: 'trophy', tone: 'green', title: 'Holding position one', desc: 'Queries where you already rank first. These are your most likely AI citations — protect them.', rows: ai.snippets, tip: 'Keep these pages updated and fast. Add Organization and author markup so engines can attribute the answer to you.' }
     ];
     const cols = g => g.page ? [C.page, C.impr, C.clicks, C.ctr, C.pos] : g.gain ? [C.q, C.impr, C.clicks, C.ctr, C.pos, C.gain] : [C.q, C.impr, C.clicks, C.ctr, C.pos];
     const html = head('AEO & GEO signals', 'How your Search Console data reflects AI search: where answers are being taken from you, and which queries are shaped like prompts.') +
@@ -305,12 +405,12 @@
         <div class="aitile a-blue"><span>vs expected</span><b>−${fmtN(A.perMonth(ai.expectedGap))}</b><small>clicks / month below benchmark</small></div>
         <div class="aitile ${A.readiness >= 60 ? 'a-green' : A.readiness >= 35 ? 'a-amber' : 'a-red'}"><span>GEO ready</span><b>${A.readiness}%</b><small>AI search readiness</small></div>
       </div>
-      <section class="panel">${groups.map(g => `
+      <div class="stack">${groups.map(g => `
         <details class="acc" ${g.id === 'ov' ? 'open' : ''}>
-          <summary><div><h3>${esc(g.title)}</h3><p>${esc(g.desc)}</p></div><div class="n">${g.rows.length.toLocaleString()}<small>${fmtN(g.rows.reduce((s, r) => s + r.impr, 0))} impr.</small></div></summary>
-          <div class="acc-tip">${esc(g.tip)}</div>
+          ${accHead(g.icon, g.tone, g.title, g.desc, g.rows.length.toLocaleString() + (g.page ? ' pages' : ' queries'))}
+          <div class="acc-tip"><b>What to do:</b> ${esc(g.tip)}</div>
           ${table('t-ai-' + g.id, cols(g), g.rows, { sort: g.gain ? 'gain' : 'impr', file: 'ai-' + g.id, pageSize: 25, searchKeys: g.page ? ['path'] : ['q'] })}
-        </details>`).join('')}</section>
+        </details>`).join('')}</div>
       <div class="note"><b>About the readiness score.</b> It blends how many of your question searches rank top 5, how much of your demand is question- or prompt-shaped, whether you hold position one anywhere, and how many top rankings are losing clicks to on-page answers. It's a directional measure from Search Console data only.</div>`;
     return { html, mount: () => groups.forEach(g => drawTable('t-ai-' + g.id)) };
   };
@@ -327,14 +427,15 @@
     return { html, mount: () => drawTable('t-q') };
   };
 
+  const TIER_ICON = { carry: ['rocket', 'green'], strong: ['star', 'indigo'], steady: ['file', 'teal'], tail: ['down', 'amber'], ghost: ['ghost', 'red'] };
   V.pages = (A) => {
     const html = head('Pages', 'Pages grouped by how much they carry, relative to the rest of your site.') +
       `<div class="strip">${A.tiers.map(t => stat(t.n.toLocaleString(), t.label, t.key === 'carry' ? 'gain' : t.key === 'ghost' ? 'risk' : '')).join('')}</div>
-      <section class="panel">${A.tiers.map((t, i) => `
+      <div class="stack">${A.tiers.map((t, i) => `
         <details class="acc" ${i === 0 ? 'open' : ''}>
-          <summary><div><h3>${esc(t.label)}</h3><p>${esc(t.desc)}</p></div><div class="n">${fmtN(t.clicks)}<small>clicks · ${t.n} pages</small></div></summary>
+          ${accHead(TIER_ICON[t.key][0], TIER_ICON[t.key][1], t.label, t.desc, t.n.toLocaleString() + ' pages · ' + fmtN(t.clicks) + ' clicks')}
           ${table('t-pg-' + t.key, [C.page, C.clicks, C.impr, C.ctr, C.pos], t.rows, { sort: t.key === 'ghost' ? 'impr' : 'clicks', file: 'pages-' + t.key, searchKeys: ['path'], pageSize: 25, placeholder: 'Filter pages' })}
-        </details>`).join('')}</section>`;
+        </details>`).join('')}</div>`;
     return { html, mount: () => A.tiers.forEach(t => drawTable('t-pg-' + t.key)) };
   };
 
@@ -352,15 +453,16 @@
     const html = head('Search intent', 'Every query sorted by what the searcher wants: to learn, to compare, to act, or to find you.') +
       `<div class="grid-2"><section class="panel"><div class="panel-h"><h2>Clicks by intent</h2></div><div class="panel-b"><div class="chart-box"><canvas id="ch-intent" aria-label="Clicks and impressions by intent"></canvas></div></div></section>
        <section class="panel"><div class="panel-h"><h2>Summary</h2></div><div class="panel-b flush"><table><thead><tr><th>Intent</th><th class="r">Queries</th><th class="r">CTR</th><th class="r">Position</th></tr></thead><tbody>${list.map(i => `<tr><td>${esc(i.label)}</td><td class="r">${i.n.toLocaleString()}</td><td class="r">${pctf(i.ctr)}</td><td class="r">${posTag(i.pos)}</td></tr>`).join('')}</tbody></table></div></section></div>
-       <section class="panel">${list.map((i, k) => `
-        <details class="acc" ${k === 0 ? 'open' : ''}><summary><div><h3>${esc(i.label)}</h3><p>${esc(INTENT_HELP[i.key])}</p></div><div class="n">${fmtN(i.clicks)}<small>clicks · ${i.n} queries</small></div></summary>
-        ${table('t-in-' + i.key, [C.q, C.clicks, C.impr, C.ctr, C.pos], i.rows, { sort: 'impr', file: 'intent-' + i.key, pageSize: 25 })}</details>`).join('')}</section>`;
+       <div class="stack">${list.map((i, k) => `
+        <details class="acc" ${k === 0 ? 'open' : ''}>${accHead(INTENT_ICON[i.key][0], INTENT_ICON[i.key][1], i.label, INTENT_HELP[i.key], i.n.toLocaleString() + ' queries · ' + fmtN(i.clicks) + ' clicks')}
+        ${table('t-in-' + i.key, [C.q, C.clicks, C.impr, C.ctr, C.pos], i.rows, { sort: 'impr', file: 'intent-' + i.key, pageSize: 25 })}</details>`).join('')}</div>`;
     const mount = () => {
       list.forEach(i => drawTable('t-in-' + i.key));
       chart('ch-intent', { type: 'bar', data: { labels: list.map(i => i.label), datasets: [{ label: 'Clicks', data: list.map(i => i.clicks), backgroundColor: cssVar('--signal'), borderRadius: 4 }, { label: 'Impressions ÷ 10', data: list.map(i => i.impr / 10), backgroundColor: cssVar('--sky-soft'), borderColor: cssVar('--sky'), borderWidth: 1, borderRadius: 4 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => fmtN(v) } } } } });
     };
     return { html, mount };
   };
+  const INTENT_ICON = { info: ['book', 'indigo'], comm: ['scale', 'orange'], trans: ['cart', 'green'], nav: ['star', 'violet'], other: ['compass', 'teal'] };
   const INTENT_HELP = { info: 'Learning: questions, guides, how-tos. Build depth and answer directly.', comm: 'Comparing options: best, top, reviews, vs. Lists and comparison pages win here.', trans: 'Ready to act: price, buy, book, download. Send these to pages with a clear next step.', nav: 'Looking for you by name. Track as brand demand, not SEO performance.', other: 'No clear signal. Often short head terms; check what the ranking page offers.' };
 
   V.regex = (A) => {

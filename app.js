@@ -96,11 +96,14 @@
     if (!res.ok) throw new Error((data.error && data.error.message) || 'Search Console returned an error (' + res.status + ').');
     return data;
   }
+  let FILTER = { type: 'web', device: '' };
   async function pull(site, start, end, dims, max, label) {
     const out = [];
     for (let startRow = 0; startRow < max; startRow += 25000) {
       progress(`Fetching ${label}… ${out.length.toLocaleString()} rows`);
-      const d = await api(`sites/${encodeURIComponent(site)}/searchAnalytics/query`, { startDate: start, endDate: end, dimensions: dims, rowLimit: Math.min(25000, max - startRow), startRow });
+      const body = { startDate: start, endDate: end, dimensions: dims, type: FILTER.type, rowLimit: Math.min(25000, max - startRow), startRow };
+      if (FILTER.device && !dims.includes('device')) body.dimensionFilterGroups = [{ filters: [{ dimension: 'device', operator: 'equals', expression: FILTER.device }] }];
+      const d = await api(`sites/${encodeURIComponent(site)}/searchAnalytics/query`, body);
       const rows = d.rows || [];
       out.push(...rows);
       if (rows.length < 25000) break;
@@ -135,6 +138,7 @@
   $('picker-form').addEventListener('submit', async e => {
     e.preventDefault();
     const site = $('pick-site').value, start = $('pick-start').value, end = $('pick-end').value, compare = $('pick-compare').checked;
+    FILTER = { type: $('pick-type').value, device: $('pick-device').value };
     if (!site || !start || !end || start > end) { $('pick-error').textContent = 'Choose a property and a valid date range.'; $('pick-error').hidden = false; return; }
     $('pick-error').hidden = true; $('pick-go').disabled = true;
     try {
@@ -156,7 +160,7 @@
       if (!q.length && !p.length) throw new Error('Search Console has no data for this property in that range.');
       progress('Analysing…');
       loaded({
-        site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days,
+        site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER },
         prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
         Dev: dev.map(r => mapRow(r, ['d'])), QP: qp.map(r => mapRow(r, ['q', 'p'])), prevQ, prevP
@@ -194,6 +198,8 @@
     A = window.CW.analyse(D, S);
     $('top-site').textContent = D.site + (D.source === 'demo' ? ' (sample)' : '');
     $('top-range').textContent = D.start && D.end ? `${fmtDate(D.start)} – ${fmtDate(D.end)}` : 'Date range not in export';
+    const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
+    $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
     counts();
     show('app');
     if (!location.hash || !V[location.hash.slice(1)]) history.replaceState(null, '', '#overview');

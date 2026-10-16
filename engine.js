@@ -364,10 +364,25 @@
     if (ai.questions.length) opp.push({ l: `${ai.questions.length} question searches`, v: 'Answer directly for AI', view: 'ai' });
     const signals = { good: good.slice(0, 4), bad: bad.slice(0, 4), opp: opp.slice(0, 4) };
 
+    // ── Position distribution (non-brand queries) ──
+    const BUCKETS = [['1–3', 0, 3.5], ['4–10', 3.5, 10.5], ['11–20', 10.5, 20.5], ['21–50', 20.5, 50.5], ['51+', 50.5, 1e9]];
+    const posDist = BUCKETS.map(([label, lo, hi]) => { const rows = NBQ.filter(r => r.pos >= lo && r.pos < hi); return { label, ...agg(rows) }; });
+
+    // ── CTR by position: actual (impression-weighted) vs benchmark ──
+    const ctrByPos = [];
+    for (let p = 1; p <= 20; p++) {
+      const rows = NBQ.filter(r => Math.round(r.pos) === p);
+      const a = agg(rows);
+      ctrByPos.push({ pos: p, actual: rows.length ? a.ctr : null, bench: expCtr(p), n: rows.length, impr: a.impr });
+    }
+
+    // ── Anonymous queries: clicks Google doesn't attribute to any query ──
+    const anon = D.C && D.C.length ? { site: site.clicks, queries: totAll.clicks, hidden: Math.max(0, site.clicks - totAll.clicks), share: site.clicks ? Math.max(0, site.clicks - totAll.clicks) / site.clicks * 100 : 0 } : null;
+
     return {
       Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
-      intents, sections1, sections2, tiers, potentialMonthly, plan, signals,
+      intents, sections1, sections2, tiers, potentialMonthly, plan, signals, posDist, ctrByPos, anon,
       brandRx: brandRegex(S.brand)
     };
   }
