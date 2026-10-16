@@ -44,16 +44,30 @@
       const parts = base.split(/[-_]/);
       if (parts.length > 1) { out.add(parts.join(' ')); out.add(parts.join('')); }
     }
-    // suggestions: frequent tokens in top-CTR queries that look navigational
+    // suggestions: only brand-shaped variants found in real queries —
+    // misspellings of the base name, or the name split into two words.
     const sugg = new Map();
-    (Q || []).filter(q => q.ctr > 25 && q.impr > 20).slice(0, 400).forEach(q => {
-      q.q.toLowerCase().split(/\s+/).forEach(t => {
-        if (t.length < 4 || STOP.has(t)) return;
-        sugg.set(t, (sugg.get(t) || 0) + q.clicks);
+    if (base && base.length > 3) {
+      (Q || []).slice(0, 5000).forEach(q => {
+        const toks = q.q.toLowerCase().split(/\s+/).filter(Boolean);
+        toks.forEach((t, i) => {
+          const clean = t.replace(/[^a-z0-9.]/g, '');
+          if (clean.length < 4 || out.has(clean)) return;
+          if (clean !== base && Math.abs(clean.length - base.length) <= 2 && lev(clean, base) <= (base.length > 7 ? 2 : 1)) sugg.set(clean, (sugg.get(clean) || 0) + q.impr);
+          const pair = toks[i + 1] ? t + ' ' + toks[i + 1] : null;
+          if (pair && pair.replace(' ', '') === base && !out.has(pair)) sugg.set(pair, (sugg.get(pair) || 0) + q.impr);
+        });
       });
-    });
-    const suggestions = [...sugg.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).filter(t => !out.has(t)).slice(0, 6);
+    }
+    const suggestions = [...sugg.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 6);
     return { terms: [...out], suggestions };
+  }
+  function lev(a, b) {
+    const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[m][n];
   }
   const STOP = new Set('the and for with from that this your what how why when where which best near free online login www com app official site review reviews price prices'.split(' '));
 
@@ -235,8 +249,13 @@
       conversational: NBQ.filter(r => r.words >= 7).sort((a, b) => b.impr - a.impr),
       compare: NBQ.filter(r => RX.compare.test(r.q)).sort((a, b) => b.impr - a.impr),
       fresh: NBQ.filter(r => (RX.year.test(r.q) || RX.fresh.test(r.q))).sort((a, b) => b.impr - a.impr),
-      snippets: NBQ.filter(r => r.pos <= 1.5 && r.impr >= imprFloor).sort((a, b) => b.impr - a.impr)
+      snippets: NBQ.filter(r => r.pos <= 1.5 && r.impr >= imprFloor).sort((a, b) => b.impr - a.impr),
+      // near-total zero-click at the very top: typical of AI Mode / full AI answers
+      aiMode: NBQ.filter(r => r.pos <= 3 && r.impr >= imprFloor && r.ctr < 0.5).sort((a, b) => b.impr - a.impr),
+      zeroPages: P.filter(r => r.pos <= 10 && r.impr >= pageFloor && r.ctr < 0.5).sort((a, b) => b.impr - a.impr)
     };
+    // clicks below what page-one rankings should earn, across all non-brand queries
+    ai.expectedGap = NBQ.filter(r => r.pos <= 10).reduce((s, r) => s + Math.max(0, r.impr * (expCtr(r.pos) - r.ctr) / 100), 0);
     const aiImpr = agg(ai.questions.concat(ai.conversational.filter(r => !RX.question.test(r.q))));
     const readiness = Math.round(Math.min(100,
       (ai.snippets.length ? 25 : 0) +
@@ -260,7 +279,13 @@
         if (!m.has(key)) m.set(key, []);
         m.get(key).push(r);
       });
-      return [...m.entries()].map(([k, rows]) => ({ key: k, rows: rows.sort((a, b) => b.clicks - a.clicks), ...agg(rows) })).sort((a, b) => b.clicks - a.clicks);
+      return [...m.entries()].map(([k, rows]) => {
+        const a = agg(rows);
+        const bench = expCtr(a.pos);
+        // status: what this section needs next
+        const status = a.pos > 10 ? 'work' : a.ctr < bench * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= bench * 0.8 ? 'strong' : 'steady';
+        return { key: k, rows: rows.sort((x, y) => y.clicks - x.clicks), ...a, bench, status };
+      }).sort((a, b) => b.clicks - a.clicks);
     }
     const sections1 = sectionsAt(1), sections2 = sectionsAt(2);
 
@@ -320,10 +345,29 @@
       body: `Average position ${strong.pos.toFixed(1)} and ${strong.ctr.toFixed(1)}% CTR show Google already trusts this topic. More pages here should rank quickly.` });
     plan.sort((a, b) => (b.gain || 0) - (a.gain || 0));
 
+    // ── Signals: going well / needs attention / opportunities ──
+    const good = [], bad = [], opp = [];
+    const topSec = sections1.filter(s => s.key !== '/')[0];
+    if (topSec) good.push({ l: `${topSec.key} section`, v: `${fmtN(topSec.clicks)} clicks · ${topSec.ctr.toFixed(1)}% CTR`, view: 'sections' });
+    const topQ = NBQ.slice().sort((a, b) => b.clicks - a.clicks)[0];
+    if (topQ) good.push({ l: `“${topQ.q}”`, v: `${fmtN(topQ.clicks)} clicks at #${topQ.pos.toFixed(1)}`, view: 'queries' });
+    if (ai.snippets.length) good.push({ l: 'Holding position one', v: `${ai.snippets.length} non-brand ${ai.snippets.length === 1 ? 'query' : 'queries'}`, view: 'ai' });
+    if (decay && decay.rising.length) good.push({ l: decay.rising[0].path, v: `+${fmtN(decay.rising[0].won)} clicks vs previous`, view: 'decay' });
+    if (ctrPages[0]) bad.push({ l: ctrPages[0].path, v: `${ctrPages[0].ctr.toFixed(1)}% CTR at #${ctrPages[0].pos.toFixed(1)}`, view: 'ctr' });
+    if (decay && decay.pages[0]) bad.push({ l: decay.pages[0].path, v: `${decay.pages[0].ch.toFixed(0)}% clicks`, view: 'decay' });
+    const hi = cannibal.filter(c => c.sev === 'high').length;
+    if (hi) bad.push({ l: 'Pages competing with each other', v: `${hi} high-severity ${hi === 1 ? 'query' : 'queries'}`, view: 'cannibal' });
+    if (ai.overview.length) bad.push({ l: 'Clicks lost to AI answers', v: `${ai.overview.length} top-5 ${ai.overview.length === 1 ? 'query' : 'queries'}`, view: 'ai' });
+    if (quickWins[0]) opp.push({ l: `“${quickWins[0].q}”`, v: `#${quickWins[0].pos.toFixed(1)} · +${fmtN(perMonth(quickWins[0].gain))}/mo`, view: 'quickwins' });
+    if (quickWins.length) opp.push({ l: `${quickWins.length} queries on positions 4–20`, v: 'Push to top 3', view: 'quickwins' });
+    if (ctrPages.length) opp.push({ l: `${ctrPages.length} page-one titles`, v: 'Rewrite for CTR', view: 'ctr' });
+    if (ai.questions.length) opp.push({ l: `${ai.questions.length} question searches`, v: 'Answer directly for AI', view: 'ai' });
+    const signals = { good: good.slice(0, 4), bad: bad.slice(0, 4), opp: opp.slice(0, 4) };
+
     return {
       Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
-      intents, sections1, sections2, tiers, potentialMonthly, plan,
+      intents, sections1, sections2, tiers, potentialMonthly, plan, signals,
       brandRx: brandRegex(S.brand)
     };
   }

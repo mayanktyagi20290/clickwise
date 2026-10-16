@@ -221,7 +221,8 @@
     view.innerHTML = out.html;
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
-    document.title = (document.querySelector('.nav a.on') ? document.querySelector('.nav a.on').firstChild.textContent + ' — ' : '') + CFG.appName;
+    const onLink = document.querySelector('.nav a.on span');
+    document.title = (onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
     $('nav').classList.remove('open'); $('menu-btn').setAttribute('aria-expanded', 'false');
     window.scrollTo(0, 0); view.focus({ preventScroll: true });
   }

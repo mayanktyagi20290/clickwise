@@ -43,7 +43,7 @@
       QP.push({ q, p: page.p, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos });
     };
     // brand
-    ['trailcraft', 'trailcraft india', 'trail craft', 'trailcraft coupon', 'trailcraft boots', 'trailcraft reviews'].forEach((q, i) => push(q, i === 4 ? gearPages[0] : home, between(1, 1.6), between(400, 3200) / (i + 1), 2.2));
+    ['trailcraft', 'trailcraft india', 'trail craft', 'trailcraft coupon', 'trailcraft boots', 'trailcraft reviews', 'trialcraft', 'trailcraf shoes'].forEach((q, i) => push(q, i === 4 ? gearPages[0] : home, between(1, 1.6), between(400, 3200) / (i + 1), 2.2));
     gearPages.forEach((pg, i) => {
       const g = pg.topic;
       const base = between(1500, 9000) / (1 + i * 0.25);
@@ -72,6 +72,7 @@
       push(t + ' itinerary 4 days', pg, between(5, 15), base * 0.1, 1);
       push('is ' + t + ' safe for beginners in winter', pg, between(3, 12), base * 0.05, 0.6);
       push(t + ' cost', pg, between(6, 18), base * 0.15, 1);
+      if (i % 3 === 0) push(t + ' altitude in meters', pg, between(1, 2.5), base * 0.12, 0.02); // answered on the results page
     });
     guidePages.forEach((pg, i) => {
       const g = pg.topic;

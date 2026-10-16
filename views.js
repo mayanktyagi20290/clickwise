@@ -112,19 +112,62 @@
   // ════════════════ VIEWS ════════════════
   const V = {};
 
-  V.overview = (A, D) => {
+  const ICON = {
+    clicks: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    warn: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+    bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>'
+  };
+  const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+  function tileDelta(cur, prev, invert, unit) {
+    if (prev == null || !isFinite(prev) || prev === 0) return '';
+    const d = unit === 'pt' ? cur - prev : (cur - prev) / prev * 100;
+    const good = invert ? d < 0 : d > 0;
+    return `<span class="tile-d" title="${good ? 'Improved' : 'Worse'} vs previous period">${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
+  }
+  function tiles(A) {
     const nb = A.totNB, p = A.prev;
+    const bench = expCtr(nb.pos);
+    return `<section class="tiles" aria-label="Non-branded performance">
+      <div class="tile t-blue"><div class="tile-i">${svg('clicks')}</div><div class="tile-l">Non-brand clicks</div><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries tracked</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
+      <div class="tile t-green"><div class="tile-i">${svg('eye')}</div><div class="tile-l">Impressions</div><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-s">Times you appeared in search</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
+      <div class="tile t-amber"><div class="tile-i">${svg('pulse')}</div><div class="tile-l">Average CTR</div><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
+      <div class="tile t-red"><div class="tile-i">${svg('target')}</div><div class="tile-l">Average position</div><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-s">${nb.pos <= 5 ? 'Excellent — top 5' : nb.pos <= 10 ? 'Solid — page one' : 'Needs work — page two'}</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
+    </section>`;
+  }
+  function signalBox(cls, icon, title, items, empty) {
+    return `<section class="sig ${cls}"><h2>${svg(icon)}${esc(title)}</h2>${items.length ? items.map(i => `<a href="#${i.view}"><span class="sl" title="${esc(i.l)}">${esc(i.l)}</span><span class="sv">${esc(i.v)}</span></a>`).join('') : `<p class="none">${esc(empty)}</p>`}</section>`;
+  }
+  const STATUS = { strong: 'Strong', ctr: 'Fix CTR', work: 'Needs work', steady: 'Steady' };
+  function sectionCards(list) {
+    if (!list.length) return '<p class="empty">No pages found.</p>';
+    const max = Math.max(...list.map(s => s.clicks), 1);
+    return `<div class="cards">${list.map(s => `
+      <article class="card s-${s.status}">
+        <div class="card-top"><span class="card-n" title="${esc(s.key)}">${esc(s.key)}</span><span class="badge b-${s.status}">${STATUS[s.status]}</span></div>
+        <div class="card-v">${fmtN(s.clicks)}</div>
+        <div class="card-m">CTR ${pctf(s.ctr)} · pos ${s.pos.toFixed(1)} · ${s.n} page${s.n === 1 ? '' : 's'}</div>
+        <div class="card-bar"><span style="width:${(s.clicks / max * 100).toFixed(1)}%"></span></div>
+      </article>`).join('')}</div>`;
+  }
+
+  V.overview = (A, D) => {
     const brandShare = A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0;
     const html = `
-      <h1 class="hero-statement">${esc(D.site)} could gain about <span class="big num">${fmtN(A.potentialMonthly)}</span> more clicks a month from searches it already ranks for.</h1>
-      <p class="hero-sub">That estimate comes from ${A.quickWins.length.toLocaleString()} queries sitting on positions 4–20 and ${A.ctrQueries.length.toLocaleString()} page-one queries with below-benchmark CTR. It excludes branded searches, which made up ${brandShare.toFixed(0)}% of query clicks.</p>
-
-      <section class="kpis" aria-label="Non-branded performance">
-        <div class="kpi"><div class="kpi-l">Non-branded clicks</div><div class="kpi-v">${fmtN(nb.clicks)}</div><div class="kpi-d">${delta(nb.clicks, p && p.nb.clicks)}</div></div>
-        <div class="kpi"><div class="kpi-l">Impressions</div><div class="kpi-v">${fmtN(nb.impr)}</div><div class="kpi-d">${delta(nb.impr, p && p.nb.impr)}</div></div>
-        <div class="kpi"><div class="kpi-l">CTR</div><div class="kpi-v">${pctf(nb.ctr, 2)}</div><div class="kpi-d">${delta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div></div>
-        <div class="kpi"><div class="kpi-l">Average position</div><div class="kpi-v">${nb.pos.toFixed(1)}</div><div class="kpi-d">${delta(nb.pos, p && p.nb.pos, true)}</div></div>
+      <section class="banner">
+        <div><h1>${esc(D.site)} could gain about <b class="num">${fmtN(A.potentialMonthly)}</b> more clicks a month from searches it already ranks for.</h1>
+        <p>From ${A.quickWins.length.toLocaleString()} queries on positions 4–20 and ${A.ctrQueries.length.toLocaleString()} page-one queries with below-benchmark CTR. Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded.</p></div>
+        <a class="btn-primary" href="#plan">See the action plan</a>
       </section>
+      ${tiles(A)}
+      <div class="signals">
+        ${signalBox('sig-good', 'check', "What's going well", A.signals.good, 'Not enough data yet.')}
+        ${signalBox('sig-bad', 'warn', 'Needs attention', A.signals.bad, 'Nothing urgent found.')}
+        ${signalBox('sig-opp', 'bolt', 'Opportunities', A.signals.opp, 'No clear opportunities in this range.')}
+      </div>
 
       <section class="panel">
         <div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a><p>Ranked by estimated clicks per month. Each links to the exact queries or pages.</p></div>
@@ -146,15 +189,15 @@
       </div>
 
       <section class="panel">
-        <div class="panel-h"><h2>Site sections by clicks</h2><a href="#sections">All sections</a></div>
-        <div class="panel-b flush">${sectionBars(A.sections1.slice(0, 8))}</div>
+        <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Badges show what each section needs next: Strong, Steady, Fix CTR (ranks but under-clicked), or Needs work (mostly page two).</p></div>
+        <div class="panel-b cards-wrap">${sectionCards(A.sections1.filter(x => x.key !== '/').slice(0, 8))}</div>
       </section>`;
     const mount = () => {
       if (D.C && D.C.length) {
         const c = D.C.slice().sort((a, b) => a.d.localeCompare(b.d));
         chart('ch-trend', { type: 'line', data: { labels: c.map(r => r.d.slice(5)), datasets: [
-          { label: 'Clicks', data: c.map(r => r.clicks), borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal'), tension: .3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-          { label: 'Impressions', data: c.map(r => r.impr), borderColor: cssVar('--sky'), backgroundColor: cssVar('--sky'), tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], yAxisID: 'y1' }
+          { label: 'Clicks', data: c.map(r => r.clicks), borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .3, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
+          { label: 'Impressions', data: c.map(r => r.impr), borderColor: cssVar('--good'), backgroundColor: cssVar('--good'), tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], yAxisID: 'y1' }
         ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { position: 'left', ticks: { callback: v => fmtN(v) } }, y1: { position: 'right', grid: { display: false }, ticks: { callback: v => fmtN(v) } } } } });
       }
       chart('ch-split', { type: 'doughnut', data: { labels: ['Non-branded', 'Branded'], datasets: [{ data: [A.totNB.clicks, A.totB.clicks], backgroundColor: [cssVar('--signal'), cssVar('--watch')], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: x => ` ${x.label}: ${fmtN(x.raw)} clicks` } } } } });
@@ -245,20 +288,28 @@
     const ai = A.ai;
     const groups = [
       { id: 'ov', title: 'Likely answered by AI Overviews', desc: 'Top-5 rankings with CTR under a third of benchmark. Something on the results page is answering the query before the click.', rows: ai.overview, tip: 'Open a few in Google. If an AI Overview appears, make sure your page is cited: lead with a short direct answer, use clear headings that mirror the question, and add original data the overview cannot summarise.', gain: true },
+      { id: 'am', title: 'AI Mode candidates', desc: 'Positions 1–3 with almost no clicks (under 0.5% CTR). Typical when a full AI answer replaces the results page.', rows: ai.aiMode, tip: 'These are the hardest to win back with titles alone. Aim to be a cited source: original data, clear definitions, and a named author with credentials.' },
+      { id: 'zp', title: 'Zero-click pages', desc: 'Page-one URLs with impressions but under 0.5% CTR.', rows: ai.zeroPages, tip: 'Check whether the page answers the query fully in the snippet. If so, add a reason to click: a tool, a download, a comparison table, or deeper detail.', page: true },
       { id: 'qs', title: 'Question searches', desc: 'The format AI answers and People Also Ask boxes draw from.', rows: ai.questions, tip: 'Answer each question in 40–60 words directly under a heading phrased as the question. Group related questions into an FAQ section with FAQPage markup.' },
       { id: 'cv', title: 'Conversational searches (7+ words)', desc: 'Long, natural-language searches — the way people prompt ChatGPT, Perplexity and Gemini.', rows: ai.conversational, tip: 'These show the follow-up questions your audience has. Cover them as sections of a pillar page rather than separate thin pages.' },
       { id: 'cp', title: 'Comparisons and alternatives', desc: 'Searches weighing two options. AI engines love citing structured comparison tables.', rows: ai.compare, tip: 'Give each comparison a table with clear criteria, a verdict, and who each option suits.' },
       { id: 'fr', title: 'Freshness-sensitive searches', desc: 'Queries with a year or words like “latest”. AI engines prefer recently updated sources.', rows: ai.fresh, tip: 'Show a visible “Updated on” date, refresh numbers each year, and include the year in the title where it fits.' },
       { id: 'sn', title: 'Holding position one', desc: 'Queries where you already rank first. These are your most likely AI citations — protect them.', rows: ai.snippets, tip: 'Keep these pages updated and fast. Add Organization and author markup so engines can attribute the answer to you.' }
     ];
-    const cols = g => g.gain ? [C.q, C.impr, C.clicks, C.ctr, C.pos, C.gain] : [C.q, C.impr, C.clicks, C.ctr, C.pos];
+    const cols = g => g.page ? [C.page, C.impr, C.clicks, C.ctr, C.pos] : g.gain ? [C.q, C.impr, C.clicks, C.ctr, C.pos, C.gain] : [C.q, C.impr, C.clicks, C.ctr, C.pos];
     const html = head('AEO & GEO signals', 'How your Search Console data reflects AI search: where answers are being taken from you, and which queries are shaped like prompts.') +
-      `<div class="strip">${stat(A.readiness + '/100', 'AI search readiness', A.readiness >= 60 ? 'gain' : A.readiness >= 35 ? 'watch' : 'risk')}${stat(ai.overview.length, 'top-5 queries losing clicks to answers', 'risk')}${stat(ai.questions.length.toLocaleString(), 'question searches')}${stat(ai.conversational.length.toLocaleString(), 'conversational searches')}</div>
+      `<div class="aitiles">
+        <div class="aitile a-amber"><span>AI Overview</span><b>${ai.overview.length}</b><small>top-5 queries under-clicked</small></div>
+        <div class="aitile a-red"><span>AI Mode</span><b>${ai.aiMode.length}</b><small>top-3 queries near zero clicks</small></div>
+        <div class="aitile a-violet"><span>Zero-click</span><b>${ai.zeroPages.length}</b><small>page-one pages under 0.5% CTR</small></div>
+        <div class="aitile a-blue"><span>vs expected</span><b>−${fmtN(A.perMonth(ai.expectedGap))}</b><small>clicks / month below benchmark</small></div>
+        <div class="aitile ${A.readiness >= 60 ? 'a-green' : A.readiness >= 35 ? 'a-amber' : 'a-red'}"><span>GEO ready</span><b>${A.readiness}%</b><small>AI search readiness</small></div>
+      </div>
       <section class="panel">${groups.map(g => `
         <details class="acc" ${g.id === 'ov' ? 'open' : ''}>
           <summary><div><h3>${esc(g.title)}</h3><p>${esc(g.desc)}</p></div><div class="n">${g.rows.length.toLocaleString()}<small>${fmtN(g.rows.reduce((s, r) => s + r.impr, 0))} impr.</small></div></summary>
           <div class="acc-tip">${esc(g.tip)}</div>
-          ${table('t-ai-' + g.id, cols(g), g.rows, { sort: g.gain ? 'gain' : 'impr', file: 'ai-' + g.id, pageSize: 25 })}
+          ${table('t-ai-' + g.id, cols(g), g.rows, { sort: g.gain ? 'gain' : 'impr', file: 'ai-' + g.id, pageSize: 25, searchKeys: g.page ? ['path'] : ['q'] })}
         </details>`).join('')}</section>
       <div class="note"><b>About the readiness score.</b> It blends how many of your question searches rank top 5, how much of your demand is question- or prompt-shaped, whether you hold position one anywhere, and how many top rankings are losing clicks to on-page answers. It's a directional measure from Search Console data only.</div>`;
     return { html, mount: () => groups.forEach(g => drawTable('t-ai-' + g.id)) };
@@ -290,7 +341,7 @@
   V.sections = (A) => {
     const list2 = A.sections2;
     const html = head('Site sections', 'Your URLs grouped by folder, built automatically from your site structure. Position is weighted by impressions.') +
-      `<section class="panel"><div class="panel-h"><h2>Top-level folders</h2></div><div class="panel-b flush">${sectionBars(A.sections1)}</div></section>
+      `<section class="panel"><div class="panel-h"><h2>Top-level folders</h2><p>Strong: top-5 and clicked well. Steady: page one, normal CTR. Fix CTR: ranks but under-clicked. Needs work: mostly page two.</p></div><div class="panel-b cards-wrap">${sectionCards(A.sections1)}</div></section>
        <section class="panel"><div class="panel-h"><h2>Second-level folders</h2><p>Finer breakdown, useful for large sections like /blog/ or /products/.</p></div>
        ${table('t-sec', [{ k: 'key', l: 'Section', cls: 'u' }, { k: 'n', l: 'Pages', r: 1 }, C.clicks, C.impr, C.ctr, C.pos], list2, { sort: 'clicks', file: 'sections', placeholder: 'Filter sections' })}</section>`;
     return { html, mount: () => drawTable('t-sec') };
