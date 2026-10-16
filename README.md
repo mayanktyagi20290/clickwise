@@ -10,7 +10,7 @@ Generic for any website — no site-specific logic.
 | `index.html` + `landing.css` | Marketing site (hero, features, AI search, pricing, FAQ) |
 | `app.html` | The audit tool |
 | `styles.css` | Shared design tokens + app styles (light/dark) |
-| `config.js` | **Edit this**: app name, Google OAuth client ID, row limits |
+| `config.js` | **Edit this**: app name, Google OAuth client ID, row limits, utility-page hints |
 | `engine.js` | Analysis engine (pure functions) |
 | `filters.js` | Smart filters: validated filter specs, plain-English parser, safe text matching (pure functions) |
 | `workflows.js` | One-click workflow templates and their runners (pure functions) |
@@ -56,7 +56,23 @@ Old `#regex` links redirect to Smart filters.
 
 ## Tests
 
-No build step. The checks used during development are plain Node scripts (parser and filter unit tests, plus a Playwright smoke test that opens every screen on sample data). Scheduled workflows, email alerts and an AI fallback for the filter parser need the backend below; nothing in the app pretends otherwise.
+```
+npm install                 # once: test tools only, nothing is needed to deploy
+npx playwright install chromium   # once, if Chromium is not installed
+npm test                    # = node tests/run.js  (unit, regression, browser)
+npm run test:fast           # unit + regression only, no browser
+```
+
+- `tests/unit.test.js` — metrics, monthly scaling, brand matching, CTR calibration, outlier caps, results-page flags, de-duplication, sitelink and utility pages, parser, validation, special characters.
+- `tests/regression.test.js` — an anonymised real 3-month export: site totals, coverage, non-brand figures and estimate sanity checks. The fixture holds a real site's numbers, so it is **gitignored** and the suite skips without it. Create one locally with `node tools/anonymize-export.js <export.xlsx> <brand> tests/fixtures/real-export-anon.json`.
+- `tests/browser.test.js` — Playwright: every screen and workflow on sample data, mobile width, Excel and CSV upload, set-aside pages, print, CSV export safety, Forget this site.
+- `tools/anonymize-export.js` turns any Performance export into a fixture (numbers kept; query words, URLs and brand replaced).
+
+Scheduled workflows, email alerts and an AI fallback for the filter parser need the backend below; nothing in the app pretends otherwise.
+
+## How estimates work
+
+All opportunity figures are clicks per month, shown as a low–high range. Expected CTR at each position is the site's own median CTR where it has at least 30 non-branded queries, and an industry benchmark elsewhere (never higher than the position above). A query keeps its own click rate relative to its position, so searches answered on the results page are not projected to a full top-3 CTR, and are flagged. No single query may contribute more than 10% of a list. The headline counts each query once; page estimates overlap query estimates and are never added to it. Pages that look like branded sitelinks or utility pages are set aside with the reason, and users can include them again.
 
 ## Roadmap (paid tier)
 

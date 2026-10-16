@@ -22,8 +22,8 @@
   const dz = $('dropzone'), fi = $('file-input');
   ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, () => dz.classList.remove('over')));
-  dz.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
-  fi.addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
+  dz.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) readFiles([...e.dataTransfer.files]); });
+  fi.addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); });
 
   // ── file import (Search Console Performance export) ──
   function num(v) {
@@ -36,42 +36,64 @@
     const s = String(v || '').trim();
     return s.endsWith('%') ? parseFloat(s) || 0 : (parseFloat(s) || 0) <= 1 ? (parseFloat(s) || 0) * 100 : parseFloat(s) || 0;
   }
-  function readFile(file) {
+  // Accepts the Excel download, or the CSV files from Search Console's CSV download (unzipped,
+  // selected together). Sheets are recognised by sheet or file name and their header row.
+  const MAX_BYTES = 50 * 1024 * 1024;
+  const KIND_LABEL = { Q: 'Queries', P: 'Pages', C: 'Dates', Dev: 'Devices', Countries: 'Countries', Appearance: 'Search appearance' };
+  function kindOf(name, header) {
+    const n = name.toLowerCase(), h = String(header || '').toLowerCase();
+    const has = w => n.includes(w) || h.includes(w);
+    return has('quer') ? 'Q' : has('appearance') ? 'Appearance' : has('page') ? 'P' : has('countr') ? 'Countries' : has('date') || n.includes('chart') ? 'C' : has('device') ? 'Dev' : null;
+  }
+  const readBuffer = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(new Uint8Array(e.target.result)); r.onerror = () => rej(new Error('read failed')); r.readAsArrayBuffer(file); });
+  async function readFiles(files) {
     startError('');
     if (!window.XLSX) { startError('The spreadsheet reader is still loading. Try again in a moment.'); return; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        const out = { Q: [], P: [], C: [], Dev: [] };
-        wb.SheetNames.forEach(name => {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' }).filter(r => r.some(c => c !== ''));
-          if (rows.length < 2) return;
-          const n = name.toLowerCase(), h = String(rows[0][0] || '').toLowerCase();
-          const kind = n.includes('quer') || h.includes('quer') ? 'Q' : n.includes('page') || h.includes('page') ? 'P' : n.includes('date') || h.includes('date') ? 'C' : n.includes('device') || h.includes('device') ? 'Dev' : null;
-          if (!kind) return;
-          rows.slice(1).forEach(r => {
-            if (r[0] === '' || r[0] == null) return;
-            const row = { clicks: num(r[1]), impr: num(r[2]), ctr: ctrVal(r[3]), pos: num(r[4]) };
-            if (kind === 'Q') out.Q.push({ q: String(r[0]), ...row });
-            else if (kind === 'P') out.P.push({ p: String(r[0]), ...row });
-            else if (kind === 'C') out.C.push({ d: typeof r[0] === 'number' ? excelDate(r[0]) : String(r[0]).slice(0, 10), ...row });
-            else out.Dev.push({ d: String(r[0]).toUpperCase(), ...row });
-          });
+    const zip = files.find(f => /\.zip$/i.test(f.name));
+    if (zip) { startError('That is Search Console\'s CSV download, which comes as a .zip. Unzip it and select the CSV files together, or use Export › Download Excel instead.'); return; }
+    const big = files.find(f => f.size > MAX_BYTES);
+    if (big) { startError(`“${big.name}” is larger than 50 MB. Search Console exports are much smaller; check that this is the Performance export.`); return; }
+    const out = { Q: [], P: [], C: [], Dev: [], Countries: [], Appearance: [] };
+    const found = new Set(), unread = [];
+    for (const file of files) {
+      let wb;
+      // raw: CSV cells stay text, so a query such as "=total" is not turned into a formula and lost
+      try { wb = XLSX.read(await readBuffer(file), { type: 'array', raw: true }); } catch (e) { unread.push(file.name); continue; }
+      if (!wb || !wb.SheetNames || !wb.SheetNames.length) { unread.push(file.name); continue; }
+      wb.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' }).filter(r => r.some(c => c !== ''));
+        if (rows.length < 2) return;
+        // a CSV has one sheet named "Sheet1": use the file name instead
+        const kind = kindOf(wb.SheetNames.length === 1 ? file.name + ' ' + name : name, rows[0][0]);
+        if (!kind || found.has(kind)) return;
+        found.add(kind);
+        rows.slice(1).forEach(r => {
+          if (r[0] === '' || r[0] == null) return;
+          const row = { clicks: num(r[1]), impr: num(r[2]), ctr: ctrVal(r[3]), pos: num(r[4]) };
+          if (kind === 'Q') out.Q.push({ q: String(r[0]), ...row });
+          else if (kind === 'P') out.P.push({ p: String(r[0]), ...row });
+          else if (kind === 'C') out.C.push({ d: typeof r[0] === 'number' ? excelDate(r[0]) : String(r[0]).slice(0, 10), ...row });
+          else if (kind === 'Dev') out.Dev.push({ d: String(r[0]).toUpperCase(), ...row });
+          else out[kind].push({ d: String(r[0]), ...row });
         });
-        if (!out.Q.length && !out.P.length) { startError('That file has no Queries or Pages sheet. Export it from Search Console › Performance › Export › Download Excel.'); return; }
-        out.C.sort((a, b) => a.d.localeCompare(b.d));
-        const host = (out.P[0] && hostOf(out.P[0].p)) || (file.name.match(/([a-z0-9-]+\.[a-z.]{2,})/i) || [])[1] || 'Your site';
-        loaded({ ...out, site: host, source: 'file', start: out.C[0] && out.C[0].d, end: out.C.length ? out.C[out.C.length - 1].d : null, days: out.C.length || 90 });
-      } catch (err) { startError('Could not read that file: ' + err.message); }
-    };
-    reader.readAsArrayBuffer(file);
+      });
+    }
+    if (!out.Q.length && !out.P.length) {
+      startError(unread.length && !found.size ? `Couldn't read ${unread.map(n => '“' + n + '”').join(', ')} as a spreadsheet. Upload the file from Search Console › Performance › Export › Download Excel.`
+        : found.size ? `Found ${[...found].map(k => KIND_LABEL[k]).join(', ')}, but no Queries or Pages. Export from Search Console › Performance with the Queries and Pages tabs included.`
+        : 'That file has no Queries or Pages sheet. Export it from Search Console › Performance › Export › Download Excel.');
+      return;
+    }
+    out.C = out.C.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.d)).sort((a, b) => a.d.localeCompare(b.d));
+    const first = files[0];
+    const host = (out.P[0] && hostOf(out.P[0].p)) || (first.name.match(/([a-z0-9-]+\.[a-z.]{2,})/i) || [])[1] || 'Your site';
+    loaded({ ...out, site: host, source: 'file', start: out.C[0] && out.C[0].d, end: out.C.length ? out.C[out.C.length - 1].d : null, days: out.C.length || null });
   }
   function excelDate(n) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
   function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return null; } }
 
   // ── Google sign-in (Google Identity Services token flow) ──
-  let token = null, tokenClient = null;
+  let token = null, tokenClient = null, tokenExpires = 0;
   $('btn-connect').addEventListener('click', () => {
     startError('');
     if (!CFG.googleClientId || CFG.googleClientId.startsWith('YOUR_')) { startError('Google sign-in is not configured yet. Add your OAuth client ID in config.js. Meanwhile, upload an export or try the sample data.'); return; }
@@ -79,20 +101,37 @@
     tokenClient = tokenClient || google.accounts.oauth2.initTokenClient({
       client_id: CFG.googleClientId,
       scope: 'https://www.googleapis.com/auth/webmasters.readonly',
-      callback: r => { if (r.error) { startError('Sign-in was not completed: ' + r.error); return; } token = r.access_token; openPicker(); },
+      callback: r => { if (r.error) { startError('Sign-in was not completed: ' + r.error); return; } token = r.access_token; tokenExpires = Date.now() + (+r.expires_in || 3600) * 1000; openPicker(); },
       error_callback: e => startError(e && e.type === 'popup_closed' ? 'The sign-in window was closed before finishing.' : 'Sign-in failed. Allow pop-ups for this site and try again.')
     });
     tokenClient.requestAccessToken({ prompt: token ? '' : 'consent' });
   });
 
-  async function api(path, body) {
-    const res = await fetch('https://searchconsole.googleapis.com/webmasters/v3/' + path, {
-      method: body ? 'POST' : 'GET',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined
-    });
+  // Search Console reads are safe to repeat, so busy (429) and server (5xx) errors and dropped
+  // connections are retried up to 3 times with growing waits, honouring Retry-After.
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function api(path, body, attempt = 0) {
+    if (tokenExpires && Date.now() > tokenExpires - 30000) throw new Error('Your Google session has expired (sessions last about an hour). Go back and connect again.');
+    let res;
+    try {
+      res = await fetch('https://searchconsole.googleapis.com/webmasters/v3/' + path, {
+        method: body ? 'POST' : 'GET',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined
+      });
+    } catch (e) {
+      if (attempt < 3) { await sleep(1000 * 2 ** attempt); return api(path, body, attempt + 1); }
+      throw new Error('Could not reach Search Console. Check your connection and try again.');
+    }
+    if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+      const wait = (+res.headers.get('Retry-After') || 2 ** attempt) * 1000 + Math.round(Math.random() * 400);
+      progress(`Search Console is busy, retrying in ${Math.round(wait / 1000)} s…`);
+      await sleep(wait); return api(path, body, attempt + 1);
+    }
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) throw new Error('Your Google session expired. Go back and connect again.');
+    if (res.status === 403) throw new Error('This Google account cannot read that property. Ask an owner to add you in Search Console › Settings › Users.');
+    if (res.status === 429) throw new Error('Search Console\'s usage limit was reached. Wait a few minutes and try again.');
     if (!res.ok) throw new Error((data.error && data.error.message) || 'Search Console returned an error (' + res.status + ').');
     return data;
   }
@@ -194,8 +233,9 @@
   });
   const splitTerms = v => v.split(',').map(s => s.trim()).filter(Boolean);
 
+  const analyse = () => window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints });
   function launch() {
-    A = window.CW.analyse(D, S);
+    A = analyse();
     $('top-site').textContent = D.site + (D.source === 'demo' ? ' (sample)' : '');
     $('top-range').textContent = D.start && D.end ? `${fmtDate(D.start)} – ${fmtDate(D.end)}` : 'Date range not in export';
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
@@ -249,19 +289,29 @@
 
   // ── chrome ──
   $('menu-btn').addEventListener('click', () => { const o = $('nav').classList.toggle('open'); $('menu-btn').setAttribute('aria-expanded', String(o)); });
-  $('btn-print').addEventListener('click', () => { if (location.hash !== '#plan') { location.hash = '#plan'; setTimeout(() => window.print(), 300); } else window.print(); });
-  $('btn-new').addEventListener('click', () => { A = null; D = null; history.replaceState(null, '', location.pathname); fi.value = ''; show('start'); });
+  // Print the one-page opportunity report (the browser can save it as PDF).
+  $('btn-print').addEventListener('click', () => { if (location.hash !== '#wf=report') { location.hash = '#wf=report'; setTimeout(() => window.print(), 400); } else window.print(); });
+  function revoke() { try { if (token && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(token, () => { }); } catch (e) { } token = null; tokenExpires = 0; }
+  function reset() { A = null; D = null; revoke(); history.replaceState(null, '', location.pathname); fi.value = ''; $('start-info').hidden = true; show('start'); }
+  $('btn-new').addEventListener('click', reset);
+  // Forget everything stored in this browser for the current site.
+  $('set-forget').addEventListener('click', () => {
+    if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings and saved workflows from this browser.`)) return;
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); } catch (e) { }
+    $('settings').close('forget'); reset();
+  });
   $('btn-settings').addEventListener('click', () => {
     $('set-brand').value = S.brand.join(', ');
     $('set-ignore').value = (S.ignore || []).join(', ');
+    $('set-keep').value = (S.keep || []).join(', ');
     $('set-exclude').value = (S.exclude || []).join(', ');
     $('settings').showModal();
   });
   $('settings').addEventListener('close', () => {
     if ($('settings').returnValue !== 'save') return;
-    S = { ...S, brand: splitTerms($('set-brand').value), exclude: splitTerms($('set-exclude').value), ignore: splitTerms($('set-ignore').value) };
+    S = { ...S, brand: splitTerms($('set-brand').value), exclude: splitTerms($('set-exclude').value), ignore: splitTerms($('set-ignore').value), keep: splitTerms($('set-keep').value) };
     store.set('site:' + D.site, S);
-    A = window.CW.analyse(D, S); counts(); route();
+    A = analyse(); counts(); route();
   });
 
   // events from the automation screens
@@ -270,10 +320,24 @@
     if (!S || !D) return;
     S = { ...S, ignore: (e.detail || []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 50) };
     store.set('site:' + D.site, S);
-    A = window.CW.analyse(D, S); counts();
+    A = analyse(); counts();
     history.replaceState(null, '', '#wf=ignore'); route();
   });
-  document.addEventListener('click', e => { if (e.target.closest('[data-demo]')) document.dispatchEvent(new CustomEvent('cw:demo')); });
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-demo]')) document.dispatchEvent(new CustomEvent('cw:demo'));
+    // "Include" on a page set aside as a likely sitelink or utility page
+    const k = e.target.closest('[data-keep]');
+    if (k && S && D) {
+      S = { ...S, keep: [...new Set((S.keep || []).concat(k.dataset.keep))] };
+      store.set('site:' + D.site, S); A = analyse(); counts(); route();
+    }
+  });
+
+  // Data is never stored, so a reload starts over; say so instead of silently resetting.
+  if (location.hash.length > 1 && !/[?&]demo\b/.test(location.search)) {
+    $('start-info').textContent = 'Clickwise doesn\'t keep your search data, so reloading starts a new analysis. Upload the file again or reconnect — settings for each site are remembered.';
+    $('start-info').hidden = false;
+  }
 
   // Deep link straight into the sample: app.html?demo
   // (deferred libraries such as Chart.js are ready by DOMContentLoaded)

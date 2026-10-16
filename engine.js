@@ -71,14 +71,26 @@
   }
   const STOP = new Set('the and for with from that this your what how why when where which best near free online login www com app official site review reviews price prices'.split(' '));
 
+  // Brand terms match as words. Short names (4 characters or fewer) must match exactly, so "ola"
+  // never matches "cola". Longer names also catch typos glued to them — up to 3 extra letters
+  // or digits ("brandoo", "ibrando", "brandoned") — but not longer words ("brandonian").
+  const WB = '(?:^|[^\\p{L}\\p{N}])', WE = '(?=$|[^\\p{L}\\p{N}])', GLUE = '[\\p{L}\\p{N}]{0,3}';
+  function brandPattern(terms) {
+    const t = (terms || []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    if (!t.length) return null;
+    const short = t.filter(x => x.length <= 4).map(escRx), long = t.filter(x => x.length > 4).map(escRx);
+    const parts = [];
+    if (short.length) parts.push(WB + '(?:' + short.join('|') + ')' + WE);
+    if (long.length) parts.push(WB + GLUE + '(?:' + long.join('|') + ')' + GLUE + WE);
+    return new RegExp(parts.join('|'), 'iu');
+  }
   function makeBrandTest(terms) {
-    const t = (terms || []).map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (!t.length) return () => false;
-    return q => { const l = q.toLowerCase(); return t.some(x => l.includes(x)); };
+    const rx = brandPattern(terms);
+    return rx ? q => rx.test(String(q)) : () => false;
   }
   function brandRegex(terms) {
     const t = (terms || []).map(s => s.trim().toLowerCase()).filter(Boolean).map(escRx);
-    return t.length ? '(' + t.join('|') + ')' : '(yourbrand)';
+    return t.length ? '\\b(' + t.join('|') + ')\\b' : '\\b(yourbrand)\\b';
   }
 
   // ── intent ──
@@ -101,6 +113,46 @@
     return 'other';
   }
   const INTENT_LABEL = { info: 'Informational', comm: 'Commercial', trans: 'Transactional', nav: 'Branded', other: 'Unclassified' };
+
+  // ── estimation settings ──
+  const EST = {
+    minObs: 30,        // queries needed at a position before the site's own CTR replaces the benchmark
+    capShare: 0.10,    // no single query may contribute more than this share of a list's upper estimate
+    serpRatio: 0.35,   // CTR under this share of expected at positions 1–8 → likely a results-page feature
+    lowTargetStep: 2   // conservative case: the query climbs this many positions
+  };
+  const DEFAULT_UTILITY = ['dashboard', 'admin', 'panel', 'account', 'accounts', 'my-account', 'profile', 'settings', 'login', 'logout', 'signin', 'sign-in', 'signup', 'sign-up', 'register', 'auth', 'cart', 'checkout', 'billing', 'inbox', 'notifications', 'wp-admin', 'preview'];
+
+  function median(a) { const s = a.slice().sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; }
+  // Expected CTR by position: the site's own median CTR where it has enough queries,
+  // the benchmark elsewhere, never higher than the position above it.
+  function buildCurve(rows, minObs) {
+    const by = Array.from({ length: 21 }, () => []);
+    rows.forEach(r => { if (!(r.pos >= 0.5) || !(r.impr > 0)) return; const p = Math.round(r.pos); if (p >= 1 && p <= 20) by[p].push(r.ctr); });
+    const pts = [null], src = [null];
+    let above = Infinity;
+    for (let p = 1; p <= 20; p++) {
+      const own = by[p].length >= minObs ? median(by[p]) : null;
+      let v = own != null ? own : expCtr(p), from = own != null ? 'site' : 'benchmark';
+      if (v > above) { v = above; from = from + ' (capped)'; }
+      pts.push(v); src.push(from); above = v;
+    }
+    const at = pos => {
+      if (!(pos > 1)) return pts[1];
+      if (pos >= 20) return Math.min(pts[20], expCtr(pos));
+      const a = Math.floor(pos);
+      return pts[a] + (pts[a + 1] - pts[a]) * (pos - a);
+    };
+    return { at, minObs, points: pts.slice(1).map((v, i) => ({ pos: i + 1, ctr: v, source: src[i + 1], n: by[i + 1].length })), sitePositions: src.filter(x => x && x.startsWith('site')).length };
+  }
+  // Keep any single row from dominating a list; flag the ones that were cut.
+  function capList(list, share) {
+    if (list.length < 10) return list;
+    const cap = list.reduce((s, r) => s + r.gainHi, 0) * share;
+    list.forEach(r => { if (r.gainHi > cap) { r.gainHi = cap; r.gainLo = Math.min(r.gainLo, cap); r.gain = r.gainLo; r.capped = true; } });
+    return list;
+  }
+  const byEstimate = (a, b) => b.gainLo - a.gainLo || b.gainHi - a.gainHi;
 
   // ── main analysis ──
   function analyse(D0, S) {
@@ -135,14 +187,53 @@
     const imprFloor = Math.max(10, Math.round(pct(NBQ.map(r => r.impr), 0.5)));
     const pageFloor = Math.max(20, Math.round(pct(P.map(r => r.impr), 0.5)));
 
-    // ── Almost page one (striking distance) ──
-    const quickWins = NBQ.filter(r => r.pos > 3.5 && r.pos <= 20 && r.impr >= imprFloor).map(r => {
-      const target = r.pos <= 10 ? 3 : 7;
-      const gain = Math.max(0, r.impr * (expCtr(target) - r.ctr) / 100);
-      return { ...r, target, gain };
-    }).filter(r => r.gain >= 1).sort((a, b) => b.gain - a.gain);
+    // ── expected CTR (site's own curve, benchmark fallback) ──
+    // All estimates below are clicks per month, as a low–high range.
+    const curve = buildCurve(NBQ, S.minObs || EST.minObs);
+    const expAt = curve.at;
+    // Pages blend many queries at different positions, so they get their own curve built from page rows.
+    const pageCurve = buildCurve(P, S.minObs || EST.minObs);
+    const rel = r => { const e = expAt(r.pos); return e > 0 ? r.ctr / e : 1; };
+    const isSerp = r => r.pos <= 8 && rel(r) < EST.serpRatio;
+    const pos0 = v => Math.max(0, v);
 
-    // ── Titles to rewrite (CTR below benchmark at current position) ──
+    // ── page flags: likely branded sitelinks and utility pages ──
+    const util = new Set((S.utilityHints || DEFAULT_UTILITY).map(x => String(x).toLowerCase()));
+    const keepPages = (S.keep || []).map(x => String(x).trim().toLowerCase()).filter(Boolean);
+    const brandShare = totAll.clicks ? totB.clicks / totAll.clicks : 0;
+    const qpBrand = new Map();
+    (D.QP || []).forEach(r => { const o = qpBrand.get(r.p) || { b: 0, all: 0 }; o.all += r.impr; if (isBrand(r.q)) o.b += r.impr; qpBrand.set(r.p, o); });
+    function pageFlag(r) {
+      if (keepPages.some(k => r.p.toLowerCase().includes(k))) return null;
+      const segs = r.path.split('/').filter(Boolean).map(x => x.toLowerCase());
+      if (segs.some(x => util.has(x) || x.split(/[-_.]/).some(t => util.has(t))))
+        return { kind: 'utility', certain: false, reason: 'URL looks like a dashboard, account or other utility page' };
+      const q = qpBrand.get(r.p);
+      if (q && q.all >= 20) {
+        const sh = q.b / q.all;
+        return sh >= 0.5 ? { kind: 'sitelink', certain: true, reason: `${Math.round(sh * 100)}% of its impressions come from branded searches` } : null;
+      }
+      // compared with what queries at that position earn: a sitelink is shown under brand results, not ranked on its own
+      if (segs.length === 1 && r.pos <= 3 && rel(r) < EST.serpRatio && brandShare >= 0.2)
+        return { kind: 'sitelink', certain: false, reason: `Top-level page at position ${r.pos.toFixed(1)} with ${r.ctr.toFixed(1)}% CTR on a site where ${Math.round(brandShare * 100)}% of query clicks are branded — probably shown as a sitelink under brand results` };
+      return null;
+    }
+    const pageFlags = new Map();
+    P.forEach(r => { const f = pageFlag(r); if (f) { pageFlags.set(r.p, f); r.flag = f; } });
+
+    // ── Almost page one (striking distance) ──
+    // A query keeps its own click behaviour relative to its position, so pages that lose
+    // clicks to answer boxes are not projected to a full top-3 CTR.
+    const quickWins = capList(NBQ.filter(r => r.pos > 3.5 && r.pos <= 20 && r.impr >= imprFloor).map(r => {
+      const ratio = rel(r), k = Math.min(1, ratio);
+      const target = r.pos <= 10 ? 3 : 7;
+      const lowTarget = Math.max(target, r.pos - EST.lowTargetStep);
+      const gainHi = perMonth(pos0(r.impr * (expAt(target) * k - r.ctr) / 100));
+      const gainLo = perMonth(pos0(r.impr * (expAt(lowTarget) * k - r.ctr) / 100));
+      return { ...r, target, lowTarget, exp: expAt(r.pos), ratio, gainLo, gainHi, gain: gainLo, serp: isSerp(r) };
+    }).filter(r => r.gainHi >= 1), EST.capShare).sort(byEstimate);
+
+    // ── Titles to rewrite (CTR below expected at current position) ──
     const qpByPage = new Map();
     (D.QP || []).forEach(r => {
       if (isBrand(r.q)) return;
@@ -150,17 +241,23 @@
       qpByPage.get(r.p).push(r);
     });
     qpByPage.forEach(a => a.sort((x, y) => y.impr - x.impr));
-    const ctrPages = P.filter(r => r.pos <= 10 && r.impr >= pageFloor).map(r => {
-      const bench = expCtr(r.pos);
-      const ratio = bench ? r.ctr / bench : 1;
-      const gain = Math.max(0, r.impr * (bench * 0.85 - r.ctr) / 100);
-      const top = (qpByPage.get(r.p) || []).slice(0, 3).map(x => x.q);
-      return { ...r, bench, ratio, gain, top };
-    }).filter(r => r.ratio < 0.6 && r.gain >= 1).sort((a, b) => b.gain - a.gain);
-    const ctrQueries = NBQ.filter(r => r.pos <= 10 && r.impr >= imprFloor).map(r => {
-      const bench = expCtr(r.pos);
-      return { ...r, bench, ratio: r.ctr / bench, gain: Math.max(0, r.impr * (bench * 0.85 - r.ctr) / 100) };
-    }).filter(r => r.ratio < 0.5 && r.gain >= 1).sort((a, b) => b.gain - a.gain);
+    // Title-rewrite estimate: low = reach 60% of expected CTR, high = reach 85%. Pages use the lower of
+    // the page and query curves. Where a results-page feature is likely, a rewrite rarely closes the gap:
+    // low is 0 and high is at most double the current CTR (never above 35% of expected).
+    const ctrEst = (r, page) => {
+      const bench = page ? Math.min(pageCurve.at(r.pos), expAt(r.pos)) : expAt(r.pos), ratio = bench > 0 ? r.ctr / bench : 1;
+      const serp = r.pos <= 8 && ratio < EST.serpRatio;
+      const hiTarget = serp ? Math.min(bench * EST.serpRatio, r.ctr * 2) : bench * 0.85;
+      const gainHi = perMonth(pos0(r.impr * (hiTarget - r.ctr) / 100));
+      const gainLo = serp ? 0 : perMonth(pos0(r.impr * (bench * 0.6 - r.ctr) / 100));
+      return { bench, ratio, gainLo, gainHi, gain: gainLo, serp };
+    };
+    const ctrCandidates = P.filter(r => r.pos <= 10 && r.impr >= pageFloor).map(r => ({ ...r, ...ctrEst(r, true), top: (qpByPage.get(r.p) || []).slice(0, 3).map(x => x.q) }))
+      .filter(r => r.ratio < 0.6 && r.gainHi >= 1);
+    const ctrPages = capList(ctrCandidates.filter(r => !r.flag), EST.capShare).sort(byEstimate);
+    const setAside = ctrCandidates.filter(r => r.flag).sort((a, b) => b.impr - a.impr);
+    const ctrQueries = capList(NBQ.filter(r => r.pos <= 10 && r.impr >= imprFloor).map(r => ({ ...r, ...ctrEst(r, false) }))
+      .filter(r => r.ratio < 0.5 && r.gainHi >= 1), EST.capShare).sort(byEstimate);
 
     // ── Competing pages (cannibalisation) ──
     let cannibal = [], cannibalMode = 'none';
@@ -179,7 +276,7 @@
         if (comp.length < 2) return;
         const a = agg(rows);
         const best = Math.min(...comp.map(r => r.pos));
-        const loss = Math.max(0, tot * (expCtr(best) - a.ctr) / 100);
+        const loss = perMonth(Math.max(0, tot * (expAt(best) - a.ctr) / 100));
         const split = comp[1].impr / tot;
         const sev = split >= 0.3 && a.pos > 3 ? 'high' : split >= 0.2 ? 'medium' : 'low';
         cannibal.push({ q, pages: comp.map(r => ({ ...r, share: r.impr / tot * 100 })), ...a, impr: tot, loss, sev });
@@ -200,7 +297,7 @@
         const spread = Math.max(...rows.map(r => r.pos)) - Math.min(...rows.map(r => r.pos));
         if (spread < 4) return;
         const best = Math.min(...rows.map(r => r.pos));
-        const loss = Math.max(0, a.impr * (expCtr(best) - a.ctr) / 100);
+        const loss = perMonth(Math.max(0, a.impr * (expAt(best) - a.ctr) / 100));
         const sev = spread > 10 && rows.length >= 3 ? 'high' : spread > 6 ? 'medium' : 'low';
         cannibal.push({ q: k, variants: rows.sort((x, y) => y.impr - x.impr), ...a, loss, sev, spread });
       });
@@ -247,8 +344,10 @@
 
     // ── AI search (AEO / GEO) signals ──
     const ai = {
-      overview: NBQ.filter(r => r.pos <= 5 && r.impr >= imprFloor && r.ctr < expCtr(r.pos) * 0.35)
-        .map(r => ({ ...r, gain: Math.max(0, r.impr * (expCtr(r.pos) * 0.6 - r.ctr) / 100) })).sort((a, b) => b.impr - a.impr),
+      // possible answer boxes or AI Overviews: top-5 rankings far below the site's own CTR at that position
+      overview: capList(NBQ.filter(r => r.pos <= 5 && r.impr >= imprFloor && rel(r) < EST.serpRatio)
+        .map(r => { const gainHi = perMonth(pos0(r.impr * (Math.min(expAt(r.pos) * EST.serpRatio, r.ctr * 2) - r.ctr) / 100)); return { ...r, bench: expAt(r.pos), gainLo: 0, gainHi, gain: 0, serp: true }; })
+        .filter(r => r.gainHi >= 1), EST.capShare).sort((a, b) => b.impr - a.impr),
       questions: NBQ.filter(r => RX.question.test(r.q)).sort((a, b) => b.impr - a.impr),
       conversational: NBQ.filter(r => r.words >= 7).sort((a, b) => b.impr - a.impr),
       compare: NBQ.filter(r => RX.compare.test(r.q)).sort((a, b) => b.impr - a.impr),
@@ -258,8 +357,8 @@
       aiMode: NBQ.filter(r => r.pos <= 3 && r.impr >= imprFloor && r.ctr < 0.5).sort((a, b) => b.impr - a.impr),
       zeroPages: P.filter(r => r.pos <= 10 && r.impr >= pageFloor && r.ctr < 0.5).sort((a, b) => b.impr - a.impr)
     };
-    // clicks below what page-one rankings should earn, across all non-brand queries
-    ai.expectedGap = NBQ.filter(r => r.pos <= 10).reduce((s, r) => s + Math.max(0, r.impr * (expCtr(r.pos) - r.ctr) / 100), 0);
+    // clicks per month below the industry benchmark curve, across page-one non-brand queries
+    ai.expectedGap = perMonth(NBQ.filter(r => r.pos <= 10).reduce((s, r) => s + Math.max(0, r.impr * (expCtr(r.pos) - r.ctr) / 100), 0));
     const aiImpr = agg(ai.questions.concat(ai.conversational.filter(r => !RX.question.test(r.q))));
     const readiness = Math.round(Math.min(100,
       (ai.snippets.length ? 25 : 0) +
@@ -304,50 +403,50 @@
       { key: 'ghost', label: 'Seen but not clicked', desc: 'Impressions with zero clicks. Usually ranking too low, or the wrong page for the query.', rows: P.filter(r => r.clicks === 0 && r.impr > 0) }
     ].map(t => ({ ...t, rows: t.rows.sort((a, b) => b.clicks - a.clicks || b.impr - a.impr), ...agg(t.rows) }));
 
-    // ── Headline potential (deduplicated, monthly) ──
-    const seen = new Set();
-    let potential = 0;
-    quickWins.forEach(r => { seen.add(r.q); potential += r.gain; });
-    ctrQueries.forEach(r => { if (!seen.has(r.q)) potential += r.gain; });
-    const potentialMonthly = perMonth(potential);
+    // ── Headline potential: one estimate per query, never summed across lists ──
+    const bestByQuery = new Map();
+    quickWins.concat(ctrQueries, ai.overview).forEach(r => { const o = bestByQuery.get(r.q); if (!o || r.gainHi > o.gainHi || (r.gainHi === o.gainHi && r.gainLo > o.gainLo)) bestByQuery.set(r.q, r); });
+    const uniq = [...bestByQuery.values()];
+    const potential = { lo: sum(uniq, 'gainLo'), hi: sum(uniq, 'gainHi'), n: uniq.length, monthlySiteClicks: perMonth(site.clicks) };
+    const potentialMonthly = potential.lo;
 
     // ── Action plan ──
     const plan = [];
     if (ctrPages.length) {
       const top = ctrPages.slice(0, 10);
-      plan.push({ view: 'ctr', gain: perMonth(sum(top, 'gain')), effort: 'Low',
+      plan.push({ view: 'ctr', gain: sum(top, 'gainLo'), gainHi: sum(top, 'gainHi'), effort: 'Low',
         title: `Rewrite titles and meta descriptions on ${top.length} page${top.length > 1 ? 's' : ''} that already rank on page one`,
-        body: `Start with ${top[0].path}: ${fmtN(top[0].impr)} impressions at position ${top[0].pos.toFixed(1)}, but ${top[0].ctr.toFixed(1)}% CTR against a ${top[0].bench.toFixed(1)}% benchmark. No ranking change is needed for these gains.` });
+        body: `Start with ${top[0].path}: ${fmtN(top[0].impr)} impressions at position ${top[0].pos.toFixed(1)}, but ${top[0].ctr.toFixed(1)}% CTR where ${top[0].bench.toFixed(1)}% is expected at that position. No ranking change is needed for these gains.` });
     }
     if (quickWins.length) {
       const top = quickWins.slice(0, 20);
-      plan.push({ view: 'quickwins', gain: perMonth(sum(top, 'gain')), effort: 'Medium',
-        title: `Push ${top.length} queries from positions 4–20 into the top 3`,
+      plan.push({ view: 'quickwins', gain: sum(top, 'gainLo'), gainHi: sum(top, 'gainHi'), effort: 'Medium',
+        title: `Move ${top.length} queries from positions 4–20 up the page`,
         body: `Biggest prize: “${top[0].q}” at position ${top[0].pos.toFixed(1)} with ${fmtN(top[0].impr)} impressions. Add internal links from strong pages, expand the section that answers it, and match the title to the query.` });
     }
     if (decay && decay.pages.length) {
       const top = decay.pages.slice(0, 10);
-      plan.push({ view: 'decay', gain: perMonth(sum(top, 'lost')) * 0.6, effort: 'Medium',
+      plan.push({ view: 'decay', gain: perMonth(sum(top, 'lost')) * 0.3, gainHi: perMonth(sum(top, 'lost')) * 0.8, effort: 'Medium',
         title: `Refresh ${top.length} page${top.length > 1 ? 's' : ''} that lost clicks since the previous period`,
         body: `${top[0].path} dropped from ${fmtN(top[0].prev.clicks)} to ${fmtN(top[0].cur.clicks)} clicks (${top[0].reason}). Update facts, dates and examples, and check what now outranks it.` });
     }
     if (cannibal.length && cannibalMode === 'exact') {
       const top = cannibal.filter(c => c.sev !== 'low').slice(0, 10);
-      if (top.length) plan.push({ view: 'cannibal', gain: perMonth(sum(top, 'loss')) * 0.5, effort: 'Medium',
+      if (top.length) plan.push({ view: 'cannibal', gain: 0, gainHi: sum(top, 'loss') * 0.5, effort: 'Medium',
         title: `Pick one page for ${top.length} quer${top.length > 1 ? 'ies' : 'y'} where your own pages compete`,
         body: `“${top[0].q}” splits impressions across ${top[0].pages.length} URLs. Merge or differentiate them, and point internal links at the one you want to rank.` });
     }
     if (ai.overview.length) {
       const top = ai.overview.slice(0, 15);
-      plan.push({ view: 'ai', gain: perMonth(sum(top, 'gain')), effort: 'Medium',
-        title: `Win back ${top.length} top-5 queries likely answered by AI Overviews`,
-        body: `These rank well but get a fraction of expected clicks. Lead the page with a 40–60 word direct answer, add FAQ or HowTo structure, and give the reader a reason to click for depth.` });
+      plan.push({ view: 'ai', gain: 0, gainHi: sum(top, 'gainHi'), effort: 'Medium',
+        title: `Check ${top.length} top-5 queries that may be answered on the results page`,
+        body: `These rank well but get a fraction of the clicks this site normally earns at that position — often an AI Overview or answer box. Lead the page with a 40–60 word direct answer, add FAQ or HowTo structure, and give the reader a reason to click for depth.` });
     }
     const strong = sections1.filter(s => s.n >= 1 && s.n <= 8 && s.pos <= 8 && s.impr >= pageFloor * 3 && s.key !== '/').sort((a, b) => b.ctr - a.ctr)[0];
     if (strong) plan.push({ view: 'sections', gain: null, effort: 'High',
       title: `Expand ${strong.key} — strong rankings, only ${strong.n} page${strong.n > 1 ? 's' : ''}`,
       body: `Average position ${strong.pos.toFixed(1)} and ${strong.ctr.toFixed(1)}% CTR show Google already trusts this topic. More pages here should rank quickly.` });
-    plan.sort((a, b) => (b.gain || 0) - (a.gain || 0));
+    plan.sort((a, b) => (b.gain || 0) - (a.gain || 0) || (b.gainHi || 0) - (a.gainHi || 0));
 
     // ── Signals: going well / needs attention / opportunities ──
     const good = [], bad = [], opp = [];
@@ -361,8 +460,8 @@
     if (decay && decay.pages[0]) bad.push({ l: decay.pages[0].path, v: `${decay.pages[0].ch.toFixed(0)}% clicks`, view: 'decay' });
     const hi = cannibal.filter(c => c.sev === 'high').length;
     if (hi) bad.push({ l: 'Pages competing with each other', v: `${hi} high-severity ${hi === 1 ? 'query' : 'queries'}`, view: 'cannibal' });
-    if (ai.overview.length) bad.push({ l: 'Clicks lost to AI answers', v: `${ai.overview.length} top-5 ${ai.overview.length === 1 ? 'query' : 'queries'}`, view: 'ai' });
-    if (quickWins[0]) opp.push({ l: `“${quickWins[0].q}”`, v: `#${quickWins[0].pos.toFixed(1)} · +${fmtN(perMonth(quickWins[0].gain))}/mo`, view: 'quickwins' });
+    if (ai.overview.length) bad.push({ l: 'Possible answer boxes or AI Overviews', v: `${ai.overview.length} top-5 ${ai.overview.length === 1 ? 'query' : 'queries'}`, view: 'ai' });
+    if (quickWins[0]) opp.push({ l: `“${quickWins[0].q}”`, v: `#${quickWins[0].pos.toFixed(1)} · +${fmtN(quickWins[0].gainLo) === fmtN(quickWins[0].gainHi) ? fmtN(quickWins[0].gainHi) : fmtN(quickWins[0].gainLo) + '–' + fmtN(quickWins[0].gainHi)}/mo`, view: 'quickwins' });
     if (quickWins.length) opp.push({ l: `${quickWins.length} queries on positions 4–20`, v: 'Push to top 3', view: 'quickwins' });
     if (ctrPages.length) opp.push({ l: `${ctrPages.length} page-one titles`, v: 'Rewrite for CTR', view: 'ctr' });
     if (ai.questions.length) opp.push({ l: `${ai.questions.length} question searches`, v: 'Answer directly for AI', view: 'ai' });
@@ -377,16 +476,28 @@
     for (let p = 1; p <= 20; p++) {
       const rows = NBQ.filter(r => Math.round(r.pos) === p);
       const a = agg(rows);
-      ctrByPos.push({ pos: p, actual: rows.length ? a.ctr : null, bench: expCtr(p), n: rows.length, impr: a.impr });
+      ctrByPos.push({ pos: p, actual: rows.length ? a.ctr : null, bench: expCtr(p), expected: expAt(p), n: rows.length, impr: a.impr });
     }
 
     // ── Anonymous queries: clicks Google doesn't attribute to any query ──
-    const anon = D.C && D.C.length ? { site: site.clicks, queries: totAll.clicks, hidden: Math.max(0, site.clicks - totAll.clicks), share: site.clicks ? Math.max(0, site.clicks - totAll.clicks) / site.clicks * 100 : 0 } : null;
+    // ── Coverage: how much of the site's search traffic the query and page rows contain ──
+    // Only when daily totals exist; without a denominator no percentage is shown.
+    const hasSite = !!(D0.C && D0.C.length);
+    const q0 = agg(D0.Q), p0 = agg(D0.P);
+    const rowLimit = D0.source === 'file' && (D0.Q.length === 1000 || D0.P.length === 1000);
+    const coverage = hasSite ? {
+      source: D0.source, rowsQ: D0.Q.length, rowsP: D0.P.length, rowLimit,
+      q: { clicks: site.clicks ? q0.clicks / site.clicks * 100 : null, impr: site.impr ? q0.impr / site.impr * 100 : null },
+      p: { clicks: site.clicks ? p0.clicks / site.clicks * 100 : null, impr: site.impr ? p0.impr / site.impr * 100 : null },
+      // clicks the query rows do not account for: export row limits and queries Google withholds
+      notShown: { clicks: Math.max(0, site.clicks - q0.clicks), share: site.clicks ? Math.max(0, site.clicks - q0.clicks) / site.clicks * 100 : 0 }
+    } : null;
+    const method = { days, start: D0.start || null, end: D0.end || null, assumedDays: !D0.days, curve: curve.points, sitePositions: curve.sitePositions, ...EST };
 
     return {
       Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
-      intents, sections1, sections2, tiers, potentialMonthly, plan, signals, posDist, ctrByPos, anon,
+      intents, sections1, sections2, tiers, potential, potentialMonthly, plan, signals, posDist, ctrByPos, coverage, method, curve, pageCurve, setAside, pageFlags,
       brandRx: brandRegex(S.brand), isBrand, isExcluded, data: D, ignored: ign
     };
   }
@@ -410,5 +521,5 @@
     return Math.round(n).toLocaleString('en-US');
   }
 
-  window.CW = { analyse, expCtr, agg, pct, fmtN, brandGuess, pathOf, INTENT_LABEL, change, RX, makeBrandTest };
+  window.CW = { analyse, expCtr, agg, pct, fmtN, brandGuess, pathOf, INTENT_LABEL, change, RX, makeBrandTest, buildCurve, EST, DEFAULT_UTILITY };
 })();

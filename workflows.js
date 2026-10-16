@@ -25,8 +25,8 @@
     { id: 'quickwins', name: 'Find SEO quick wins', icon: 'bolt', tone: 'orange', featured: true,
       finds: 'Searches close to the top 3 and page-one results that earn fewer clicks than they should, merged into one prioritised to-do list.',
       needs: ['queries', 'pages'], better: ['qp'],
-      conditions: ['Non-branded searches ranking 4–20 with above-median impressions', 'Page-one pages and searches under 60% of the clicks expected at their position', 'Top-5 searches likely answered by AI Overviews', 'Duplicates merged; findings with thin data removed'],
-      output: 'A ranked action list with estimated clicks per month, confidence and effort.',
+      conditions: ['Non-branded searches ranking 4–20 with above-median impressions', 'Page-one pages and searches under 60% of the clicks this site normally earns at their position', 'Top-5 searches that may be answered on the results page', 'One estimate per search; page estimates shown but not added to the total', 'Findings with thin data removed'],
+      output: 'A ranked action list with a low–high clicks-per-month estimate, confidence and effort.',
       steps: ['Analyse query and page performance', 'Find ranking and CTR opportunities', 'Remove duplicates and low-confidence findings', 'Prioritise by estimated clicks', 'Build the action plan'] },
     { id: 'brand', name: 'Split branded and non-branded searches', icon: 'star', tone: 'violet',
       finds: 'How much of your search traffic comes from people already looking for you, and how much SEO is really earning.',
@@ -39,8 +39,8 @@
       spec: A => ({ target: 'query', conds: [{ f: 'pos', op: 'between', v: 4, v2: 20 }, { f: 'brand', op: 'is', v: false }, { f: 'impr', op: 'gte', v: A.imprFloor, note: 'site median' }] }) },
     { id: 'lowctr', name: 'High-impression, low-CTR pages', icon: 'eye', tone: 'amber',
       finds: 'Pages Google shows often on page one that people rarely click. Titles and descriptions fix most of these.',
-      needs: ['pages'], conditions: ['Impressions in the top 25% of your pages', 'Position 10 or better', 'Under 60% of the clicks expected at that position'],
-      output: 'Pages sorted by impressions, with expected CTR alongside actual CTR.',
+      needs: ['pages'], conditions: ['Impressions in the top 25% of your pages', 'Position 10 or better', 'Under 60% of the clicks this site normally earns at that position', 'Likely sitelinks and utility pages set aside, with the reason'],
+      output: 'Pages sorted by impressions, with expected CTR alongside actual CTR. Likely branded sitelinks and utility pages are listed separately.', setAside: true,
       spec: A => ({ target: 'page', conds: [{ f: 'impr', op: 'gte', v: F.rows(A).high.page, note: 'top 25% on this site' }, { f: 'pos', op: 'lte', v: 10 }, { f: 'ctrGap', op: 'lt', v: 60 }] }) },
     { id: 'declines', name: 'Discover traffic declines', icon: 'down', tone: 'red',
       finds: 'Pages and searches that lost a meaningful share of clicks since the previous period, with the most likely cause.',
@@ -71,35 +71,44 @@
       finds: 'Remove searches you never want counted — job seekers, competitor names, spam — from every report.',
       needs: ['queries'], conditions: ['Any search containing one of your words is left out', 'Applies to every report for this site, in this browser'],
       output: 'A preview of what will be removed before you save.' },
-    { id: 'report', name: 'Weekly SEO opportunity report', icon: 'book', tone: 'green',
+    { id: 'report', name: 'SEO opportunity report', icon: 'book', tone: 'green',
       finds: 'One page with headline numbers, what changed, the top actions and the biggest risks — ready to print or send.',
       needs: ['queries', 'pages'], better: ['prev', 'dates'], conditions: ['Uses the loaded date range', 'Top 5 actions by estimated clicks', 'Largest declines and AI-search risks'],
-      output: 'A printable report.', schedule: 'Automatic weekly delivery needs the Clickwise server, which is not live yet. Run it any time and print or save as PDF.' }
+      output: 'A printable report.', schedule: 'Runs on demand. Automatic weekly delivery needs the Clickwise server, which is not live yet; print or save as PDF any time.' }
   ];
 
   const byId = id => TEMPLATES.find(w => w.id === id);
-  const perMonth = (A, v) => A.perMonth(v);
 
   // ── runners ──
+  // One entry per query (the strongest of ranking, CTR or answer-box estimates) and one per page.
+  // Page estimates overlap the searches that land on them, so only query estimates are totalled.
   function quickWins(A) {
     const floor = A.imprFloor;
-    const items = [];
-    const seenQ = new Set();
-    A.quickWins.forEach(r => {
-      seenQ.add(r.q);
-      items.push({ kind: 'Ranking', item: r.q, isQuery: true, why: `Position ${r.pos.toFixed(1)} with ${fmtN(r.impr)} impressions`, action: r.pos > 10 ? 'Move to page one: expand the content, add internal links, match the title to the search' : 'Push into the top 3: tighten the title, answer the search near the top, add internal links', gain: perMonth(A, r.gain), impr: r.impr, effort: 'Medium' });
+    const best = new Map();
+    const add = (r, kind, why, action, effort) => {
+      const o = best.get(r.q);
+      if (o && (o.gainHi > r.gainHi || (o.gainHi === r.gainHi && o.gainLo >= r.gainLo))) return;
+      best.set(r.q, { kind, item: r.q, isQuery: true, why, action, gainLo: r.gainLo, gainHi: r.gainHi, gain: r.gainLo, impr: r.impr, effort, serp: r.serp, capped: r.capped });
+    };
+    A.quickWins.forEach(r => add(r, 'Ranking', `Position ${r.pos.toFixed(1)} with ${fmtN(r.impr)} impressions`, r.pos > 10 ? 'Move to page one: expand the content, add internal links, match the title to the search' : 'Climb towards the top 3: tighten the title, answer the search near the top, add internal links', 'Medium'));
+    A.ctrQueries.forEach(r => add(r, 'CTR', `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, ~${r.bench.toFixed(1)}% expected`, r.serp ? 'Check the results page first: an answer box or AI Overview may be taking the click' : 'Rewrite the title and description for this search', 'Low'));
+    A.ai.overview.forEach(r => add(r, 'Answer box?', `Top-5 ranking but ${r.ctr.toFixed(1)}% CTR`, 'Check the results page; lead with a 40–60 word answer and give a reason to click', 'Medium'));
+    const queries = [...best.values()];
+    const pages = A.ctrPages.map(r => ({ kind: 'Page title', item: r.path, url: r.p, why: `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, ~${r.bench.toFixed(1)}% expected`, action: 'Rewrite the title and meta description' + (r.top && r.top.length ? ` around “${r.top[0]}”` : ''), gainLo: r.gainLo, gainHi: r.gainHi, gain: r.gainLo, impr: r.impr, effort: 'Low', overlap: true, serp: r.serp, capped: r.capped }));
+    const all = queries.concat(pages);
+    const kept = all.filter(r => r.impr >= floor * 2 && r.gainHi >= 1);
+    kept.forEach(r => {
+      r.confidence = r.serp || r.capped ? 'Low' : r.impr >= floor * 6 ? 'High' : 'Medium';
+      r.conf = { High: 3, Medium: 2, Low: 1 }[r.confidence];
+      r.note = [r.serp ? 'results-page feature likely' : '', r.capped ? 'capped: unusually large' : '', r.overlap ? 'overlaps search estimates; not in total' : ''].filter(Boolean).join('; ');
     });
-    A.ctrPages.forEach(r => items.push({ kind: 'CTR', item: r.path, url: r.p, why: `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, expected ~${r.bench.toFixed(1)}%`, action: 'Rewrite the title and meta description' + (r.top && r.top.length ? ` around “${r.top[0]}”` : ''), gain: perMonth(A, r.gain), impr: r.impr, effort: 'Low' }));
-    A.ctrQueries.forEach(r => { if (!seenQ.has(r.q)) { seenQ.add(r.q); items.push({ kind: 'CTR', item: r.q, isQuery: true, why: `${r.ctr.toFixed(1)}% CTR at position ${r.pos.toFixed(1)}, expected ~${r.bench.toFixed(1)}%`, action: 'Check the results page, then rewrite the title for this search', gain: perMonth(A, r.gain), impr: r.impr, effort: 'Low' }); } });
-    A.ai.overview.forEach(r => { if (!seenQ.has(r.q)) { seenQ.add(r.q); items.push({ kind: 'AI answer', item: r.q, isQuery: true, why: `Top-5 ranking but ${r.ctr.toFixed(1)}% CTR`, action: 'Lead with a 40–60 word direct answer and add something an AI summary cannot give', gain: perMonth(A, r.gain), impr: r.impr, effort: 'Medium' }); } });
-    const before = items.length;
-    const kept = items.filter(r => r.impr >= floor * 2 && r.gain >= 1);
-    kept.forEach(r => { r.confidence = r.impr >= floor * 6 ? 'High' : 'Medium'; r.conf = r.confidence === 'High' ? 2 : 1; });
-    kept.sort((a, b) => b.gain - a.gain);
-    const total = kept.reduce((s, r) => s + r.gain, 0);
+    kept.sort((a, b) => b.gainLo - a.gainLo || b.conf - a.conf || b.gainHi - a.gainHi);
+    const counted = kept.filter(r => !r.overlap);
+    const lo = counted.reduce((s, r) => s + r.gainLo, 0), hi = counted.reduce((s, r) => s + r.gainHi, 0);
     return {
-      summary: kept.length ? `Found ${kept.length} quick wins worth about ${fmtN(total)} extra clicks a month. Start with the top of the list.` : 'No quick wins with enough data in this range. Try a longer date range.',
-      stats: [{ v: kept.length, l: 'quick wins', tone: 'gain' }, { v: '+' + fmtN(total), l: 'clicks a month (estimate)', tone: 'gain' }, { v: before - kept.length, l: 'thin-data findings removed', tone: '' }],
+      summary: kept.length ? `Found ${kept.length} quick wins (${counted.length} searches, ${kept.length - counted.length} page titles). The searches could add about ${fmtN(lo)}–${fmtN(hi)} clicks a month; page-title estimates overlap those searches and are not added.` : 'No quick wins with enough data in this range. Try a longer date range.',
+      stats: [{ v: kept.length, l: 'quick wins', tone: 'gain' }, { v: '+' + fmtN(lo) + '–' + fmtN(hi), l: 'clicks a month (estimate, searches only)', tone: 'gain' }, { v: all.length - kept.length, l: 'thin-data findings removed', tone: '' }],
+      total: { lo, hi },
       table: { cols: 'quickwins', rows: kept, sort: 'gain' },
       plan: A.plan.slice(0, 5)
     };
@@ -171,7 +180,7 @@
       report: {
         clicks: nb.clicks, impr: nb.impr, ctr: nb.ctr, pos: nb.pos,
         dClicks: p ? ch(nb.clicks, p.nb.clicks) : null, dImpr: p ? ch(nb.impr, p.nb.impr) : null,
-        potential: A.potentialMonthly, plan: A.plan.slice(0, 5),
+        potential: A.potential, method: A.method, coverage: A.coverage, site: A.site, plan: A.plan.slice(0, 5),
         declines: A.decay ? A.decay.pages.slice(0, 5) : null, rising: A.decay ? A.decay.rising.slice(0, 3) : null,
         quick: A.quickWins.slice(0, 5), ai: { overview: A.ai.overview.length, aiMode: A.ai.aiMode.length, readiness: A.readiness },
         brandShare: A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0, start: D.start, end: D.end, sample: D.source === 'demo'
@@ -189,12 +198,20 @@
       const spec = w.spec(A);
       const res = F.run(spec, A);
       if (!res.ok) return { error: res.errors.join(' ') };
+      // pages that are probably sitelinks or utility pages are listed separately, not silently dropped
+      let setAside = null;
+      if (w.setAside && spec.target === 'page') {
+        setAside = res.rows.filter(r => r.flag);
+        res.rows = res.rows.filter(r => !r.flag);
+        res.total = CW.agg(res.rows.filter(r => !r.gone));
+      }
       const n = res.rows.length;
       return {
         spec, result: res,
         summary: res.groups ? `${n.toLocaleString()} ${spec.target === 'page' ? 'page' : 'search'}${n === 1 ? '' : 'es'.slice(spec.target === 'page' ? 1 : 0)} in ${res.groups.length} group${res.groups.length === 1 ? '' : 's'}. ${F.describe(spec)}`
           : `${n.toLocaleString()} ${spec.target === 'page' ? 'page' : 'search'}${n === 1 ? '' : 'es'.slice(spec.target === 'page' ? 1 : 0)} found. ${F.describe(spec)}`,
-        stats: [{ v: n.toLocaleString(), l: spec.target === 'page' ? 'pages' : 'searches', tone: 'gain' }, { v: fmtN(res.total.clicks), l: 'clicks', tone: '' }, { v: fmtN(res.total.impr), l: 'impressions', tone: '' }]
+        stats: [{ v: n.toLocaleString(), l: spec.target === 'page' ? 'pages' : 'searches', tone: 'gain' }, { v: fmtN(res.total.clicks), l: 'clicks', tone: '' }, { v: fmtN(res.total.impr), l: 'impressions', tone: '' }].concat(setAside && setAside.length ? [{ v: setAside.length, l: 'set aside (likely sitelinks or utility pages)', tone: 'watch' }] : []),
+        setAside
       };
     }
     switch (id) {

@@ -1,2 +1,5 @@
 .DS_Store
 node_modules/
+
+# private: real (anonymised) Search Console numbers, kept out of the public repo
+tests/fixtures/real-export-anon.json

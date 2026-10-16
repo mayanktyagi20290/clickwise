@@ -1,0 +1,14 @@
+{
+  "name": "clickwise",
+  "private": true,
+  "description": "Search Console intelligence. Static site: nothing here is needed to deploy, only to test.",
+  "scripts": {
+    "test": "node tests/run.js",
+    "test:fast": "node tests/run.js --no-browser"
+  },
+  "devDependencies": {
+    "chart.js": "4.4.1",
+    "playwright": "1.56.0",
+    "xlsx": "0.18.5"
+  }
+}

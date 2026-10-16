@@ -26,6 +26,8 @@ Data sources: upload of the GSC Performance Excel export, Google sign-in (webmas
 - Product principle: users choose the outcome, Clickwise does the technical work. No user-facing regex; the old Regex library was replaced by Smart filters + Workflows (old `#regex` links redirect).
 - Filters are data, never code: parser output is a JSON spec checked by `validate()` before running; text values are matched as plain strings (escaped when used inside internal matchers). Any future AI parsing must emit the same spec and pass the same validation.
 - Only working features appear in the UI: no schedule buttons until the backend exists.
+- Estimates (since the Oct 2026 audit): clicks per month, low–high ranges; site's own CTR curve (≥30 queries per position) with benchmark fallback; per-query ratio keeps answer-box searches from inflating gains; 10% cap per row; headline counts each query once, page estimates never added. Likely sitelinks and utility URLs set aside with reason + Include override. Dashboard tiles are site totals from daily data; coverage of query/page rows shown; "not represented in this export" replaces "anonymous" for uploads.
+- Tests: `npm test` (unit, regression on anonymised real export, Playwright browser). Audit doc: "Clickwise — Application Audit (Oct 2026)".
 - Look follows the SemanticsX GSC Audit style the user liked: indigo/slate palette, white rounded cards, gradient KPI tiles, collapsible icon cards with count pills, control bar with date pill. Style patterns only — no logos, names or copy taken.
 - Compact type scale (14px base) — user found earlier version too large.
 - Features borrowed from SEOSignalX GSC Insights: position distribution, CTR by position, top keywords/pages, anonymous queries, search type and device filters.

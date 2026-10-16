@@ -3,7 +3,7 @@
 (function () {
   'use strict';
   const { V, esc, ui } = window.CW_VIEWS;
-  const { table, drawTable, TABLES, C, head, stat, ledger, svg, ICON, pctf, posTag, urlCell, serp, gainCell, tileDelta } = ui;
+  const { table, drawTable, TABLES, C, head, stat, ledger, svg, ICON, pctf, posTag, urlCell, serp, gainCell, range, methodNote, tileDelta } = ui;
   const F = window.CW_FILTERS, W = window.CW_WORKFLOWS, CW = window.CW, fmtN = CW.fmtN;
 
   Object.assign(ICON, {
@@ -69,7 +69,7 @@
   }
 
   // ════════ Smart filters ════════
-  const FIELD_NAME = { clicks: 'Clicks', impr: 'Impressions', ctr: 'CTR (%)', pos: 'Position', ctrGap: 'Share of expected clicks (%)', clickChange: 'Change in clicks (%)', words: 'Words in the search', text: null, section: 'Folder', pageType: 'Page type', brand: 'Branded', question: 'Is a question', location: 'Mentions a place', intent: 'Intent' };
+  const FIELD_NAME = { place: 'Place', clicks: 'Clicks', impr: 'Impressions', ctr: 'CTR (%)', pos: 'Position', ctrGap: 'Share of expected clicks (%)', clickChange: 'Change in clicks (%)', words: 'Words in the search', text: null, section: 'Folder', pageType: 'Page type', brand: 'Branded', question: 'Is a question', location: 'Mentions a place', intent: 'Intent' };
   const OP_NAME = { gt: 'more than', gte: 'at least', lt: 'less than', lte: 'at most', between: 'between', contains: 'contains', notContains: "doesn't contain", startsWith: 'starts with', endsWith: 'ends with', equals: 'is exactly', word: 'has the word', is: 'is', not: 'is not' };
   const fieldName = (f, target) => FIELD_NAME[f] || (target === 'page' ? 'URL' : 'Search text');
   let CUR = null;
@@ -180,7 +180,7 @@
   function builder(A, spec, R, onAdd) {
     const fSel = document.getElementById('sf-f'), opSel = document.getElementById('sf-op'), vBox = document.getElementById('sf-v'), err = document.getElementById('sf-adderr');
     if (!fSel) return;
-    const enumValues = f => f === 'intent' ? Object.entries(CW.INTENT_LABEL) : f === 'pageType' ? R.types.map(t => [t, t]) : f === 'section' ? R.folders.map(x => [x, x]) : [];
+    const enumValues = f => f === 'intent' ? Object.entries(CW.INTENT_LABEL) : f === 'pageType' ? R.types.map(t => [t, t]) : f === 'section' ? R.folders.map(x => [x, x]) : f === 'place' ? R.places[spec.target].map(x => [x, x]) : [];
     const drawOps = () => {
       const f = F.FIELDS[fSel.value];
       opSel.innerHTML = F.OPS[f.kind].filter(o => o !== 'in').map(o => `<option value="${o}">${esc(OP_NAME[o])}</option>`).join('');
@@ -254,18 +254,19 @@
   };
 
   // ── workflow results ──
-  const confTag = r => `<span class="tag ${r.confidence === 'High' ? 'gain' : 'watch'}">${esc(r.confidence)}</span>`;
+  const confTag = r => `<span class="tag ${r.confidence === 'High' ? 'gain' : r.confidence === 'Medium' ? 'watch' : ''}">${esc(r.confidence)}</span>`;
   const sevTag = s => `<span class="tag ${s === 'high' ? 'risk' : s === 'medium' ? 'watch' : ''}">${s === 'high' ? 'High' : s === 'medium' ? 'Medium' : 'Low'}</span>`;
   const before = { k: 'prevC', l: 'Clicks before', r: 1, f: r => fmtN(r.prevC) }, now = { k: 'curC', l: 'Clicks now', r: 1, f: r => fmtN(r.curC) };
   const chg = { k: 'ch', l: 'Change', r: 1, f: r => `<span class="lossv">${r.ch.toFixed(0)}%</span>` }, cause = { k: 'reason', l: 'Likely cause', sort: false };
   const COLS = {
-    quickwins: [{ k: 'kind', l: 'Type', f: r => `<span class="tag">${esc(r.kind)}</span>` }, { k: 'item', l: 'Search or page', cls: 'q', f: r => r.isQuery ? serp(r.item) : urlCell(r.url, r.item), csv: r => r.url || r.item }, { k: 'why', l: 'Why it was picked', sort: false }, { k: 'action', l: 'What to do', sort: false }, { k: 'conf', l: 'Confidence', f: confTag, csv: r => r.confidence }, { k: 'effort', l: 'Effort' }, { k: 'gain', l: 'Clicks / month', r: 1, f: r => gainCell(r.gain) }],
+    quickwins: [{ k: 'kind', l: 'Type', f: r => `<span class="tag">${esc(r.kind)}</span>` }, { k: 'item', l: 'Search or page', cls: 'q', f: r => r.isQuery ? serp(r.item) : urlCell(r.url, r.item), csv: r => r.url || r.item }, { k: 'why', l: 'Why it was picked', sort: false }, { k: 'action', l: 'What to do', sort: false }, { k: 'conf', l: 'Confidence', f: r => confTag(r) + (r.note ? `<br><small class="flat">${esc(r.note)}</small>` : ''), csv: r => r.confidence + (r.note ? ' (' + r.note + ')' : '') }, { k: 'effort', l: 'Effort' }, { k: 'gain', l: 'Clicks / month (est.)', r: 1, f: r => gainCell({ gainLo: r.gainLo, gainHi: r.gainHi }), csv: r => `${Math.round(r.gainLo)}–${Math.round(r.gainHi)}` }],
     decline: [C.page, before, now, chg, cause],
     declineQ: [C.q, before, now, chg, cause],
-    cannibal: [C.q, { k: 'pagesN', l: 'Competing pages', sort: false, f: r => r.pages.map(p => `${urlCell(p.p, CW.pathOf(p.p))} <small class="flat">${p.share.toFixed(0)}% · #${p.pos.toFixed(1)}</small>`).join('<br>'), csv: r => r.pages.map(p => p.p).join(' | ') }, C.impr, C.pos, { k: 'loss', l: 'Clicks lost', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">−${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
-    cannibalEst: [{ k: 'q', l: 'Similar searches', cls: 'q', f: r => (r.variants || []).slice(0, 4).map(v => `${esc(v.q)} <small class="flat">#${v.pos.toFixed(1)}</small>`).join('<br>'), csv: r => (r.variants || []).map(v => v.q).join(' | ') }, C.impr, { k: 'spread', l: 'Position spread', r: 1, f: r => r.spread.toFixed(1) }, { k: 'loss', l: 'Clicks lost', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">−${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
+    cannibal: [C.q, { k: 'pagesN', l: 'Competing pages', sort: false, f: r => r.pages.map(p => `${urlCell(p.p, CW.pathOf(p.p))} <small class="flat">${p.share.toFixed(0)}% · #${p.pos.toFixed(1)}</small>`).join('<br>'), csv: r => r.pages.map(p => p.p).join(' | ') }, C.impr, C.pos, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? fmtN(r.loss) : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
+    cannibalEst: [{ k: 'q', l: 'Similar searches', cls: 'q', f: r => (r.variants || []).slice(0, 4).map(v => `${esc(v.q)} <small class="flat">#${v.pos.toFixed(1)}</small>`).join('<br>'), csv: r => (r.variants || []).map(v => v.q).join(' | ') }, C.impr, { k: 'spread', l: 'Position spread', r: 1, f: r => r.spread.toFixed(1) }, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? fmtN(r.loss) : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }],
     links: [{ k: 'path', l: 'Page to strengthen', cls: 'u', f: r => urlCell(r.p, r.path), csv: r => r.p }, C.pos, C.impr, { k: 'anchor', l: 'Suggested anchor text', f: r => r.anchor ? `“${esc(r.anchor)}”` : '<span class="flat">Use the page’s main topic</span>' }, { k: 'src', l: 'Link to it from', sort: false, f: r => r.sources.map(s => urlCell(s.p, s.path)).join('<br>'), csv: r => r.sources.map(s => s.p).join(' | ') }],
-    queries: [C.q, C.clicks, C.impr, C.ctr, C.pos]
+    queries: [C.q, C.clicks, C.impr, C.ctr, C.pos],
+    setAside: [C.page, C.impr, C.ctr, C.pos, { k: 'why', l: 'Why it was set aside', sort: false, f: r => `${esc(r.flag.reason)}${r.flag.certain ? '' : ' <span class="tag">unconfirmed</span>'}`, csv: r => r.flag.reason }, { k: 'inc', l: '', sort: false, csv: false, f: r => `<button type="button" class="btn-quiet" data-keep="${esc(r.p)}">Include</button>` }]
   };
 
   V.wf = (A, D, id) => {
@@ -287,8 +288,9 @@
 
     if (out.spec) {
       body = `<p class="wf-sum">${esc(out.summary)}</p>${strip}${resultBlock('t-wf', out.spec, out.result, 'workflow-' + id)}
+        ${out.setAside && out.setAside.length ? `<section class="panel"><div class="panel-h"><h2>Set aside (${out.setAside.length})</h2><p>Probably branded sitelinks or utility pages, where a title rewrite rarely helps. Include any that are real landing pages.</p></div>${table('t-wf-sa', COLS.setAside, out.setAside, { sort: 'impr', file: 'workflow-' + id + '-set-aside', search: false, pageSize: 10 })}</section>` : ''}
         <p class="no-print"><a href="#filters?spec=${encodeURIComponent(JSON.stringify(out.spec))}">Adjust these conditions in Smart filters</a></p>`;
-      mount = () => mountResult('t-wf', out.result);
+      mount = () => { mountResult('t-wf', out.result); if (out.setAside && out.setAside.length) drawTable('t-wf-sa'); };
     } else if (id === 'report') {
       body = reportHtml(A, D, out.report); mount = () => { const b = document.getElementById('rep-print'); if (b) b.addEventListener('click', () => window.print()); };
     } else if (id === 'ignore') {
@@ -316,6 +318,7 @@
         (out.extra ? `<section class="panel"><div class="panel-h"><h2>${esc(out.extra.title)}</h2></div>${table('t-wf-x', COLS[out.extra.cols], out.extra.rows, { sort: out.extra.sort, file: 'workflow-' + id + '-searches', pageSize: 25 })}</section>` : '') +
         (out.plan && out.plan.length ? `<section class="panel"><div class="panel-h"><h2>Action plan</h2><p>The same findings grouped into a few bigger tasks.</p></div>${ledger(out.plan)}</section>` : '') +
         (id === 'cannibal' ? '<div class="note"><b>Before you change anything.</b> Search for each query and check whether both pages really serve the same intent. Merge with a 301 only when they do; otherwise make each page target a clearly different angle.</div>' : '') +
+        (id === 'quickwins' ? methodNote(A) : '') +
         (id === 'links' ? '<div class="note"><b>How the sources are chosen.</b> Your best-ranking pages in the same folder, or the strongest pages on the site when the folder has none. Search Console has no link data, so check what already links to each page before adding more.</div>' : '');
       mount = () => { if (t) drawTable('t-wf'); if (out.extra) drawTable('t-wf-x'); };
     }
@@ -324,24 +327,27 @@
 
   function reportHtml(A, D, r) {
     const li = (items, f) => items && items.length ? `<ol class="rep-list">${items.map(f).join('')}</ol>` : '<p class="flat">Nothing to report.</p>';
+    const st = r.site, cov = r.coverage, nb = A.totNB;
     return `<section class="panel report" id="report">
       <div class="rep-h"><div><h2>SEO opportunity report</h2><p>${esc(D.site)} · ${esc(rangeLabel(D))}${r.sample ? ' · <b>Sample data, fictional site</b>' : ''}</p></div><button type="button" class="btn-primary sm no-print" id="rep-print">Print or save as PDF</button></div>
-      <section class="tiles" aria-label="Non-branded performance">
-        <div class="tile t-blue"><div class="tile-v">${fmtN(r.clicks)}</div><div class="tile-l">Non-brand clicks</div>${tileDelta(r.clicks, A.prev && A.prev.nb.clicks)}</div>
-        <div class="tile t-green"><div class="tile-v">${fmtN(r.impr)}</div><div class="tile-l">Impressions</div>${tileDelta(r.impr, A.prev && A.prev.nb.impr)}</div>
-        <div class="tile t-amber"><div class="tile-v">${pctf(r.ctr, 2)}</div><div class="tile-l">CTR</div>${tileDelta(r.ctr, A.prev && A.prev.nb.ctr, false, 'pt')}</div>
-        <div class="tile t-red"><div class="tile-v">${r.pos.toFixed(1)}</div><div class="tile-l">Avg. position</div>${tileDelta(r.pos, A.prev && A.prev.nb.pos, true)}</div>
-      </section>
+      ${cov ? `<section class="tiles" aria-label="Whole-site performance">
+        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks, all searches</div></div>
+        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions, all searches</div></div>
+        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div></div>
+        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Avg. position</div></div>
+      </section>` : ''}
       <div class="rep-b">
-        <p class="rep-lead">Searches you already rank for could bring about <b>${fmtN(r.potential)} more clicks a month</b> (estimate based on typical CTR at each position; branded searches, ${r.brandShare.toFixed(0)}% of query clicks, are excluded).</p>
+        <p>Non-branded searches${cov ? ` in this data (query rows cover ${cov.q.clicks.toFixed(1)}% of clicks${cov.rowLimit ? `; the export lists the top ${cov.rowsQ.toLocaleString()} queries` : ''})` : ''}: <b>${fmtN(nb.clicks)}</b> clicks, ${fmtN(nb.impr)} impressions, ${pctf(nb.ctr, 2)} CTR, position ${nb.pos.toFixed(1)}${A.prev ? `; clicks ${tileDelta(nb.clicks, A.prev.nb.clicks).replace(/<[^>]+>/g, '').trim()}` : ''}.</p>
+        <p class="rep-lead">${r.potential.hi >= 1 ? `Searches already ranking could bring roughly <b>${fmtN(r.potential.lo)}–${fmtN(r.potential.hi)} more clicks a month</b> (estimate; each search counted once; branded searches, ${r.brandShare.toFixed(0)}% of query clicks, excluded).` : 'No clear click opportunities in searches already ranking.'}</p>
         <h3>Top actions</h3>${ledger(r.plan)}
         <div class="grid-2 even">
           <div><h3>Biggest declines</h3>${r.declines ? li(r.declines, x => `<li>${urlCell(x.p, x.path)} — ${fmtN(x.prev.clicks)} → ${fmtN(x.cur.clicks)} clicks <span class="flat">(${esc(x.reason)})</span></li>`) : '<p class="flat">Needs a comparison period.</p>'}</div>
-          <div><h3>Closest to the top 3</h3>${li(r.quick, x => `<li>${esc(x.q)} — position ${x.pos.toFixed(1)}, ${fmtN(x.impr)} impressions</li>`)}</div>
+          <div><h3>Closest to the top 3</h3>${li(r.quick, x => `<li>${esc(x.q)} — position ${x.pos.toFixed(1)}, ${fmtN(x.impr)} impressions, ${range(x.gainLo, x.gainHi)} clicks a month</li>`)}</div>
         </div>
         <h3>AI search</h3>
-        <p>${r.ai.overview} top-5 searches get far fewer clicks than expected (likely AI Overviews), ${r.ai.aiMode} top-3 searches get almost none. Directional AI-search readiness: <b>${r.ai.readiness}%</b>.</p>
-        <p class="flat rep-foot">Generated by Clickwise from Search Console data. Click estimates show priority, not guaranteed results.</p>
+        <p>${r.ai.overview} top-5 searches get far fewer clicks than this site usually earns at that position (possible answer boxes or AI Overviews); ${r.ai.aiMode} top-3 searches get almost none. Directional AI-search readiness: <b>${r.ai.readiness}%</b>.</p>
+        ${methodNote(A)}
+        <p class="flat rep-foot">Generated by Clickwise from Search Console data. Estimates show priority, not guaranteed results.</p>
       </div>
     </section>`;
   }

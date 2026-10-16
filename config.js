@@ -17,5 +17,9 @@ window.CW_CONFIG = {
   maxQueryPageRows: 50000,
 
   // Default URL fragments treated as non-SEO pages (login, account, cart…).
-  defaultExcludes: ['/login', '/signin', '/sign-in', '/signup', '/register', '/account', '/cart', '/checkout', '/auth/']
+  defaultExcludes: ['/login', '/signin', '/sign-in', '/signup', '/register', '/account', '/cart', '/checkout', '/auth/'],
+
+  // URL words that suggest a dashboard, account or other utility page. Matching pages are
+  // set aside from title-rewrite advice with the reason shown, and users can include them again.
+  utilityHints: ['dashboard', 'admin', 'panel', 'account', 'accounts', 'my-account', 'profile', 'settings', 'login', 'logout', 'signin', 'sign-in', 'signup', 'sign-up', 'register', 'auth', 'cart', 'checkout', 'billing', 'inbox', 'notifications', 'wp-admin', 'preview']
 };

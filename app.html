@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=7">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -29,9 +29,9 @@
       </button>
 
       <label class="source source-file" id="dropzone">
-        <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.zip" multiple>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
-        <span><strong>Upload an export</strong><small>The .xlsx from Search Console › Performance › Export.</small></span>
+        <span><strong>Upload an export</strong><small>The Excel file from Search Console › Performance › Export, or its CSV files selected together.</small></span>
       </label>
 
       <button class="source source-demo" id="btn-demo" type="button">
@@ -40,6 +40,7 @@
       </button>
     </div>
     <p class="start-error" id="start-error" role="alert" hidden></p>
+    <p class="start-info" id="start-info" role="status" hidden></p>
     <p class="start-foot">Your data stays in this browser. Nothing is uploaded to our servers.</p>
   </div>
 </main>
@@ -137,7 +138,7 @@
           <span class="tag watch" id="top-sample" hidden title="Numbers are generated for a fictional site">Sample data</span>
         </div>
         <div class="top-actions">
-          <button type="button" class="btn-dark" id="btn-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Download report</button>
+          <button type="button" class="btn-dark" id="btn-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>Print report</button>
         </div>
       </div>
     </header>
@@ -152,20 +153,23 @@
     <label class="field"><span>Brand names (searches containing any of these count as branded)</span><textarea id="set-brand" rows="2"></textarea></label>
     <label class="field"><span>Searches to ignore everywhere (containing any of these words)</span><textarea id="set-ignore" rows="2" placeholder="e.g. jobs, salary, competitor name"></textarea></label>
     <label class="field"><span>Pages to leave out (URL contains)</span><input id="set-exclude" type="text"></label>
+    <label class="field"><span>Pages always analysed, even if they look like sitelinks or utility pages (URL contains)</span><input id="set-keep" type="text" placeholder="e.g. /pricing"></label>
+    <p class="hint">Stored in this browser: brand names, ignored searches, page settings and saved workflows for this site. Search data itself is never stored.</p>
     <div class="dialog-actions">
+      <button type="button" class="btn-quiet danger" id="set-forget">Forget this site</button>
       <button value="cancel" class="btn-quiet">Cancel</button>
       <button value="save" class="btn-primary sm">Save and recalculate</button>
     </div>
   </form>
 </dialog>
 
-<script src="config.js?v=6"></script>
-<script src="engine.js?v=6"></script>
-<script src="demo.js?v=6"></script>
-<script src="filters.js?v=6"></script>
-<script src="workflows.js?v=6"></script>
-<script src="views.js?v=6"></script>
-<script src="automation.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="config.js?v=7"></script>
+<script src="engine.js?v=7"></script>
+<script src="demo.js?v=7"></script>
+<script src="filters.js?v=7"></script>
+<script src="workflows.js?v=7"></script>
+<script src="views.js?v=7"></script>
+<script src="automation.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

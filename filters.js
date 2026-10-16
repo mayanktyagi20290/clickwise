@@ -21,6 +21,7 @@
     brand: { kind: 'bool', label: 'Branded', on: ['query'] },
     question: { kind: 'bool', label: 'Question', on: ['query'] },
     location: { kind: 'bool', label: 'Mentions a place', on: ['query', 'page'] },
+    place: { kind: 'enum', label: 'Place', on: ['query', 'page'] },
     intent: { kind: 'enum', label: 'Intent', on: ['query'] }
   };
   const OPS = {
@@ -128,6 +129,7 @@
       hasPrev: !!(prevQ || prevP),
       hasQP: !!(D.QP && D.QP.length),
       folders: [...new Set(page.map(r => r.folder).filter(f => f !== '/'))],
+      places: { query: [...new Set(query.map(r => r.place).filter(Boolean))].sort(), page: [...new Set(page.map(r => r.place).filter(Boolean))].sort() },
       types: [...new Set(page.map(r => r.pageType))].sort(),
       high: { query: Math.max(10, pctl(query, 0.75)), page: Math.max(20, pctl(page, 0.75)) },
       low: { query: pctl(query, 0.25), page: pctl(page, 0.25) }
@@ -249,6 +251,7 @@
       case 'brand': return c.v ? 'Branded searches' : 'Non-branded searches';
       case 'question': return c.v ? 'Phrased as a question' : 'Not a question';
       case 'location': return c.v ? 'Mentions a place' : 'No place mentioned';
+      case 'place': return (c.op === 'not' ? "Doesn't mention " : 'Mentions ') + c.v;
       case 'intent': return (c.op === 'not' ? 'Intent is not ' : 'Intent: ') + (CW.INTENT_LABEL[c.v] || c.v);
       case 'pageType': return (c.op === 'not' ? 'Not ' : 'Page type: ') + c.v;
       case 'section': return (c.op === 'not' ? 'Outside the ' : 'In the ') + c.v + ' folder';
@@ -309,6 +312,8 @@
         else if (c.op === 'endsWith') steps.push([dim, 'Custom (regex)', re2(v) + '$']);
         else if (c.op === 'word') steps.push([dim, 'Custom (regex)', '\\b' + re2(v) + '\\b']);
         else if (c.op === 'in') steps.push([dim, 'Custom (regex)', '(' + c.v.map(re2).join('|') + ')']);
+      } else if (c.f === 'place') {
+        steps.push([dim, c.op === 'not' ? "Doesn't contain" : 'Contains', String(c.v).toLowerCase()]);
       } else if (c.f === 'brand') {
         steps.push(['Query', c.v ? 'Custom (regex)' : "Custom (regex) › Doesn't match regex", A.brandRx]);
       } else if (c.f === 'question') {
@@ -420,6 +425,13 @@
     quoted.forEach(([neg, v]) => textCond(neg ? 'notContains' : 'contains', v));
     take(/\bhow[- ]to\b/g, () => { conds.push({ f: 'text', op: 'startsWith', v: 'how to' }); });
 
+    // "<topic> queries/keywords/searches" → the search contains that word
+    const NOT_TOPIC = new Set(['top', 'all', 'my', 'our', 'these', 'those', 'high', 'low', 'new', 'old', 'zero', 'based', 'tail', 'long', 'short', 'one', 'two', 'declining', 'losing', 'growing', 'rising', 'branded', 'brand', 'unbranded', 'generic', 'local', 'question', 'questions', 'commercial', 'informational', 'transactional', 'navigational', 'best', 'worst', 'more', 'less', 'other', 'any', 'such']);
+    take(/\b([\p{L}\p{N}][\p{L}\p{N}-]{1,40}) (?:queries|query|keywords?|searches|search terms?)\b/gu, (m, w) => {
+      if (STOP.has(w) || NOT_TOPIC.has(w) || /^\d+$/.test(w)) return false;
+      target = 'query'; textCond('contains', w); return 'keywords';
+    });
+
     // "<word> pages" → a folder, a page type, or a URL word
     take(/\b([\p{L}\p{N}][\p{L}\p{N}-]{1,40}) (?:pages?|urls?|articles?|posts?|listings?)\b/gu, (m, w) => {
       if (STOP.has(w) || ['landing', 'top', 'high', 'low', 'new', 'old', 'best', 'worst', 'these', 'those', 'all', 'zero', 'declining', 'losing', 'growing', 'my'].includes(w)) return false;
@@ -430,6 +442,16 @@
       else conds.push({ f: 'text', op: 'contains', v: w });
     });
     if (/\b(pages?|urls?)\b/.test(t) && pageHit >= 0 && !conds.some(c => ['brand', 'question', 'intent', 'words'].includes(c.f))) target = 'page';
+
+    // a place named anywhere ("in delhi", "mumbai") → that place
+    {
+      const m = loose(t).match(PLACE_RX);
+      if (m && m[1] !== 'near me' && m[1] !== 'nearby') {
+        const name = placeOf(m[1]);
+        conds.push({ f: 'place', op: 'is', v: name });
+        t = t.replace(new RegExp(B + escRx(m[1]).replace(/ /g, '[\\s-]+') + E, 'u'), ' ');
+      }
+    }
 
     // leftovers we could not read
     const unknown = t.replace(/[^\p{L}\p{N}\s%-]/gu, ' ').split(/\s+/).filter(w => w && !STOP.has(w) && !/^\d+$/.test(w) && w.length > 1);

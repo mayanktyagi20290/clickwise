@@ -591,3 +591,19 @@ td a.btn-quiet{text-decoration:none;color:var(--ink);display:inline-block}
 .rep-foot{font-size:12px;margin-top:18px}
 @media (max-width:640px){.sf{padding:14px}.sf-box{flex-wrap:wrap}.sf-box .btn-primary{width:100%}.builder input[type=text]{width:100%}.wf-head{flex-direction:column}}
 @media print{.report{border:0;box-shadow:none}.rep-b .ledger li{break-inside:avoid}}
+
+/* ---------- coverage, method, settings ---------- */
+.subset .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.subset .kv>div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line-soft);border-radius:10px;background:var(--sunk)}
+.subset .kv span{font-size:12px;color:var(--muted)}
+.subset .kv b{font:700 18px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.subset .kv small{font-size:11.5px;color:var(--muted)}
+.cov{margin:12px 0 0;font-size:13px;color:var(--ink-2)}
+.note.method{background:var(--sunk);border:1px solid var(--line-soft);font-size:12.5px!important;line-height:1.55;margin-top:14px}
+.start-info{margin:12px 0 0;padding:10px 14px;border-radius:10px;background:var(--signal-soft);color:var(--ink-2);font-size:13px}
+.dialog .hint{margin:0;font-size:12px;color:var(--muted)}
+.btn-quiet.danger{color:var(--risk);margin-right:auto}
+.btn-quiet.danger:hover{border-color:var(--risk)}
+.gainv+br+.tag,.gainv~.tag{margin-top:3px}
+/* grid children may shrink below their content (charts), so two-column grids collapse cleanly on phones */
+.grid-2>*,.signals>*,.tiles>*{min-width:0}

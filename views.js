@@ -15,7 +15,15 @@
     const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '';
     return `<span class="${cls}">${arrow} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
   };
-  const gainCell = v => v >= 1 ? `<span class="gainv">+${fmtN(v)}</span>` : '<span class="flat">—</span>';
+  // Estimates are clicks per month as a low–high range; flags explain when a number deserves less trust.
+  const range = (lo, hi) => !(hi >= 1) ? '—' : lo >= 1 && fmtN(lo) !== fmtN(hi) ? `+${fmtN(lo)}–${fmtN(hi)}` : lo >= 1 ? `+${fmtN(hi)}` : `up to +${fmtN(hi)}`;
+  const gainCell = r => {
+    if (typeof r === 'number') return r >= 1 ? `<span class="gainv">+${fmtN(r)}</span>` : '<span class="flat">—</span>';
+    const lo = r.gainLo != null ? r.gainLo : r.gain, hi = r.gainHi != null ? r.gainHi : r.gain;
+    const flags = (r.serp ? '<span class="tag watch" title="CTR far below this site\'s usual CTR at this position: an answer box, AI Overview or intent mismatch may be taking the click, so a title rewrite may not help">results-page feature?</span>' : '') +
+      (r.capped ? '<span class="tag" title="This row was unusually large, so it was capped at 10% of the list total">capped</span>' : '');
+    return hi >= 1 ? `<span class="gainv">${range(lo, hi)}</span>${flags ? '<br>' + flags : ''}` : '<span class="flat">—</span>';
+  };
   // only http(s) URLs become links; anything else (e.g. javascript: from a crafted file) is shown as text
   const safeHref = u => /^https?:\/\//i.test(String(u || '')) ? esc(u) : null;
   const urlCell = (url, path) => safeHref(url) ? `<a href="${safeHref(url)}" target="_blank" rel="noopener">${esc(path || url)}</a>` : esc(path || url);
@@ -88,7 +96,7 @@
     impr: { k: 'impr', l: 'Impressions', r: 1, f: r => fmtN(r.impr) },
     ctr: { k: 'ctr', l: 'CTR', r: 1, f: r => pctf(r.ctr) },
     pos: { k: 'pos', l: 'Position', r: 1, f: r => posTag(r.pos) },
-    gain: { k: 'gain', l: 'Clicks to gain', r: 1, f: r => gainCell(r.gain) },
+    gain: { k: 'gain', l: 'Clicks / month (est.)', r: 1, f: r => gainCell(r), csv: r => `${Math.round(r.gainLo || 0)}–${Math.round(r.gainHi || r.gain || 0)}` },
     bench: { k: 'bench', l: 'Expected CTR', r: 1, f: r => pctf(r.bench) }
   };
 
@@ -110,8 +118,15 @@
   const ledger = (items, limit) => items.length ? `<ol class="ledger">${items.slice(0, limit || items.length).map(a => `
       <li><span class="rank" aria-hidden="true"></span>
         <div><h3>${esc(a.title)}</h3><p>${esc(a.body)}</p><a class="go" href="#${a.view}">Open the list</a></div>
-        <div class="gain">${a.gain ? `<b>+${fmtN(a.gain)}</b><small>clicks / month</small>` : '<b style="color:var(--muted)">Growth</b><small>longer term</small>'}<br><span class="tag">${esc(a.effort)} effort</span></div>
+        <div class="gain">${a.gainHi >= 1 ? `<b>${range(a.gain, a.gainHi)}</b><small>clicks / month (est.)</small>` : '<b style="color:var(--muted)">Growth</b><small>longer term</small>'}<br><span class="tag">${esc(a.effort)} effort</span></div>
       </li>`).join('')}</ol>` : '<p class="empty">No clear actions found. That usually means the date range is short or traffic is very low. Try a longer range.</p>';
+
+  // How every estimate was made, in plain words.
+  function methodNote(A) {
+    const m = A.method, own = A.curve.points.filter(p => p.source.startsWith('site')).map(p => p.pos);
+    const period = m.start && m.end ? `${m.days} days (${m.start} to ${m.end})` : `an assumed ${m.days} days (the export has no dates)`;
+    return `<div class="note method"><b>How these estimates work.</b> Observed over ${esc(period)}, converted to clicks per month. Expected CTR at each position is this site's own median CTR where it has at least ${m.minObs} non-branded queries${own.length ? ` (positions ${own.join(', ')})` : ' (none here)'}, and an industry benchmark elsewhere. Each search keeps its own click rate relative to its position, so searches that lose clicks to answer boxes are not projected to a full top-3 CTR. The low figure assumes a smaller move (${m.lowTargetStep} positions up, or 60% of expected CTR); the high figure assumes reaching the target. No single search may contribute more than ${Math.round(m.capShare * 100)}% of a list. These are estimates for prioritising, not forecasts.</div>`;
+  }
 
   // ════════════════ VIEWS ════════════════
   const V = {};
@@ -153,13 +168,39 @@
     return `<span class="tile-d" title="${good ? 'Improved' : 'Worse'} vs previous period">${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
   }
   function tiles(A) {
-    const nb = A.totNB, p = A.prev;
+    const nb = A.totNB, p = A.prev, cov = A.coverage;
+    if (cov) {
+      const st = A.site, bench = expCtr(st.pos);
+      return `<section class="tiles" aria-label="Whole-site performance">
+        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">All searches, from daily totals</div></div>
+        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">All searches, from daily totals</div></div>
+        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Whole site, branded included</div></div>
+        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">Weighted by impressions</div></div>
+      </section>`;
+    }
     const bench = expCtr(nb.pos);
     return `<section class="tiles" aria-label="Non-branded performance">
-      <div class="tile t-blue"><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-l">Non-brand clicks</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries tracked</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
-      <div class="tile t-green"><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-l">Total impressions</div><div class="tile-s">Times you appeared in search</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
-      <div class="tile t-amber"><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-l">Average CTR</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
-      <div class="tile t-red"><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">${nb.pos <= 5 ? 'Excellent — top 5' : nb.pos <= 10 ? 'Solid — page one' : 'Needs work — page two'}</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
+      <div class="tile t-blue"><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-l">Non-brand clicks</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries in this data</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
+      <div class="tile t-green"><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-l">Non-brand impressions</div><div class="tile-s">Queries in this data only</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
+      <div class="tile t-amber"><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-l">Non-brand CTR</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
+      <div class="tile t-red"><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-l">Non-brand position</div><div class="tile-s">Weighted by impressions</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
+    </section>`;
+  }
+  // Non-brand subset and how much of the site the query and page rows cover.
+  function subsetStrip(A, D) {
+    const nb = A.totNB, p = A.prev, cov = A.coverage;
+    const rows = cov ? (cov.rowLimit ? `top ${cov.rowsQ.toLocaleString()} queries` : `${cov.rowsQ.toLocaleString()} queries`) : `${A.Q.length.toLocaleString()} queries`;
+    const d = (c, pr, inv, unit) => { const t = tileDelta(c, pr, inv, unit); return t ? `<small>${t.replace(/<[^>]+>/g, '')}</small>` : ''; };
+    const covLine = !cov ? '' : `<p class="cov">${cov.rowLimit ? `<b>This export lists only the top ${cov.rowsQ.toLocaleString()} queries and ${cov.rowsP.toLocaleString()} pages.</b> ` : ''}Query rows cover <b>${cov.q.clicks.toFixed(1)}%</b> of clicks and <b>${cov.q.impr.toFixed(1)}%</b> of impressions; page rows cover <b>${cov.p.clicks.toFixed(1)}%</b> of clicks and <b>${cov.p.impr.toFixed(1)}%</b> of impressions. ${cov.notShown.clicks > 0 ? `<b>${fmtN(cov.notShown.clicks)} clicks (${cov.notShown.share.toFixed(1)}%)</b> ${cov.source === 'file' ? 'are not represented in this export: searches beyond its row limit plus queries Google keeps private.' : 'have no reported query: Google withholds rare queries for privacy, and row limits may apply.'}` : ''}</p>`;
+    return `<section class="panel subset">
+      <div class="panel-h"><h2>Non-branded searches</h2><p>Figures below come from the ${esc(rows)}, with branded searches removed. Opportunity estimates use this subset.</p></div>
+      <div class="panel-b"><div class="kv">
+        <div><span>Clicks</span><b>${fmtN(nb.clicks)}</b>${d(nb.clicks, p && p.nb.clicks)}</div>
+        <div><span>Impressions</span><b>${fmtN(nb.impr)}</b>${d(nb.impr, p && p.nb.impr)}</div>
+        <div><span>CTR</span><b>${pctf(nb.ctr, 2)}</b>${d(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
+        <div><span>Position</span><b>${nb.pos.toFixed(1)}</b>${d(nb.pos, p && p.nb.pos, true)}</div>
+        <div><span>Branded share of query clicks</span><b>${A.totAll.clicks ? (A.totB.clicks / A.totAll.clicks * 100).toFixed(0) : 0}%</b></div>
+      </div>${covLine}</div>
     </section>`;
   }
   function signalBox(cls, icon, title, items, empty) {
@@ -176,6 +217,14 @@
         <div class="card-m">CTR ${pctf(s.ctr)} · pos ${s.pos.toFixed(1)} · ${s.n} page${s.n === 1 ? '' : 's'}</div>
         <div class="card-bar"><span style="width:${(s.clicks / max * 100).toFixed(1)}%"></span></div>
       </a>`).join('')}</div>`;
+  }
+
+  // Countries and search appearance, when the export includes them.
+  function countryTable(D) {
+    const top = (list, n) => (list || []).slice().sort((a, b) => b.clicks - a.clicks).slice(0, n);
+    const c = top(D.Countries, 5), a = top(D.Appearance, 4);
+    const t = (rows, label) => rows.length ? `<table style="margin-top:10px"><thead><tr><th>${label}</th><th class="r">Clicks</th><th class="r">CTR</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.d)}</td><td class="r">${fmtN(r.clicks)}</td><td class="r">${pctf(r.ctr)}</td></tr>`).join('')}</tbody></table>` : '';
+    return t(c, 'Top countries') + t(a, 'Search appearance');
   }
 
   // Aggregate the daily series by day / week / month
@@ -214,8 +263,8 @@
     const topP = A.P.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const html = `
       <section class="banner">
-        <div><h1>${esc(D.site)} could gain about <b class="num">${fmtN(A.potentialMonthly)}</b> more clicks a month from searches it already ranks for.</h1>
-        <p>From ${A.quickWins.length.toLocaleString()} queries on positions 4–20 and ${A.ctrQueries.length.toLocaleString()} page-one queries with below-benchmark CTR. Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded.</p></div>
+        <div><h1>${A.potential.hi >= 1 ? `${esc(D.site)} could gain roughly <b class="num">${fmtN(A.potential.lo)}–${fmtN(A.potential.hi)}</b> more clicks a month from searches it already ranks for.` : `No clear click opportunities in searches ${esc(D.site)} already ranks for.`}</h1>
+        <p>An estimate from ${A.potential.n.toLocaleString()} non-branded searches${A.coverage ? ` (${(A.potential.hi / Math.max(1, A.potential.monthlySiteClicks) * 100).toFixed(1)}% of monthly clicks at the high end)` : ''}, counted once each. Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded. <a href="#plan">How it's estimated</a></p></div>
         <a class="btn-primary" href="#plan">See the action plan</a>
       </section>
 
@@ -229,6 +278,8 @@
           <div class="chart-box"><canvas id="ch-trend" aria-label="Clicks and impressions over time"></canvas></div>
         </div>` : '<p class="empty" style="padding:16px 20px">This export has no date data. Connect Search Console or include the Dates sheet to see the trend.</p>'}
       </section>
+
+      ${subsetStrip(A, D)}
 
       <div class="signals">
         ${signalBox('sig-good', 'check', "What's going well", A.signals.good, 'Not enough data yet.')}
@@ -247,7 +298,7 @@
           <div class="panel-b"><div class="chart-box sm"><canvas id="ch-dist" aria-label="Queries by position band"></canvas></div></div>
         </section>
         <section class="panel">
-          <div class="panel-h"><h2>CTR by position</h2><p>Your click-through rate at each position against the typical benchmark.</p></div>
+          <div class="panel-h"><h2>CTR by position</h2><p>Your non-branded CTR, the expected CTR used for estimates (your own where there is enough data), and the industry benchmark.</p></div>
           <div class="panel-b"><div class="chart-box sm"><canvas id="ch-ctrpos" aria-label="CTR by position versus benchmark"></canvas></div></div>
         </section>
       </div>
@@ -267,7 +318,7 @@
           <div class="panel-b">
             <div class="chart-box sm"><canvas id="ch-split" aria-label="Branded versus non-branded clicks"></canvas></div>
             ${D.Dev && D.Dev.length ? `<table style="margin-top:10px"><tbody>${D.Dev.map(d => `<tr><td>${esc(d.d.charAt(0) + d.d.slice(1).toLowerCase())}</td><td class="r">${fmtN(d.clicks)} clicks</td><td class="r">${pctf(d.ctr)} CTR</td></tr>`).join('')}</tbody></table>` : ''}
-            ${A.anon && A.anon.hidden > 0 ? `<p class="anon"><b>${A.anon.share.toFixed(0)}% of clicks</b> (${fmtN(A.anon.hidden)}) came from anonymous queries Google doesn't report individually.</p>` : ''}
+            ${countryTable(D)}
           </div>
         </section>
       </div>
@@ -304,7 +355,8 @@
       ] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: x => { const b = A.posDist[x.dataIndex]; return [` ${b.n} queries`, ` ${fmtN(b.clicks)} clicks · ${fmtN(b.impr)} impr.`]; } } } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Position' } }, y: { ticks: { precision: 0 } } } } });
       chart('ch-ctrpos', { type: 'line', data: { labels: A.ctrByPos.map(p => p.pos), datasets: [
         { label: 'Your CTR', data: A.ctrByPos.map(p => p.actual), borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal'), spanGaps: true, tension: .3, pointRadius: 3, borderWidth: 2 },
-        { label: 'Benchmark', data: A.ctrByPos.map(p => p.bench), borderColor: cssVar('--muted'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: .3 }
+        { label: 'Expected (used for estimates)', data: A.ctrByPos.map(p => p.expected), borderColor: cssVar('--good'), pointRadius: 0, borderWidth: 1.5, tension: .3 },
+        { label: 'Industry benchmark', data: A.ctrByPos.map(p => p.bench), borderColor: cssVar('--muted'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: .3 }
       ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: x => ` ${x.dataset.label}: ${x.raw == null ? '—' : x.raw.toFixed(1) + '%'}` } } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Position' } }, y: { ticks: { callback: v => v + '%' } } } } });
       chart('ch-split', { type: 'doughnut', data: { labels: ['Non-branded', 'Branded'], datasets: [{ data: [A.totNB.clicks, A.totB.clicks], backgroundColor: [cssVar('--signal'), cssVar('--watch')], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: x => ` ${x.label}: ${fmtN(x.raw)} clicks` } } } } });
     };
@@ -320,33 +372,35 @@
     </div>`;
   }
 
-  V.plan = (A) => ({ html: head('Action plan', 'Every recommendation, ranked by the clicks it could add each month. Gains assume you reach the typical CTR for the target position; treat them as a guide to priority, not a forecast.') +
-    `<section class="panel">${ledger(A.plan)}</section>
-     <div class="note"><b>How estimates work.</b> Clickwise compares each query's CTR with a benchmark curve for its position (about 28% at #1, 11% at #3, 2.4% at #10). The gap, times impressions, is the opportunity. Branded searches are left out.</div>` });
+  V.plan = (A) => ({ html: head('Action plan', 'Every recommendation, ranked by its conservative (low) estimate of clicks per month. Ranges overlap between actions, so do not add them up.') +
+    `<section class="panel">${ledger(A.plan)}</section>${methodNote(A)}` });
 
   V.quickwins = (A) => {
     const rows = A.quickWins;
     const html = head('Almost page one', 'Non-branded queries ranking 4–20 with real demand. Moving them into the top 3 (or top 7 from page two) is usually the fastest SEO gain.') +
-      `<div class="strip">${stat(rows.length.toLocaleString(), 'queries in striking distance', 'gain')}${stat('+' + fmtN(A.perMonth(rows.reduce((s, r) => s + r.gain, 0))), 'clicks a month if they reach target', 'gain')}${stat(rows.filter(r => r.pos > 10).length.toLocaleString(), 'stuck on page two', 'watch')}</div>
-      <section class="panel">${table('t-qw', [C.q, C.impr, C.clicks, C.ctr, C.pos, { k: 'target', l: 'Target', r: 1, f: r => '#' + r.target }, C.gain], rows, { sort: 'gain', file: 'almost-page-one', placeholder: 'Filter queries',
+      `<div class="strip">${stat(rows.length.toLocaleString(), 'queries in striking distance', 'gain')}${stat(range(rows.reduce((s, r) => s + r.gainLo, 0), rows.reduce((s, r) => s + r.gainHi, 0)), 'clicks a month (estimate)', 'gain')}${stat(rows.filter(r => r.serp).length.toLocaleString(), 'held back by a results-page feature?', 'watch')}${stat(rows.filter(r => r.pos > 10).length.toLocaleString(), 'on page two', '')}</div>
+      <section class="panel">${table('t-qw', [C.q, C.impr, C.clicks, C.ctr, C.pos, { k: 'target', l: 'Target', r: 1, f: r => r.lowTarget > r.target + 0.5 ? `#${r.lowTarget.toFixed(0)}–${r.target}` : '#' + r.target, csv: r => r.target }, C.gain], rows, { sort: 'gain', file: 'almost-page-one', placeholder: 'Filter queries',
         filters: [{ key: 'band', label: 'Position', options: [['a', '4–10'], ['b', '11–20']], test: (r, v) => v === 'a' ? r.pos <= 10 : r.pos > 10 }],
         empty: 'No queries between positions 4 and 20 with enough impressions.' })}</section>
-      <div class="note"><b>How to move them.</b> Link to the ranking page from your strongest pages using the query as anchor text, answer the query in a heading near the top, and make sure the title contains the exact phrase.</div>`;
+      <div class="note"><b>How to move them.</b> Link to the ranking page from your strongest pages using the query as anchor text, answer the query in a heading near the top, and make sure the title contains the exact phrase. Searches marked “results-page feature?” get far fewer clicks than this site usually earns at that position; check the results page before investing.</div>${methodNote(A)}`;
     return { html, mount: () => drawTable('t-qw') };
   };
 
   V.ctr = (A) => {
     const hasTop = A.ctrPages.some(r => r.top && r.top.length);
     const pcols = [C.page, C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain];
-    const html = head('Titles to rewrite', 'Pages and queries on page one that get far fewer clicks than their position should earn. Better titles and descriptions fix most of these without any ranking change.') +
-      `<div class="strip">${stat(A.ctrPages.length.toLocaleString(), 'pages under 60% of benchmark CTR', 'risk')}${stat('+' + fmtN(A.perMonth(A.ctrPages.reduce((s, r) => s + r.gain, 0))), 'clicks a month at 85% of benchmark', 'gain')}${stat(A.ctrQueries.length.toLocaleString(), 'queries under half of benchmark', 'watch')}</div>
+    const html = head('Titles to rewrite', 'Pages and queries on page one that get far fewer clicks than this site normally earns at that position. Better titles and descriptions fix many of these without any ranking change.') +
+      `<div class="strip">${stat(A.ctrPages.length.toLocaleString(), 'pages under 60% of expected CTR', 'risk')}${stat(range(A.ctrPages.reduce((s, r) => s + r.gainLo, 0), A.ctrPages.reduce((s, r) => s + r.gainHi, 0)), 'clicks a month (pages, estimate)', 'gain')}${stat(A.ctrQueries.length.toLocaleString(), 'queries under half of expected', 'watch')}${A.setAside.length ? stat(A.setAside.length.toLocaleString(), 'set aside: likely sitelinks or utility pages', '') : ''}</div>
       <section class="panel"><div class="panel-h"><h2>Pages</h2><p>${hasTop ? 'Under each page: the searches it gets most impressions for. Write the title for those.' : 'Connect Search Console to see which searches each page is shown for.'}</p></div>
       ${table('t-ctrp', pcols, A.ctrPages, { sort: 'gain', file: 'titles-to-rewrite-pages', searchKeys: ['path'], placeholder: 'Filter pages',
         sub: r => r.top && r.top.length ? `<tr class="sub"><td colspan="7">Top searches: ${r.top.map(q => `<span class="tag">${esc(q)}</span>`).join(' ')}</td></tr>` : '',
         empty: 'Every page-one page is close to benchmark CTR.' })}</section>
       <section class="panel"><div class="panel-h"><h2>Queries</h2><p>If CTR is low at position 1–3, check the results page: an AI Overview, map pack or ads may be taking the clicks, not your title.</p></div>
-      ${table('t-ctrq', [C.q, C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain], A.ctrQueries, { sort: 'gain', file: 'titles-to-rewrite-queries', placeholder: 'Filter queries' })}</section>`;
-    return { html, mount: () => { drawTable('t-ctrp'); drawTable('t-ctrq'); } };
+      ${table('t-ctrq', [C.q, C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain], A.ctrQueries, { sort: 'gain', file: 'titles-to-rewrite-queries', placeholder: 'Filter queries' })}</section>
+      ${A.setAside.length ? `<section class="panel"><div class="panel-h"><h2>Set aside (${A.setAside.length})</h2><p>These pages match the low-CTR rule but are probably branded sitelinks or utility pages, where a title rewrite rarely helps. They are not counted in the estimates. If one is a real landing page, include it.</p></div>
+        ${table('t-ctrx', [C.page, C.impr, C.ctr, C.pos, { k: 'why', l: 'Why it was set aside', sort: false, f: r => `${esc(r.flag.reason)}${r.flag.certain ? '' : ' <span class="tag">unconfirmed</span>'}`, csv: r => r.flag.reason }, { k: 'inc', l: '', sort: false, csv: false, f: r => `<button type="button" class="btn-quiet" data-keep="${esc(r.p)}">Include</button>` }], A.setAside, { sort: 'impr', file: 'titles-set-aside', search: false, pageSize: 10 })}</section>` : ''}
+      ${methodNote(A)}`;
+    return { html, mount: () => { drawTable('t-ctrp'); drawTable('t-ctrq'); if (A.setAside.length) drawTable('t-ctrx'); } };
   };
 
   V.cannibal = (A) => {
@@ -354,17 +408,17 @@
     const rows = A.cannibal;
     const sevTag = s => `<span class="tag ${s === 'high' ? 'risk' : s === 'medium' ? 'watch' : ''}">${s === 'high' ? 'High' : s === 'medium' ? 'Medium' : 'Low'}</span>`;
     const cols = exact
-      ? [C.q, { k: 'pagesN', l: 'Pages', r: 1, f: r => r.pages.length, csv: r => r.pages.map(p => p.p).join(' | ') }, C.impr, C.clicks, C.ctr, C.pos, { k: 'loss', l: 'Clicks lost', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">−${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }]
-      : [{ k: 'q', l: 'Keyword group', cls: 'q' }, { k: 'n', l: 'Variants', r: 1 }, C.impr, C.clicks, C.ctr, { k: 'spread', l: 'Position spread', r: 1, f: r => r.spread.toFixed(1) }, { k: 'loss', l: 'Clicks lost', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">−${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }];
+      ? [C.q, { k: 'pagesN', l: 'Pages', r: 1, f: r => r.pages.length, csv: r => r.pages.map(p => p.p).join(' | ') }, C.impr, C.clicks, C.ctr, C.pos, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }]
+      : [{ k: 'q', l: 'Keyword group', cls: 'q' }, { k: 'n', l: 'Variants', r: 1 }, C.impr, C.clicks, C.ctr, { k: 'spread', l: 'Position spread', r: 1, f: r => r.spread.toFixed(1) }, { k: 'loss', l: 'At stake / month (up to)', r: 1, f: r => r.loss >= 1 ? `<span class="lossv">${fmtN(r.loss)}</span>` : '—' }, { k: 'sevN', l: 'Severity', f: r => sevTag(r.sev), csv: r => r.sev }];
     rows.forEach(r => { r.pagesN = r.pages ? r.pages.length : 0; r.sevN = { high: 3, medium: 2, low: 1 }[r.sev]; });
     const sub = exact
       ? r => `<tr class="sub"><td colspan="8">${r.pages.map(p => `<div>${urlCell(p.p, window.CW.pathOf(p.p))} — ${p.share.toFixed(0)}% of impressions, position ${p.pos.toFixed(1)}, ${fmtN(p.clicks)} clicks</div>`).join('')}</td></tr>`
       : r => `<tr class="sub"><td colspan="8">${r.variants.slice(0, 6).map(v => `<span class="tag">${esc(v.q)} · #${v.pos.toFixed(1)}</span>`).join(' ')}</td></tr>`;
     const html = head('Competing pages', exact
-      ? 'Searches where two or more of your own URLs each take at least 10% of impressions. Google can only rank one well, so the others dilute it.'
+      ? 'Searches where two or more of your own URLs each take at least 10% of impressions. These are candidates to investigate, not confirmed problems.'
       : 'Groups of similar searches with very different positions. This is a likely sign of competing pages; connect Search Console for exact page-level matches.') +
       (exact ? '' : '<div class="note"><b>Estimated mode.</b> File exports do not include which page ranks for which query. Connecting Search Console unlocks exact competing-page detection.</div>') +
-      `<div class="strip">${stat(rows.filter(r => r.sev === 'high').length, 'high severity', 'risk')}${stat(rows.filter(r => r.sev === 'medium').length, 'medium severity', 'watch')}${stat('−' + fmtN(A.perMonth(rows.reduce((s, r) => s + r.loss, 0))), 'clicks a month lost to the split', 'risk')}</div>
+      `<div class="strip">${stat(rows.filter(r => r.sev === 'high').length, 'high severity', 'risk')}${stat(rows.filter(r => r.sev === 'medium').length, 'medium severity', 'watch')}${stat('up to ' + fmtN(rows.reduce((s, r) => s + r.loss, 0)), 'clicks a month at stake (if one page ranked as well as the best)', 'risk')}</div>
       <section class="panel">${table('t-can', cols, rows, { sort: 'sevN', file: 'competing-pages', pageSize: 25, sub, empty: 'No competing pages found.' })}</section>
       <div class="note"><b>Fixing it.</b> Choose the page that best matches the intent. Then merge the weaker page into it with a 301, or rewrite the weaker page to target a different angle, and update internal links to point to the winner.</div>`;
     return { html, mount: () => drawTable('t-can') };
@@ -393,7 +447,7 @@
   V.ai = (A) => {
     const ai = A.ai;
     const groups = [
-      { id: 'ov', icon: 'spark', tone: 'amber', title: 'Likely answered by AI Overviews', desc: 'Top-5 rankings with CTR under a third of benchmark. Something on the results page is answering the query before the click.', rows: ai.overview, tip: 'Open a few in Google. If an AI Overview appears, make sure your page is cited: lead with a short direct answer, use clear headings that mirror the question, and add original data the overview cannot summarise.', gain: true },
+      { id: 'ov', icon: 'spark', tone: 'amber', title: 'Possibly answered on the results page', desc: 'Top-5 rankings with CTR under a third of what this site usually earns at that position. An AI Overview, answer box or intent mismatch may be taking the click; check the results page to confirm.', rows: ai.overview, tip: 'Open a few in Google. If an AI Overview appears, make sure your page is cited: lead with a short direct answer, use clear headings that mirror the question, and add original data the overview cannot summarise.', gain: true },
       { id: 'am', icon: 'alert', tone: 'red', title: 'AI Mode candidates', desc: 'Positions 1–3 with almost no clicks (under 0.5% CTR). Typical when a full AI answer replaces the results page.', rows: ai.aiMode, tip: 'These are the hardest to win back with titles alone. Aim to be a cited source: original data, clear definitions, and a named author with credentials.' },
       { id: 'zp', icon: 'ghost', tone: 'violet', title: 'Zero-click pages', desc: 'Page-one URLs with impressions but under 0.5% CTR.', rows: ai.zeroPages, tip: 'Check whether the page answers the query fully in the snippet. If so, add a reason to click: a tool, a download, a comparison table, or deeper detail.', page: true },
       { id: 'qs', icon: 'help', tone: 'indigo', title: 'Question searches', desc: 'The format AI answers and People Also Ask boxes draw from.', rows: ai.questions, tip: 'Answer each question in 40–60 words directly under a heading phrased as the question. Group related questions into an FAQ section with FAQPage markup.' },
@@ -405,10 +459,10 @@
     const cols = g => g.page ? [C.page, C.impr, C.clicks, C.ctr, C.pos] : g.gain ? [C.q, C.impr, C.clicks, C.ctr, C.pos, C.gain] : [C.q, C.impr, C.clicks, C.ctr, C.pos];
     const html = head('AEO & GEO signals', 'How your Search Console data reflects AI search: where answers are being taken from you, and which queries are shaped like prompts.') +
       `<div class="aitiles">
-        <div class="aitile a-amber"><span>AI Overview</span><b>${ai.overview.length}</b><small>top-5 queries under-clicked</small></div>
+        <div class="aitile a-amber"><span>Answer box?</span><b>${ai.overview.length}</b><small>top-5 queries far below usual CTR</small></div>
         <div class="aitile a-red"><span>AI Mode</span><b>${ai.aiMode.length}</b><small>top-3 queries near zero clicks</small></div>
         <div class="aitile a-violet"><span>Zero-click</span><b>${ai.zeroPages.length}</b><small>page-one pages under 0.5% CTR</small></div>
-        <div class="aitile a-blue"><span>vs expected</span><b>−${fmtN(A.perMonth(ai.expectedGap))}</b><small>clicks / month below benchmark</small></div>
+        <div class="aitile a-blue"><span>vs benchmark</span><b>−${fmtN(ai.expectedGap)}</b><small>clicks / month below the industry CTR curve</small></div>
         <div class="aitile ${A.readiness >= 60 ? 'a-green' : A.readiness >= 35 ? 'a-amber' : 'a-red'}"><span>GEO ready</span><b>${A.readiness}%</b><small>AI search readiness</small></div>
       </div>
       <div class="stack">${groups.map(g => `
@@ -555,5 +609,5 @@
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = label, 1500); }).catch(() => { b.textContent = 'Select and copy manually'; });
   });
 
-  window.CW_VIEWS = { V, destroyCharts, esc, ui: { table, drawTable, TABLES, C, head, stat, ledger, accHead, svg, ICON, pctf, posTag, urlCell, serp, gainCell, tileDelta, chart, cssVar } };
+  window.CW_VIEWS = { V, destroyCharts, esc, ui: { table, drawTable, TABLES, C, head, stat, ledger, accHead, svg, ICON, pctf, posTag, urlCell, serp, gainCell, range, methodNote, tileDelta, chart, cssVar } };
 })();
