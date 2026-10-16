@@ -16,7 +16,9 @@
     return `<span class="${cls}">${arrow} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
   };
   const gainCell = v => v >= 1 ? `<span class="gainv">+${fmtN(v)}</span>` : '<span class="flat">—</span>';
-  const urlCell = (url, path) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(path || url)}</a>`;
+  // only http(s) URLs become links; anything else (e.g. javascript: from a crafted file) is shown as text
+  const safeHref = u => /^https?:\/\//i.test(String(u || '')) ? esc(u) : null;
+  const urlCell = (url, path) => safeHref(url) ? `<a href="${safeHref(url)}" target="_blank" rel="noopener">${esc(path || url)}</a>` : esc(path || url);
   const serp = q => `<a href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener" title="Open this search on Google" style="color:inherit;text-decoration:none">${esc(q)}</a>`;
 
   // ── reusable table: sort, search, paginate, export ──
@@ -61,7 +63,9 @@
     const t = TABLES[id]; const rows = tableRows(id);
     const cols = t.cols.filter(c => c.csv !== false);
     const val = (c, r) => c.csv ? c.csv(r) : r[c.k];
-    const csv = [cols.map(c => c.l)].concat(rows.map(r => cols.map(c => val(c, r)))).map(a => a.map(v => '"' + String(v == null ? '' : (typeof v === 'number' ? +v.toFixed(2) : v)).replace(/"/g, '""') + '"').join(',')).join('\n');
+    // search queries are written by strangers: neutralise cells that spreadsheets would run as formulas
+    const cell = v => { let s2 = String(v == null ? '' : (typeof v === 'number' ? +v.toFixed(2) : v)); if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(s2)) s2 = "'" + s2; return '"' + s2.replace(/"/g, '""') + '"'; };
+    const csv = '\ufeff' + [cols.map(c => c.l)].concat(rows.map(r => cols.map(c => val(c, r)))).map(a => a.map(cell).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = (t.opt.file || id) + '.csv'; a.click();
@@ -544,59 +548,12 @@
   const INTENT_ICON = { info: ['book', 'indigo'], comm: ['scale', 'orange'], trans: ['cart', 'green'], nav: ['star', 'violet'], other: ['compass', 'teal'] };
   const INTENT_HELP = { info: 'Learning: questions, guides, how-tos. Build depth and answer directly.', comm: 'Comparing options: best, top, reviews, vs. Lists and comparison pages win here.', trans: 'Ready to act: price, buy, book, download. Send these to pages with a clear next step.', nav: 'Looking for you by name. Track as brand demand, not SEO performance.', other: 'No clear signal. Often short head terms; check what the ranking page offers.' };
 
-  V.regex = (A) => {
-    const lib = window.CW.regexLibrary(A.brandRx);
-    const match = (rx, rows, key) => { try { const r = new RegExp(rx, 'i'); return rows.filter(x => r.test(x[key])); } catch (e) { return null; } };
-    const colsFor = use => use === 'Page' ? [C.page, C.clicks, C.impr, C.ctr, C.pos] : [C.q, C.clicks, C.impr, C.ctr, C.pos];
-    const items = lib.map((x, i) => {
-      const isPage = x.use === 'Page';
-      const rows = match(x.rx, isPage ? A.P : A.Q, isPage ? 'p' : 'q');
-      return { ...x, i, isPage, rows: rows || [], ok: rows !== null };
-    });
-    const html = head('Regex library', 'Ready-made filters for Search Console. Click any pattern to see every matching query or page in your data, then copy it into Search Console › Performance › Add filter › Custom (regex).') +
-      `<section class="panel rx-test">
-        <div class="panel-h"><h2>Test your own regex</h2><p>Type a pattern to see matching rows instantly. Case-insensitive.</p></div>
-        <div class="tools rx-tools">
-          <input type="text" id="rx-in" placeholder="e.g. ^(how|what) .*(price|cost)  ·  pages match the full URL" aria-label="Your regex" spellcheck="false" autocomplete="off">
-          <select id="rx-on" aria-label="Match against"><option value="q">Queries</option><option value="p">Pages</option></select>
-          <span class="meta" id="rx-msg">Enter a pattern</span>
-        </div>
-        <div id="rx-out" hidden>${table('t-rx-custom', colsFor('Query'), [], { sort: 'clicks', file: 'regex-matches', pageSize: 25, search: false })}</div>
-      </section>
-      <div class="stack">${items.map(x => `
-        <details class="acc rx-acc">
-          ${accHead(x.isPage ? 'file' : 'code', x.isPage ? 'teal' : 'violet', x.title, x.why, x.ok ? (x.isPage ? plural(x.rows.length, 'page', 'pages') : plural(x.rows.length, 'query', 'queries')) : 'Search Console only', x.rows.length ? (x.isPage ? 'teal' : 'violet') : 'amber')}
-          <div class="rx-code"><code id="rx-${x.i}">${esc(x.rx)}</code><button class="btn-quiet" type="button" data-copy="rx-${x.i}">Copy regex</button><span class="tag">${x.use} filter</span></div>
-          ${x.rxNote ? '<div class="acc-tip"><b>Note:</b> Search Console regex (RE2) does not support lookahead, so use “Doesn\'t match regex” with the branded pattern. Matches below are shown using your brand terms.</div>' : ''}
-          ${x.ok ? table('t-rx-' + x.i, colsFor(x.use), x.rows, { sort: 'clicks', file: 'regex-' + x.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'), pageSize: 25, searchKeys: x.isPage ? ['path'] : ['q'], empty: 'No rows match this pattern.' }) : '<p class="empty">This pattern only works inside Search Console.</p>'}
-        </details>`).join('')}</div>`;
-    const mount = () => {
-      // draw a pattern's table the first time it is opened
-      document.querySelectorAll('.rx-acc').forEach((d, k) => d.addEventListener('toggle', () => { if (d.open) drawTable('t-rx-' + items[k].i); }, { once: false }));
-      const inp = document.getElementById('rx-in'), on = document.getElementById('rx-on'), msg = document.getElementById('rx-msg'), out = document.getElementById('rx-out');
-      let tmr;
-      const run = () => {
-        const v = inp.value.trim(), key = on.value;
-        if (!v) { out.hidden = true; msg.textContent = 'Enter a pattern'; return; }
-        let rx; try { rx = new RegExp(v, 'i'); } catch (e) { out.hidden = true; msg.textContent = 'Not a valid pattern: ' + e.message.replace(/^Invalid regular expression: /, ''); return; }
-        const rows = (key === 'p' ? A.P : A.Q).filter(r => rx.test(r[key]));
-        const t = TABLES['t-rx-custom'];
-        t.cols = colsFor(key === 'p' ? 'Page' : 'Query'); t.rows = rows; t.page = 0; t.opt.searchKeys = key === 'p' ? ['path'] : ['q'];
-        document.querySelector('#t-rx-custom thead tr').innerHTML = t.cols.map(c => `<th${c.r ? ' class="r"' : ''} data-sort="${c.k}" scope="col">${esc(c.l)}</th>`).join('');
-        const a = window.CW.agg(rows);
-        msg.textContent = `${rows.length.toLocaleString()} match${rows.length === 1 ? '' : 'es'} · ${fmtN(a.clicks)} clicks · ${fmtN(a.impr)} impr.`;
-        out.hidden = false; drawTable('t-rx-custom');
-      };
-      inp.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(run, 200); });
-      on.addEventListener('change', run);
-    };
-    return { html, mount };
-  };
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-copy]'); if (!b) return;
     const t = document.getElementById(b.dataset.copy).textContent;
-    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy regex', 1500); }).catch(() => { b.textContent = 'Select and copy manually'; });
+    const label = b.dataset.label || (b.dataset.label = b.textContent);
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = label, 1500); }).catch(() => { b.textContent = 'Select and copy manually'; });
   });
 
-  window.CW_VIEWS = { V, destroyCharts, esc };
+  window.CW_VIEWS = { V, destroyCharts, esc, ui: { table, drawTable, TABLES, C, head, stat, ledger, accHead, svg, ICON, pctf, posTag, urlCell, serp, gainCell, tileDelta, chart, cssVar } };
 })();

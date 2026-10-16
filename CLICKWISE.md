@@ -11,16 +11,21 @@ Search Console intelligence SaaS by Mayank. Turns Google Search Console data int
 ## Stack
 Static site, no backend yet. Vanilla JS + Chart.js + SheetJS from cdnjs, Inter font.
 - `index.html` + `landing.css` — marketing site (hero with live engine output, features, AI search, pricing, FAQ)
-- `app.html` — audit tool; `app.js` (onboarding, file import, Google sign-in via Google Identity Services, API pulls with pagination, routing), `engine.js` (analysis, pure functions), `views.js` (screens), `demo.js` (sample site trailcraft.co), `config.js` (app name, OAuth client ID, row limits)
+- `app.html` — audit tool; `app.js` (onboarding, file import, Google sign-in via Google Identity Services, API pulls with pagination, routing), `engine.js` (analysis, pure functions), `filters.js` (smart filters + plain-English parser), `workflows.js` (workflow templates + runners), `views.js` (screens + table/chart helpers), `automation.js` (Smart filters, Workflows, workflow results), `demo.js` (sample site trailcraft.co), `config.js` (app name, OAuth client ID, row limits)
 - `styles.css` — shared tokens and app styles; assets versioned with `?v=N` to bust cache
 - `privacy.html`, `terms.html` — needed for Google OAuth verification
 
 ## Reports in the audit tool
-Overview (headline clicks-to-gain, gradient KPI tiles, Day/Week/Month trend, going well / needs attention / opportunities, top 3 actions, position distribution, CTR by position vs benchmark, top queries and pages, site sections, branded split, anonymous-query share, indexing checklist) · Action plan · Almost page one · Titles to rewrite · Competing pages (exact query×page via API, stem estimate for file uploads) · Losing ground (vs previous period, with likely cause) · AEO & GEO signals (AI Overview, AI Mode, zero-click pages, vs expected, GEO readiness, question / conversational / comparison / freshness / position-one lists) · Queries · Pages (relative tiers) · Site sections (click any folder for a deep dive: sub-folders, URLs, queries, folder-level fixes) · Search intent · Regex library (click to see matches, plus a live regex tester).
+Overview (headline clicks-to-gain, gradient KPI tiles, Day/Week/Month trend, going well / needs attention / opportunities, top 3 actions, position distribution, CTR by position vs benchmark, top queries and pages, site sections, branded split, anonymous-query share, indexing checklist) · Action plan · Almost page one · Titles to rewrite · Competing pages (exact query×page via API, stem estimate for file uploads) · Losing ground (vs previous period, with likely cause) · AEO & GEO signals (AI Overview, AI Mode, zero-click pages, vs expected, GEO readiness, question / conversational / comparison / freshness / position-one lists) · Queries · Pages (relative tiers) · Site sections (click any folder for a deep dive: sub-folders, URLs, queries, folder-level fixes) · Search intent · Workflows (12 one-click templates, saved per site) · Smart filters (plain English → validated filter chips, step-by-step builder, optional Search Console recipe under Advanced).
+
+Navigation: Dashboard · SEO opportunities (Action plan, Almost page one, Titles to rewrite, Competing pages, Losing ground) · Automation (Workflows, Smart filters) · AI search visibility · Explore (Queries, Pages, Site sections, Search intent) · Settings (brand names, ignored searches, excluded pages).
 
 Data sources: upload of the GSC Performance Excel export, Google sign-in (webmasters.readonly; search type and device filters; compare period), or sample data. Brand terms guessed from the domain, with misspelling suggestions; stored per site in the browser.
 
 ## Design decisions
+- Product principle: users choose the outcome, Clickwise does the technical work. No user-facing regex; the old Regex library was replaced by Smart filters + Workflows (old `#regex` links redirect).
+- Filters are data, never code: parser output is a JSON spec checked by `validate()` before running; text values are matched as plain strings (escaped when used inside internal matchers). Any future AI parsing must emit the same spec and pass the same validation.
+- Only working features appear in the UI: no schedule buttons until the backend exists.
 - Look follows the SemanticsX GSC Audit style the user liked: indigo/slate palette, white rounded cards, gradient KPI tiles, collapsible icon cards with count pills, control bar with date pill. Style patterns only — no logos, names or copy taken.
 - Compact type scale (14px base) — user found earlier version too large.
 - Features borrowed from SEOSignalX GSC Insights: position distribution, CTR by position, top keywords/pages, anonymous queries, search type and device filters.

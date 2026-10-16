@@ -200,10 +200,10 @@
     $('top-range').textContent = D.start && D.end ? `${fmtDate(D.start)} – ${fmtDate(D.end)}` : 'Date range not in export';
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
     $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
+    $('top-sample').hidden = D.source !== 'demo';
     counts();
     show('app');
-    const h = location.hash.slice(1);
-    if (!h || (!V[h] && !h.startsWith('section='))) history.replaceState(null, '', '#overview');
+    if (!knownRoute(location.hash.slice(1))) history.replaceState(null, '', '#overview');
     route();
   }
   function fmtDate(s) { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -218,21 +218,30 @@
   }
 
   // ── routing ──
+  // routes: #view, #view?params, #section=/folder/, #wf=<workflow id>
+  function knownRoute(raw) {
+    const base = (raw || '').split('?')[0];
+    return !!base && (!!V[base] || base.startsWith('section=') || base.startsWith('wf=') || base === 'regex');
+  }
   function route() {
     if (!A) return;
-    const raw = location.hash.slice(1) || 'overview';
-    // folder deep dive: #section=/blog/guides/
-    const sec = raw.startsWith('section=') ? decodeURIComponent(raw.slice(8)) : null;
-    const name = sec ? 'sections' : raw;
-    const fn = sec ? (a, d) => V.section(a, d, sec) : (V[name] || V.overview);
+    let raw = location.hash.slice(1) || 'overview';
+    // the old regex tool was replaced by Smart filters; keep old links working
+    if (raw.split('?')[0] === 'regex') { history.replaceState(null, '', '#filters'); raw = 'filters'; }
+    const base = raw.split('?')[0];
+    const sec = base.startsWith('section=') ? decodeURIComponent(base.slice(8)) : null;
+    const wf = base.startsWith('wf=') ? decodeURIComponent(base.slice(3)) : null;
+    const name = sec ? 'sections' : wf ? 'workflows' : base;
+    const fn = sec ? (a, d) => V.section(a, d, sec) : wf ? (a, d) => V.wf(a, d, wf) : (V[name] || V.overview);
     destroyCharts();
-    const out = fn(A, D);
+    const out = fn(A, A.data || D);
     const view = $('view');
     view.innerHTML = out.html;
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
     const onLink = document.querySelector('.nav a.on span');
-    document.title = (sec ? sec + ' — ' : onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
+    const h1 = view.querySelector('h1');
+    document.title = (sec ? sec + ' — ' : wf && h1 ? h1.textContent + ' — ' : onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
     $('nav').classList.remove('open'); $('menu-btn').setAttribute('aria-expanded', 'false');
     window.scrollTo(0, 0); view.focus({ preventScroll: true });
   }
@@ -244,15 +253,27 @@
   $('btn-new').addEventListener('click', () => { A = null; D = null; history.replaceState(null, '', location.pathname); fi.value = ''; show('start'); });
   $('btn-settings').addEventListener('click', () => {
     $('set-brand').value = S.brand.join(', ');
+    $('set-ignore').value = (S.ignore || []).join(', ');
     $('set-exclude').value = (S.exclude || []).join(', ');
     $('settings').showModal();
   });
   $('settings').addEventListener('close', () => {
     if ($('settings').returnValue !== 'save') return;
-    S = { brand: splitTerms($('set-brand').value), exclude: splitTerms($('set-exclude').value) };
+    S = { ...S, brand: splitTerms($('set-brand').value), exclude: splitTerms($('set-exclude').value), ignore: splitTerms($('set-ignore').value) };
     store.set('site:' + D.site, S);
     A = window.CW.analyse(D, S); counts(); route();
   });
+
+  // events from the automation screens
+  document.addEventListener('cw:demo', () => { history.replaceState(null, '', location.pathname + location.hash); loaded(window.CW_DEMO.build()); });
+  document.addEventListener('cw:ignore', e => {
+    if (!S || !D) return;
+    S = { ...S, ignore: (e.detail || []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 50) };
+    store.set('site:' + D.site, S);
+    A = window.CW.analyse(D, S); counts();
+    history.replaceState(null, '', '#wf=ignore'); route();
+  });
+  document.addEventListener('click', e => { if (e.target.closest('[data-demo]')) document.dispatchEvent(new CustomEvent('cw:demo')); });
 
   // Deep link straight into the sample: app.html?demo
   // (deferred libraries such as Chart.js are ready by DOMContentLoaded)

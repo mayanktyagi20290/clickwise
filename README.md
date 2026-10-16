@@ -12,7 +12,10 @@ Generic for any website — no site-specific logic.
 | `styles.css` | Shared design tokens + app styles (light/dark) |
 | `config.js` | **Edit this**: app name, Google OAuth client ID, row limits |
 | `engine.js` | Analysis engine (pure functions) |
-| `views.js` | Report screens |
+| `filters.js` | Smart filters: validated filter specs, plain-English parser, safe text matching (pure functions) |
+| `workflows.js` | One-click workflow templates and their runners (pure functions) |
+| `views.js` | Report screens and shared table/chart helpers |
+| `automation.js` | Smart filters, Workflows and workflow-result screens |
 | `app.js` | Onboarding, file import, Google sign-in, API pulls, routing |
 | `demo.js` | Sample data for a fictional site |
 | `privacy.html`, `terms.html` | Needed for Google OAuth verification — review before launch |
@@ -45,7 +48,15 @@ Any static host works: GitHub Pages, Netlify, Vercel, Cloudflare Pages. Use your
 - **Competing pages** — exact query × page cannibalisation (API) or stem-based estimate (file)
 - **Losing ground** — page/query decay vs previous period with likely cause; gaining pages
 - **AEO & GEO signals** — AI Overview suspects, question/conversational/comparison/freshness queries, position-one holders, readiness score
-- **Queries / Pages / Site sections / Search intent / Regex library**
+- **Workflows** — one-click templates: quick wins, branded vs non-branded, positions 4–20, high-impression low-CTR pages, traffic declines, questions, page types, location keywords, cannibalisation candidates, internal-link targets, ignored searches, opportunity report. Each lists the data it needs, its thresholds and its output; saved per site in the browser
+- **Smart filters** — type what you want in plain English (“blog pages that lost clicks”, “non-branded keywords ranking 5 to 15”). A deterministic parser turns it into a structured filter shown as removable chips; every value is validated and matched as plain text, never as a user-supplied pattern. Step-by-step builder for anything the parser misses; an optional Advanced panel shows how to recreate the filter in Search Console
+- **Queries / Pages / Site sections / Search intent**
+
+Old `#regex` links redirect to Smart filters.
+
+## Tests
+
+No build step. The checks used during development are plain Node scripts (parser and filter unit tests, plus a Playwright smoke test that opens every screen on sample data). Scheduled workflows, email alerts and an AI fallback for the filter parser need the backend below; nothing in the app pretends otherwise.
 
 ## Roadmap (paid tier)
 

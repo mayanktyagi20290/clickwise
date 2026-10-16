@@ -103,7 +103,11 @@
   const INTENT_LABEL = { info: 'Informational', comm: 'Commercial', trans: 'Transactional', nav: 'Branded', other: 'Unclassified' };
 
   // ── main analysis ──
-  function analyse(D, S) {
+  function analyse(D0, S) {
+    // Queries the user chose to ignore (plain words, matched as "contains") are dropped everywhere.
+    const ign = (S.ignore || []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    const keep = r => { const l = String(r.q).toLowerCase(); return !ign.some(x => l.includes(x)); };
+    const D = ign.length ? { ...D0, Q: D0.Q.filter(keep), QP: D0.QP && D0.QP.filter(keep), prevQ: D0.prevQ && D0.prevQ.filter(keep) } : D0;
     const isBrand = makeBrandTest(S.brand);
     const excl = (S.exclude || []).map(s => s.toLowerCase()).filter(Boolean);
     const isExcluded = p => { const l = p.toLowerCase(); return excl.some(x => l.includes(x)); };
@@ -383,7 +387,7 @@
       Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
       intents, sections1, sections2, tiers, potentialMonthly, plan, signals, posDist, ctrByPos, anon,
-      brandRx: brandRegex(S.brand)
+      brandRx: brandRegex(S.brand), isBrand, isExcluded, data: D, ignored: ign
     };
   }
   const STEMSTOP = new Set('a an the for and or to in of on at by with from is are how what best top near me my your vs'.split(' '));
@@ -406,27 +410,5 @@
     return Math.round(n).toLocaleString('en-US');
   }
 
-  // ── Regex library (Search Console custom regex filters, RE2 syntax) ──
-  function regexLibrary(brandRx) {
-    return [
-      { title: 'Question searches', use: 'Query', rx: '^(who|what|when|where|why|how|which|can|does|do|is|are|should|will)\\s', why: 'The queries AI Overviews and People Also Ask answer first. Give each a direct answer near the top of the page.' },
-      { title: 'How-to searches', use: 'Query', rx: '^how (to|do|does|can|much|many|long)\\s', why: 'Evergreen tutorial demand. Strong candidates for HowTo structure and step lists.' },
-      { title: 'Long conversational searches (7+ words)', use: 'Query', rx: '^(\\S+\\s){6,}\\S+$', why: 'The way people prompt ChatGPT and Gemini. Rising impressions here mean AI-style search is reaching you.' },
-      { title: 'Comparisons and alternatives', use: 'Query', rx: '\\b(vs|versus|compare|comparison|alternative|alternatives|instead of|similar to)\\b', why: 'Buyers weighing options. Dedicated comparison pages usually convert better than general guides.' },
-      { title: 'Commercial investigation', use: 'Query', rx: '\\b(best|top|review|reviews|rated|recommended|worth it)\\b', why: 'Mid-funnel research. Check that a list or review page, not a product page, is ranking.' },
-      { title: 'Year or freshness in the query', use: 'Query', rx: '\\b(202[4-9]|latest|new|updated|today)\\b', why: 'Searchers want current information. A dated title and visible “updated” line often lift CTR.' },
-      { title: 'Price and purchase intent', use: 'Query', rx: '\\b(price|pricing|cost|buy|cheap|discount|coupon|deal|near me)\\b', why: 'Closest to revenue. Send these to pages with prices and a clear next step.' },
-      { title: 'Branded searches', use: 'Query', rx: brandRx, why: 'Everything that mentions your brand, built from your brand terms. Track demand for the brand separately from SEO.' },
-      { title: 'Non-branded searches', use: 'Query', rx: '^(?!.*' + brandRx + ').*$', why: 'Note: Search Console regex (RE2) does not support lookahead. Use “Doesn\'t match regex” with the branded pattern instead.', rxNote: true },
-      { title: 'One-word head terms', use: 'Query', rx: '^\\S+$', why: 'Broad, high-volume terms. Hard to win, but impressions here show topical reach.' },
-      { title: 'Searches containing numbers', use: 'Query', rx: '\\d', why: 'Sizes, models, lists and years. Precise intent that rewards precise content.' },
-      { title: 'Deep URLs (3+ folders)', use: 'Page', rx: '^https?://[^/]+/([^/]+/){3,}', why: 'Pages buried deep in the structure. If these perform, consider linking them closer to the homepage.' }
-    ];
-  }
-  function countRegex(rx, rows, key) {
-    // approximate RE2 in JS; returns null if JS can't compile it
-    try { const r = new RegExp(rx, 'i'); return rows.filter(x => r.test(x[key])).length; } catch (e) { return null; }
-  }
-
-  window.CW = { analyse, expCtr, agg, pct, fmtN, brandGuess, regexLibrary, countRegex, pathOf, INTENT_LABEL, change };
+  window.CW = { analyse, expCtr, agg, pct, fmtN, brandGuess, pathOf, INTENT_LABEL, change, RX, makeBrandTest };
 })();
