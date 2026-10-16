@@ -58,9 +58,9 @@ test('longer brand names also catch glued typos, not longer words', () => {
 });
 
 // ── CTR calibration ──
-test('site curve replaces the benchmark only where there are enough queries', () => {
+test('site curve replaces the benchmark only where there is enough evidence', () => {
   const c = CW.buildCurve(filler(30, 3, 4).concat(filler(29, 5, 1)), 30);
-  assert.near(c.at(3), 4, 1e-9, 'position 3 uses site median');
+  assert.near(c.at(3), 4, 1e-9, 'position 3 uses the site CTR');
   assert.ok(c.points[2].source.startsWith('site'));
   assert.ok(c.points[4].source.startsWith('benchmark'), 'position 5 has 29 queries → benchmark');
 });
@@ -115,6 +115,16 @@ test('a results-page feature needs evidence: enough expected clicks', () => {
   const all = A.quickWins.concat(A.ctrQueries);
   assert.ok(!all.some(r => r.q === 'tiny' && r.serp), 'few impressions: no flag');
   assert.ok(all.some(r => r.q === 'big answered' && r.serp), 'lots of impressions, few clicks: flagged');
+});
+
+test('a section where most searches get 0 clicks still has a usable curve and opportunities', () => {
+  // like a B2B folder: 40+ queries at each position 4–15, 70% with no clicks at all
+  const Q = [];
+  for (let p = 4; p <= 15; p++) for (let i = 0; i < 40; i++) { const impr = 100 + (i * 37) % 600, clicks = i % 10 < 7 ? 0 : 1 + (i % 3); Q.push(q(`term ${p} ${i}`, clicks, impr, p)); }
+  const A = CW.analyse({ site: 's', source: 'api', Q, P: [pg('/a', 5, 50, 3)], C: days(90, 300, 30000), days: 90 }, S0);
+  for (let p = 1; p <= 20; p++) assert.ok(A.curve.at(p) >= CW.expCtr(p) * 0.2 - 1e-9, 'expected CTR never collapses to zero at ' + p);
+  assert.ok(A.quickWins.length > 50, 'almost page one finds opportunities: ' + A.quickWins.length);
+  assert.ok(A.potential.hi > 0, 'headline is not zero');
 });
 
 // ── de-duplication ──

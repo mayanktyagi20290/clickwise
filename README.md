@@ -76,7 +76,7 @@ Scheduled workflows, email alerts and an AI fallback for the filter parser need 
 
 ## How estimates work
 
-All opportunity figures are clicks per month, shown as a low–high range. Expected CTR at each position is the site's own median CTR where it has at least 30 non-branded queries, and an industry benchmark elsewhere (never higher than the position above). A query keeps its own click rate relative to its position, so searches answered on the results page are not projected to a full top-3 CTR, and are flagged. No single query may contribute more than 10% of a list. The headline counts each query once; page estimates overlap query estimates and are never added to it. Pages that look like branded sitelinks or utility pages are set aside with the reason, and users can include them again.
+All opportunity figures are clicks per month, shown as a low–high range. Expected CTR at each position is the site's own impression-weighted CTR where it has at least 30 non-branded queries and 10 clicks (never below 20% of the benchmark), and an industry benchmark elsewhere (never higher than the position above). A query keeps its own click rate relative to its position, so searches answered on the results page are not projected to a full top-3 CTR, and are flagged. No single query may contribute more than 10% of a list. The headline counts each query once; page estimates overlap query estimates and are never added to it. Pages that look like branded sitelinks or utility pages are set aside with the reason, and users can include them again.
 
 ## Roadmap (paid tier)
 

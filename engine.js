@@ -125,17 +125,29 @@
   const DEFAULT_UTILITY = ['dashboard', 'admin', 'panel', 'account', 'accounts', 'my-account', 'profile', 'settings', 'login', 'logout', 'signin', 'sign-in', 'signup', 'sign-up', 'register', 'auth', 'cart', 'checkout', 'billing', 'inbox', 'notifications', 'wp-admin', 'preview'];
 
   function median(a) { const s = a.slice().sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; }
-  // Expected CTR by position: the site's own median CTR where it has enough queries,
-  // the benchmark elsewhere, never higher than the position above it.
+  // Expected CTR by position. Where the site has enough evidence at a position (≥ minObs queries and
+  // ≥ 10 clicks) it is the site's own impression-weighted CTR, with each query's impressions capped at
+  // 10% of the bucket so one big query cannot set the curve; elsewhere the benchmark. A median is not
+  // used: on low-volume sections most queries have 0 clicks, which would make the expected CTR zero.
+  // The curve never rises at a lower position and never drops below 20% of the benchmark.
   function buildCurve(rows, minObs) {
     const by = Array.from({ length: 21 }, () => []);
-    rows.forEach(r => { if (!(r.pos >= 0.5) || !(r.impr > 0)) return; const p = Math.round(r.pos); if (p >= 1 && p <= 20) by[p].push(r.ctr); });
+    rows.forEach(r => { if (!(r.pos >= 0.5) || !(r.impr > 0)) return; const p = Math.round(r.pos); if (p >= 1 && p <= 20) by[p].push(r); });
+    const own = p => {
+      const b = by[p];
+      if (b.length < minObs || b.reduce((s, r) => s + r.clicks, 0) < 10) return null;
+      const cap = b.reduce((s, r) => s + r.impr, 0) * 0.1;
+      let c = 0, i = 0;
+      b.forEach(r => { const w = Math.min(r.impr, cap); c += w * (r.ctr / 100); i += w; });
+      return i ? c / i * 100 : null;
+    };
     const pts = [null], src = [null];
     let above = Infinity;
     for (let p = 1; p <= 20; p++) {
-      const own = by[p].length >= minObs ? median(by[p]) : null;
-      let v = own != null ? own : expCtr(p), from = own != null ? 'site' : 'benchmark';
+      const o = own(p);
+      let v = o != null ? o : expCtr(p), from = o != null ? 'site' : 'benchmark';
       if (v > above) { v = above; from = from + ' (capped)'; }
+      if (v < expCtr(p) * 0.2) { v = expCtr(p) * 0.2; from = from + ' (floor)'; }
       pts.push(v); src.push(from); above = v;
     }
     const at = pos => {
