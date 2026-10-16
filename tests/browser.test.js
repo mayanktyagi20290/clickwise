@@ -135,6 +135,77 @@ function writeComparisonExports(dir) {
     assert.equal(csvText.trim().split('\n').length - 1, rows0, 'every row exported');
   });
 
+  await testAsync('Goal builder: answer a question, edit a condition, run, save, re-run with history', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.evaluate(() => localStorage.clear());
+    // the Dashboard box hands the request to the Goal builder
+    await go('#overview'); await page.fill('#ov-ask-in', 'titles to rewrite'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
+    assert.ok(/^#filters\?q=/.test(await page.evaluate(() => location.hash)) && /Low CTR/.test(await text('.chips')), 'dashboard question opens the Goal builder');
+    await go('#filters');
+    assert.equal(await text('#view h1'), 'Goal builder');
+    const ask = async t => { await page.fill('#sf-in', t); await page.click('#sf-form button[type=submit]'); await page.waitForTimeout(250); };
+    // a bare number is asked about, not guessed
+    await ask('more than 1000');
+    assert.ok(/apply to/.test(await text('.sf-q')), 'question shown');
+    assert.equal((await page.$$('.chip')).length, 0, 'nothing guessed');
+    await page.click('.sf-q button:has-text("More than 1,000 impressions")');
+    assert.equal(await text('.chip .chip-t'), 'Impressions more than 1,000');
+    const n1 = parseInt((await text('.sf-say b')).replace(/,/g, ''), 10);
+    // edit the condition with normal controls
+    await page.click('.chip .chip-t');
+    assert.equal(await page.$eval('#sf-v1', e => e.value), '1000', 'value loaded for editing');
+    await page.fill('#sf-v1', '5000'); await page.click('#sf-addbtn'); await page.waitForTimeout(200);
+    assert.equal(await text('.chip .chip-t'), 'Impressions more than 5,000');
+    const n2 = parseInt((await text('.sf-say b')).replace(/,/g, ''), 10);
+    assert.ok(n2 <= n1, `narrower after edit: ${n1} → ${n2}`);
+    // every word that was not used is shown, either as a question or in the "not used" line
+    await ask('show me the best blog stuff please');
+    assert.ok(/blog/.test(await text('.sf-qs')) && /best/.test(await text('.sf-warn')), 'unused words visible');
+    // contradictions cannot run
+    await ask('top 3 positions and between positions 5 and 15');
+    assert.ok(/can't all be true/.test(await text('#sf-errs')) && !(await page.$('#sf-runbtn')), 'blocked with a reason');
+    // data the sample cannot answer is explained
+    await ask('pages losing clicks on mobile');
+    assert.ok(/all devices together/.test(await text('.sf-issue[data-kind="device"]')), 'device explained');
+    // run and save
+    await ask('which pages should I fix first');
+    const previewN = parseInt((await text('.sf-say b')).replace(/,/g, ''), 10);
+    await page.click('#sf-runbtn'); await page.waitForSelector('#sf-result');
+    const status = await text('#sf-result .sf-status');
+    assert.ok(new RegExp('^Finished at .* · ' + previewN + ' pages').test(status), status);
+    assert.equal(await page.$$eval('#t-sf tbody tr', t => t.length), previewN, 'run shows every match');
+    await page.fill('#sf-name', 'Fix first'); await page.click('#sf-savebtn'); await page.waitForTimeout(200);
+    await go('#workflows');
+    const row = await page.$$eval('.saved-t tbody tr', t => t.map(x => x.textContent.replace(/\s+/g, ' ')).find(x => x.includes('Fix first')) || '');
+    assert.ok(/Your goal/.test(row) && /Not run yet/.test(row), 'saved, not yet run: ' + row);
+    await page.click('.saved-t tbody tr:has-text("Fix first") a:has-text("Run")'); await page.waitForSelector('#sf-result');
+    assert.ok(/added to this workflow's history/.test(await text('#sf-result .sf-status')));
+    await go('#workflows');
+    const row2 = await page.$$eval('.saved-t tbody tr', t => t.map(x => x.textContent.replace(/\s+/g, ' ')).find(x => x.includes('Fix first')) || '');
+    assert.ok(new RegExp('Finished .* ' + previewN + ' results').test(row2), 'history: ' + row2);
+    // run history keeps only when, status and counts: no searches, URLs or click numbers
+    const hist = await page.evaluate(() => { const k = Object.keys(localStorage).find(x => x.startsWith('cw:runs:')); return k ? localStorage.getItem(k) : null; });
+    const H = JSON.parse(hist);
+    assert.ok(H.length === 1, 'one run recorded');
+    assert.deep(Object.keys(H[0]).sort(), ['at', 'count', 'data', 'errors', 'goalId', 'matched', 'ms', 'status'], 'only these fields');
+    assert.deep(Object.keys(H[0].data).sort(), ['end', 'source', 'start'], 'data: source and dates only');
+    const firstPath = await page.$eval('#t-sf tbody tr td', td => td.textContent.trim()).catch(() => '/trails/');
+    assert.ok(!hist.includes(firstPath) && !/clicks|impr|\/trails\/|\/gear\//.test(hist), 'no URLs or metrics stored: ' + hist);
+    // rename in place
+    await page.click('.saved-t tbody tr:has-text("Fix first") [data-rename]');
+    await page.fill('.saved-t td.nm input', 'Pages to fix first'); await page.keyboard.press('Enter'); await page.waitForTimeout(250);
+    assert.ok((await page.$$eval('.saved-t td.nm span', t => t.map(x => x.textContent))).includes('Pages to fix first'), 'renamed');
+    await page.click('.saved-t tbody tr:has-text("Pages to fix first") a:has-text("Edit")'); await page.waitForTimeout(250);
+    assert.equal(await page.$eval('#sf-name', e => e.value), 'Pages to fix first', 'the new name is used when reopened');
+    await go('#workflows');
+    // a damaged saved goal is refused, not run
+    await page.evaluate(() => { const k = Object.keys(localStorage).find(x => x.startsWith('cw:saved:')); const l = JSON.parse(localStorage.getItem(k)); l[0].goal.spec.conds.push({ f: 'clicks', op: 'gt', v: 1, run: 'x' }); localStorage.setItem(k, JSON.stringify(l)); });
+    await page.click('.saved-t tbody tr:has-text("Pages to fix first") a:has-text("Edit")'); await page.waitForTimeout(250);
+    assert.ok(/can't be opened/.test(await text('#sf-out')) && /damaged/.test(await text('#sf-out')), 'refused: ' + await text('#sf-out'));
+    assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('Losing ground: a brand-new page in the current export renders as new', async () => {
     const mk = (pages, start) => { const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Date', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(Array.from({ length: 30 }, (_, i) => { const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return [d.toISOString().slice(0, 10), 100, 4000, 0.025, 6]; }))), 'Chart');
@@ -153,7 +224,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'queries', 'ai']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'queries', 'ai']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);
@@ -223,9 +294,10 @@ function writeComparisonExports(dir) {
   await testAsync('Forget this site clears stored settings; reload explains the reset', async () => {
     const site = (await text('#top-site')).replace(/ \(sample\)$/, '');
     assert.ok(await page.evaluate(s => !!localStorage.getItem('cw:site:' + s), site), 'settings stored before');
+    await page.evaluate(s => { localStorage.setItem('cw:saved:' + s, '[{"id":"x","type":"goal","name":"n"}]'); localStorage.setItem('cw:runs:' + s, '[{"goalId":"x","status":"done","count":1}]'); }, site);
     await page.click('#btn-settings'); page.once('dialog', d => d.accept());
     await page.click('#set-forget'); await page.waitForTimeout(300);
-    const left = await page.evaluate(s => ['cw:site:', 'cw:saved:'].filter(k => localStorage.getItem(k + s) != null), site);
+    const left = await page.evaluate(s => ['cw:site:', 'cw:saved:', 'cw:runs:'].filter(k => localStorage.getItem(k + s) != null), site);
     assert.equal(left.length, 0, 'keys left: ' + left.join(','));
     assert.ok(await page.isVisible('#start'), 'back to start');
     await page.goto('about:blank'); await page.goto(base + 'app.html#overview');

@@ -13,10 +13,10 @@ Generic for any website — no site-specific logic.
 | `config.js` | **Edit this**: app name, Google OAuth client ID, row limits, utility-page hints |
 | `engine.js` | Analysis engine (pure functions) |
 | `opportunities.js` | Opportunity engine: one ranked list with evidence, impact, confidence, effort and warnings (pure functions) |
-| `filters.js` | Smart filters: validated filter specs, plain-English parser, safe text matching (pure functions) |
+| `filters.js` | Goal builder engine: validated filter specs, plain-English parser with clarifying questions and data checks, safe text matching (pure functions) |
 | `workflows.js` | One-click workflow templates and their runners (pure functions) |
 | `views.js` | Report screens and shared table/chart helpers |
-| `automation.js` | Smart filters, Workflows and workflow-result screens |
+| `automation.js` | Goal builder, Workflows and workflow-result screens |
 | `app.js` | Onboarding, file import, Google sign-in, API pulls, routing |
 | `demo.js` | Sample data for a fictional site |
 | `privacy.html`, `terms.html` | Needed for Google OAuth verification — review before launch |
@@ -55,10 +55,10 @@ With Search Console connected, type a folder (`/blog/`) or a full URL in **Only 
 - **Losing ground** — page/query decay vs previous period with likely cause; gaining pages. Works with Search Console connected, with an Excel export made using Date › Compare, or with two exports (this period and the previous one) uploaded together
 - **AEO & GEO signals** — AI Overview suspects, question/conversational/comparison/freshness queries, position-one holders, readiness score
 - **Workflows** — one-click templates: quick wins, branded vs non-branded, positions 4–20, high-impression low-CTR pages, traffic declines, questions, page types, location keywords, cannibalisation candidates, internal-link targets, ignored searches, opportunity report. Each lists the data it needs, its thresholds and its output; saved per site in the browser
-- **Smart filters** — type what you want in plain English (“blog pages that lost clicks”, “non-branded keywords ranking 5 to 15”). A deterministic parser turns it into a structured filter shown as removable chips; every value is validated and matched as plain text, never as a user-supplied pattern. Step-by-step builder for anything the parser misses; an optional Advanced panel shows how to recreate the filter in Search Console
+- **Goal builder** (`#filters`) — describe an SEO task in plain English (“which pages should I fix first”, “quick wins in the blog folder”, “internship keywords in Delhi with more than 1,000 impressions and position 5 to 15”). A deterministic parser turns it into conditions shown as chips; click a chip to change it with normal controls, remove it, or add more. Opportunity goals (quick wins, titles to rewrite, competing pages, answer boxes, losing clicks, early warnings, confidence, estimated clicks a month, top N) use the opportunity engine, so numbers match All opportunities. When a request is ambiguous it asks a short question with one-click answers (a number with no metric, an unrecognised word, searches or pages); when the loaded data cannot answer part of it (one device, searchers' location, a different date range, a comparison period, which page ranks for a search) it says so and offers the alternative instead of dropping it silently. Contradictory conditions are refused. The preview shows the count, how each condition narrows the list, and the first 10 rows; **Run workflow** executes it and reports status; **Save workflow** keeps it under Workflows with its run history. Every text value is matched as plain text; an optional Advanced panel shows how to recreate the filter in Search Console
 - **Queries / Pages / Site sections / Search intent**
 
-Old `#regex` links redirect to Smart filters.
+Old `#regex` links redirect to the Goal builder.
 
 ## Tests
 
@@ -71,6 +71,7 @@ npm run test:fast           # unit + regression only, no browser
 
 - `tests/unit.test.js` — metrics, monthly scaling, brand matching, CTR calibration, outlier caps, results-page flags, de-duplication, sitelink and utility pages, parser, validation, special characters.
 - `tests/opportunities.test.js` — opportunity engine: growth total equals the headline, each search counted once, recovery maths, confidence rules and determinism, period scaling, row-limit bounds, early warnings, ranking-page evidence, data warnings, empty data.
+- `tests/goals.test.js` — Goal builder: supported requests (including the brief's example), opportunity goals matching the engine, clarifying questions, data the loaded analysis cannot answer, contradictions and invalid goals, literal text matching, preview vs run, run records, saved goals, comparison scaling.
 - `tests/regression.test.js` — an anonymised real 3-month export: site totals, coverage, non-brand figures and estimate sanity checks. The fixture holds a real site's numbers, so it is **gitignored** and the suite skips without it. Create one locally with `node tools/anonymize-export.js <export.xlsx> <brand> tests/fixtures/real-export-anon.json`.
 - `tests/browser.test.js` — Playwright: every screen and workflow on sample data, mobile width, Excel and CSV upload, set-aside pages, print, CSV export safety, Forget this site.
 - `tools/anonymize-export.js` turns any Performance export into a fixture (numbers kept; query words, URLs and brand replaced).

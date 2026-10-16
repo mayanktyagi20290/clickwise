@@ -39,11 +39,23 @@
   const changeCell = r => r.clickChange == null ? '—' : `<span class="${r.clickChange < 0 ? 'lossv' : 'gainv'}">${r.clickChange > 0 ? '+' : ''}${r.clickChange.toFixed(0)}%</span>`;
   function filterCols(spec) {
     const uses = f => spec.conds.some(c => c.f === f);
-    const cols = [spec.target === 'page' ? C.page : C.q, C.clicks, C.impr, C.ctr, { ...C.pos, f: r => r.gone ? '<span class="flat">Gone</span>' : posTag(r.pos) }];
+    const oppGoal = spec.conds.some(c => ['opp', 'gain', 'confidence'].includes(c.f) && c.op !== 'not');
+    // opportunity goals add four columns, so they leave out CTR and page type to keep the table readable
+    const clicksCol = { ...C.clicks, f: r => r.uncertain ? `≤ ${fmtN(r.clicks)} <span class="tag watch" title="Not in this period's list, which stops at its row limit: clicks are at most the smallest row listed">upper bound</span>` : fmtN(r.clicks), csv: r => (r.uncertain ? '<=' : '') + Math.round(r.clicks) };
+    const cols = [spec.target === 'page' ? { ...C.page, cls: 'u wide' } : { ...C.q, cls: 'q wide' }, clicksCol, C.impr].concat(oppGoal ? [] : [C.ctr]).concat([{ ...C.pos, f: r => r.gone ? '<span class="flat">Gone</span>' : posTag(r.pos) }]);
     if (uses('ctrGap')) cols.push({ k: 'bench', l: 'Expected CTR', r: 1, f: r => r.gone ? '—' : pctf(r.bench) });
     if (uses('clickChange')) cols.push({ k: 'prevClicks', l: 'Clicks before', r: 1, f: r => fmtN(r.prevClicks) }, { k: 'clickChange', l: 'Change', r: 1, f: changeCell });
-    if (spec.target === 'page' && spec.group !== 'pageType') cols.push({ k: 'pageType', l: 'Page type', f: r => `<span class="tag">${esc(r.pageType)}</span>`, csv: r => r.pageType });
+    if (spec.target === 'page' && spec.group !== 'pageType' && !oppGoal) cols.push({ k: 'pageType', l: 'Page type', f: r => `<span class="tag">${esc(r.pageType)}</span>`, csv: r => r.pageType });
     if ((uses('location') || spec.group === 'location') && spec.group !== 'location') cols.push({ k: 'place', l: 'Place', f: r => r.place ? `<span class="tag">${esc(r.place)}</span>` : '—', csv: r => r.place || '' });
+    if (spec.target === 'query' && uses('section')) cols.push({ k: 'landingPath', l: 'Ranking page', cls: 'u', f: r => r.landingPath ? esc(r.landingPath) : '—', csv: r => r.landingPath || '' });
+    // goals about opportunities show the engine's estimate, confidence and action next to each row
+    if (spec.conds.some(c => ['opp', 'gain', 'confidence'].includes(c.f) && c.op !== 'not')) {
+      const kinds = r => [...r.opp].map(k => F.OPP[k] ? F.OPP[k].label : k);
+      cols.push({ k: 'oppS', l: 'Opportunity', sort: false, f: r => kinds(r).map(x => `<span class="tag">${esc(x)}</span>`).join(' '), csv: r => kinds(r).join('; ') },
+        { k: 'gain', l: 'Clicks / month (est.)', r: 1, f: r => r.gain == null ? '<span class="flat">—</span>' : gainCell({ gainLo: r.gain, gainHi: r.gainHi }), csv: r => r.gain == null ? '' : `${Math.round(r.gain)}–${Math.round(r.gainHi)}` },
+        { k: 'confidence', l: 'Confidence', f: r => r.confidence ? `<span class="tag ${r.confidence === 'High' ? 'gain' : r.confidence === 'Medium' ? 'watch' : ''}">${esc(r.confidence)}</span>` : '—', csv: r => r.confidence || '' },
+        { k: 'act', l: 'What to do', sort: false, cls: 'act', f: r => r.oppItem ? `<small>${esc(r.oppItem.action)}</small>` : '', csv: r => r.oppItem ? r.oppItem.action : '' });
+    }
     return cols;
   }
   function resultBlock(id, spec, res, fileBase) {
@@ -68,42 +80,76 @@
     } else drawTable(id);
   }
 
-  // ════════ Smart filters ════════
-  const FIELD_NAME = { place: 'Place', clicks: 'Clicks', impr: 'Impressions', ctr: 'CTR (%)', pos: 'Position', ctrGap: 'Share of expected clicks (%)', clickChange: 'Change in clicks (%)', words: 'Words in the search', text: null, section: 'Folder', pageType: 'Page type', brand: 'Branded', question: 'Is a question', location: 'Mentions a place', intent: 'Intent' };
+  // the Dashboard's question box hands the text to the Goal builder
+  document.addEventListener('submit', e => {
+    if (!e.target || e.target.id !== 'ov-ask') return;
+    e.preventDefault();
+    const v = (document.getElementById('ov-ask-in').value || '').trim().slice(0, 300);
+    location.hash = v ? '#filters?q=' + encodeURIComponent(v) : '#filters';
+  });
+
+  // ════════ Goal builder (Smart filters) ════════
+  // Describe → check what was understood (answer any question, edit any condition) → preview → run → save.
+  // The parser and engine are deterministic; nothing typed here is ever run as code or as a pattern.
+  const FIELD_NAME = { place: 'Place', clicks: 'Clicks', impr: 'Impressions', ctr: 'CTR (%)', pos: 'Position', ctrGap: 'Share of expected clicks (%)', clickChange: 'Change in clicks (%)', words: 'Words in the search', text: null, section: 'Folder', pageType: 'Page type', brand: 'Branded', question: 'Is a question', location: 'Mentions a place', intent: 'Intent', opp: 'Opportunity', gain: 'Estimated clicks a month', confidence: 'Confidence' };
   const OP_NAME = { gt: 'more than', gte: 'at least', lt: 'less than', lte: 'at most', between: 'between', contains: 'contains', notContains: "doesn't contain", startsWith: 'starts with', endsWith: 'ends with', equals: 'is exactly', word: 'has the word', is: 'is', not: 'is not' };
-  const fieldName = (f, target) => FIELD_NAME[f] || (target === 'page' ? 'URL' : 'Search text');
+  const fieldName = (f, target) => f === 'section' && target === 'query' ? 'Folder of the ranking page' : FIELD_NAME[f] || (target === 'page' ? 'URL' : 'Search text');
+  const STATUS = { done: 'Finished', 'needs-data': 'Needs more data', failed: 'Could not run' };
   let CUR = null;
 
+  // run history, per site, in this browser
+  const runsOf = A => { const l = store.get('runs:' + siteOf(A)); return Array.isArray(l) ? l : []; };
+  // history keeps when a run happened, its status and how many rows matched — never the search data itself
+  const addRun = (A, rec) => store.set('runs:' + siteOf(A), [{ goalId: rec.goalId, at: rec.at, status: rec.status, count: rec.count, matched: rec.matched, errors: rec.errors, ms: rec.ms, data: { source: rec.data.source, start: rec.data.start, end: rec.data.end } }].concat(runsOf(A)).slice(0, 100));
+  const lastRun = (A, id) => runsOf(A).find(r => r.goalId === id) || null;
+  // saved Smart filters from earlier versions become goals
+  const goalOf = s => s.type === 'goal' && s.goal ? s.goal : s.type === 'filter' && s.spec ? W.makeGoal(s.name || 'Saved filter', s.text || '', s.spec) : null;
+
   V.filters = (A) => {
-    const html = head('Smart filters', 'Describe what you want to find in plain English. Clickwise turns it into a filter, checks it, and shows the matching searches or pages — no patterns or formulas needed.') +
+    const html = head('Goal builder', 'Describe an SEO task in plain English. Clickwise turns it into conditions you can check and edit, previews what matches, then runs it — no patterns or formulas needed.') +
       `<section class="panel sf">
         <form class="sf-box" id="sf-form" autocomplete="off">
-          ${svg('spark')}<input id="sf-in" type="text" maxlength="300" placeholder="e.g. Pages with high impressions but not enough clicks" aria-label="Describe what you want to find">
-          <button class="btn-primary" type="submit">Find</button>
+          ${svg('spark')}<input id="sf-in" type="text" maxlength="300" placeholder="e.g. Which pages should I fix first?" aria-label="Describe what you want to find">
+          <button class="btn-primary" type="submit">Interpret</button>
         </form>
         <div class="sf-ex"><span>Try</span>${F.EXAMPLES.map(e => `<button type="button" class="chip-ex" data-ex="${esc(e)}">${esc(e)}</button>`).join('')}</div>
-        <p class="sf-or">Prefer to pick options? <button type="button" class="btn-link" id="sf-build">Build a filter step by step</button></p>
+        <p class="sf-or">Prefer to pick options? <button type="button" class="btn-link" id="sf-build">Build it step by step</button></p>
       </section>
       <div id="sf-out" aria-live="polite"></div>`;
     const mount = () => {
       const inp = document.getElementById('sf-in');
-      const go = text => { text = text.trim(); if (!text) { inp.focus(); return; } const p = F.parse(text, A); CUR = { spec: p.spec, text, parsed: p }; setParams('filters', { q: text }); render(A); };
+      const go = text => { text = text.trim(); if (!text) { inp.focus(); return; } const p = F.parse(text, A); CUR = { spec: p.spec, text, parsed: p, answered: [] }; setParams('filters', { q: text }); render(A); };
       document.getElementById('sf-form').addEventListener('submit', e => { e.preventDefault(); go(inp.value); });
       document.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { inp.value = b.dataset.ex; go(b.dataset.ex); }));
-      document.getElementById('sf-build').addEventListener('click', () => { CUR = { spec: { target: 'query', conds: [], group: null }, text: '', parsed: null }; setParams('filters'); render(A); setTimeout(() => { const f = document.getElementById('sf-f'); if (f) f.focus(); }, 0); });
+      document.getElementById('sf-build').addEventListener('click', () => { CUR = { spec: { target: 'query', conds: [] }, text: '', parsed: null, answered: [] }; setParams('filters'); render(A); setTimeout(() => { const f = document.getElementById('sf-f'); if (f) f.focus(); }, 0); });
       const prm = params();
       if (prm.get('q')) { inp.value = prm.get('q').slice(0, 300); go(inp.value); }
       else if (prm.get('saved')) {
         const s = savedList(A).find(x => x.id === prm.get('saved'));
-        if (s && s.spec) { inp.value = s.text || ''; CUR = { spec: s.spec, text: s.text || '', parsed: null, name: s.name }; render(A); }
+        const g = s && goalOf(s);
+        if (!g) { document.getElementById('sf-out').innerHTML = '<div class="note warn" role="alert">That saved workflow is no longer in this browser.</div>'; return; }
+        const ge = W.validateGoal(g);
+        if (ge.length) { document.getElementById('sf-out').innerHTML = `<div class="note warn" role="alert"><b>This saved workflow can't be opened.</b><ul>${ge.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`; return; }
+        inp.value = g.text || '';
+        CUR = { spec: g.spec, text: g.text || '', parsed: null, name: g.name, savedId: s.id, answered: [] };
+        if (prm.get('run')) runNow(A);
+        render(A);
       } else if (prm.get('spec')) {
         let spec = null; try { spec = JSON.parse(prm.get('spec')); } catch (e) { }
-        CUR = spec && typeof spec === 'object' ? { spec: { target: spec.target, conds: Array.isArray(spec.conds) ? spec.conds : [], group: spec.group || null, caseSensitive: !!spec.caseSensitive }, text: '', parsed: null } : null;
+        CUR = spec && typeof spec === 'object' ? { spec: { target: spec.target, conds: Array.isArray(spec.conds) ? spec.conds : [], group: spec.group || undefined, caseSensitive: !!spec.caseSensitive }, text: '', parsed: null, answered: [] } : null;
         if (CUR) render(A);
       } else if (CUR) { inp.value = CUR.text || ''; render(A); }
     };
     return { html, mount };
   };
+
+  const specKey = spec => JSON.stringify(spec);
+  function runNow(A) {
+    const g = W.makeGoal(CUR.name || CUR.text || F.describe(CUR.spec), CUR.text, CUR.spec);
+    const out = W.runGoal(g, A);
+    CUR.ran = { key: specKey(CUR.spec), record: out.record, result: out.result };
+    if (CUR.savedId) addRun(A, { goalId: CUR.savedId, ...out.record });
+  }
 
   function render(A) {
     const out = document.getElementById('sf-out'); if (!out || !CUR) return;
@@ -111,76 +157,138 @@
     const R = F.rows(A);
     const spec = CUR.spec, p = CUR.parsed;
     Object.keys(TABLES).filter(k => k.startsWith('t-sf')).forEach(k => delete TABLES[k]);
-    if (p && !p.understood) {
-      out.innerHTML = `<div class="note warn"><b>I couldn't turn that into a filter.</b> ${p.unknown.length ? `I didn't recognise: ${p.unknown.slice(0, 8).map(w => `<span class="tag">${esc(w)}</span>`).join(' ')}. ` : ''}Try one of the examples, mention a number (“more than 500 impressions”), a position (“positions 4 to 20”), or a word to look for in quotes (“containing "price"”).</div>`;
+    const questions = p ? p.questions.map((q, i) => ({ ...q, i })).filter(q => !CUR.answered.includes(q.i)) : [];
+    if (p && !p.understood && !questions.length) {
+      out.innerHTML = `<div class="note warn"><b>I couldn't turn that into a goal.</b> ${p.unknown.length ? `I didn't recognise: ${p.unknown.slice(0, 8).map(w => `<span class="tag">${esc(w)}</span>`).join(' ')}. ` : ''}Try one of the examples, mention a number (“more than 500 impressions”), a position (“positions 4 to 20”), an outcome (“titles to rewrite”, “pages losing clicks”), or a word to look for in quotes (“containing "price"”).</div>`;
       return;
     }
     const errs = F.validate(spec, R);
     const res = errs.length ? null : F.run(spec, A);
-    const chips = spec.conds.map((c, i) => `<span class="chip">${esc(F.chip(c, spec.target))}<button type="button" data-rm="${i}" aria-label="Remove: ${esc(F.chip(c, spec.target))}">${svg('x')}</button></span>`).join('');
+    const fun = errs.length ? null : F.funnel(spec, A);
+    const ran = CUR.ran && CUR.ran.key === specKey(spec) ? CUR.ran : null;
+    const noun = n => spec.target === 'page' ? (n === 1 ? 'page' : 'pages') : (n === 1 ? 'search' : 'searches');
+    const chips = spec.conds.map((c, i) => `<span class="chip${CUR.editing === i ? ' editing' : ''}"><button type="button" class="chip-t" data-ed="${i}" title="Edit this condition">${esc(F.chip(c, spec.target))}</button><button type="button" data-rm="${i}" aria-label="Remove: ${esc(F.chip(c, spec.target))}">${svg('x')}</button></span>`).join('');
     const groupOpts = Object.entries(F.GROUPS).filter(([k]) => spec.target === 'page' ? ['pageType', 'folder', 'location'].includes(k) : ['brand', 'intent', 'location'].includes(k));
     const recipe = F.gscRecipe(spec, A);
+    const notes = p ? p.notes : [];
+    const info = [
+      notes.includes('date-ok') ? `Dates: your request matches the loaded range (${esc(rangeLabel(D))}).` : notes.includes('date') && !(p.issues || []).some(x => x.kind === 'dates') ? `Dates: this uses the range you loaded (${esc(rangeLabel(D))}).` : '',
+      notes.includes('device-ok') ? `Device: this analysis already covers ${esc(String(D.filters.device).toLowerCase())} only.` : '',
+      notes.includes('place-mention') ? 'Places are matched in the words of the search. Search Console doesn\'t say where the searcher was.' : '',
+      notes.includes('content') ? 'Content opportunities here are improvements to pages that already rank (searches close to page one, low CTR, answer boxes). Finding topics with no page yet needs the Content assistant, which is not built yet.' : '',
+      notes.includes('compare') && R.hasPrev ? `Compared with ${esc(D.prevStart || 'the previous period')}${D.prevEnd ? ' to ' + esc(D.prevEnd) : ''}${A.decay && A.decay.scale !== 1 ? `, scaled to ${A.days} days` : ''}.` : '',
+            notes.includes('cannibal') ? `Competing pages are listed by the search they compete for${A.cannibalMode === 'stem' ? '; without a Search Console connection they are estimated from similar wording' : ''}.` : '',
+      spec.conds.some(c => ['opp', 'gain', 'confidence'].includes(c.f)) ? '<a href="#opps">Opportunity</a> kinds, estimates and confidence come from All opportunities, so the numbers match everywhere.' : ''
+    ].filter(Boolean);
+    const issues = p ? p.issues : [];
+    const actBtn = a => !a ? '' : a.type === 'dates' ? `<button type="button" class="btn-quiet" data-act="dates" data-days="${a.days}">Load the last ${a.days} days</button>` : a.type === 'device' ? `<button type="button" class="btn-quiet" data-act="device" data-device="${esc(a.value)}">Re-run for ${esc(a.value.toLowerCase())} only</button>` : '';
+    const preview = res ? res.rows.slice(0, 10) : [];
+
     out.innerHTML = `
       <section class="panel">
-        <div class="panel-h"><h2>${p ? 'What Clickwise understood' : 'Your filter'}</h2><p>Remove anything that's wrong or add a condition. Results update straight away.</p></div>
+        <div class="panel-h"><h2>${p ? 'What Clickwise understood' : 'Your goal'}</h2><p>Click a condition to change it, remove anything that's wrong, or add one. The preview updates straight away.</p></div>
         <div class="panel-b sf-edit">
+          ${issues.length ? `<div class="sf-issues">${issues.map(x => `<div class="note warn sf-issue" data-kind="${esc(x.kind)}"><b>${esc(x.text)}</b> ${esc(x.alternative || '')} ${actBtn(x.action)}</div>`).join('')}</div>` : ''}
+          ${questions.length ? `<div class="sf-qs" role="group" aria-label="Questions about your request">${questions.map(q => `<div class="sf-q"><p>${esc(q.text)}</p><div class="sf-qo">${q.options.map((o, j) => `<button type="button" class="${j === 0 ? 'btn-primary sm' : 'btn-quiet'}" data-q="${q.i}" data-o="${j}">${esc(o.label)}</button>`).join('')}</div></div>`).join('')}</div>` : ''}
           <div class="sf-row"><span class="sf-lbl">Look at</span>
             <div class="seg" role="group" aria-label="Look at"><button type="button" data-target="query" class="${spec.target === 'query' ? 'on' : ''}">Searches</button><button type="button" data-target="page" class="${spec.target === 'page' ? 'on' : ''}">Pages</button></div>
             <label class="sf-group"><span class="sf-lbl">Group by</span><select id="sf-grp"><option value="">Nothing</option>${groupOpts.map(([k, l]) => `<option value="${k}" ${spec.group === k ? 'selected' : ''}>${esc(l.charAt(0).toUpperCase() + l.slice(1))}</option>`).join('')}</select></label>
+            <label class="sf-group"><span class="sf-lbl">Show</span><select id="sf-lim"><option value="">All matches</option>${[10, 20, 50, 100].map(n => `<option value="${n}" ${spec.limit === n ? 'selected' : ''}>Top ${n}</option>`).join('')}${spec.limit && ![10, 20, 50, 100].includes(spec.limit) ? `<option value="${spec.limit}" selected>Top ${spec.limit}</option>` : ''}</select></label>
           </div>
           <div class="chips">${chips || '<span class="flat">No conditions yet — showing everything.</span>'}</div>
-          ${p && p.unknown.length ? `<p class="sf-warn">Ignored words I didn't recognise: ${p.unknown.slice(0, 8).map(w => `<span class="tag">${esc(w)}</span>`).join(' ')}</p>` : ''}
-          ${p && p.notes.includes('date') ? `<p class="sf-info">Dates: this uses the range you loaded (${esc(rangeLabel(D))}). To look at a different period, start a new analysis with that range.</p>` : ''}
+          ${info.map(x => `<p class="sf-info">${x}</p>`).join('')}
+          ${(() => { const asked = new Set(p ? p.questions.filter(q => q.word).map(q => q.word) : []); const rest = p ? p.unknown.filter(w => !asked.has(w)) : []; return rest.length ? `<p class="sf-warn">Also not used: ${rest.slice(0, 10).map(w => `<span class="tag">${esc(w)}</span>`).join(' ')}</p>` : ''; })()}
           ${CUR.dropped ? `<p class="sf-info">Removed because they don't apply here: ${esc(CUR.dropped)}.</p>` : ''}
           <div class="builder" id="sf-add">
-            <span class="sf-lbl">Add</span>
-            <select id="sf-f" aria-label="What to check">${Object.keys(F.FIELDS).filter(f => F.FIELDS[f].on.includes(spec.target) && (F.FIELDS[f].needs !== 'prev' || R.hasPrev)).map(f => `<option value="${f}">${esc(fieldName(f, spec.target))}</option>`).join('')}</select>
+            <span class="sf-lbl">${CUR.editing != null ? 'Change' : 'Add'}</span>
+            <select id="sf-f" aria-label="What to check">${Object.keys(F.FIELDS).filter(f => F.FIELDS[f].on.includes(spec.target) && (F.FIELDS[f].needs !== 'prev' || R.hasPrev) && !(f === 'section' && spec.target === 'query' && !R.hasQP) && !(['opp', 'gain', 'confidence'].includes(f) && !R.hasOpps)).map(f => `<option value="${f}">${esc(fieldName(f, spec.target))}</option>`).join('')}</select>
             <select id="sf-op" aria-label="How to compare"></select>
             <span id="sf-v" class="sf-v"></span>
-            <button type="button" class="btn-quiet" id="sf-addbtn">${svg('plus')}Add</button>
+            <button type="button" class="btn-quiet" id="sf-addbtn">${CUR.editing != null ? 'Update' : svg('plus') + 'Add'}</button>
+            ${CUR.editing != null ? '<button type="button" class="btn-link" id="sf-cancel">Cancel</button>' : ''}
             <span class="sf-err" id="sf-adderr" role="alert"></span>
           </div>
           <details class="sf-adv">
             <summary>Advanced</summary>
             <label class="check"><input type="checkbox" id="sf-cs" ${spec.caseSensitive ? 'checked' : ''}> Match capital letters exactly (useful for URLs; Search Console lowercases queries)</label>
             <div class="sf-recipe"><h4>Recreate this in Search Console</h4>
-              ${recipe.steps.length ? `<p>Performance › Search results › <b>+ Add filter</b>, then:</p><table><thead><tr><th>Filter</th><th>Choose</th><th>Value</th><th></th></tr></thead><tbody>${recipe.steps.map((s, i) => `<tr><td>${esc(s[0])}</td><td>${esc(s[1])}</td><td><code id="sf-rc-${i}">${esc(s[2])}</code></td><td><button type="button" class="btn-quiet" data-copy="sf-rc-${i}">Copy</button></td></tr>`).join('')}</tbody></table>` : '<p>Nothing to set up: this filter uses only Clickwise calculations.</p>'}
+              ${recipe.steps.length ? `<p>Performance › Search results › <b>+ Add filter</b>, then:</p><table><thead><tr><th>Filter</th><th>Choose</th><th>Value</th><th></th></tr></thead><tbody>${recipe.steps.map((s, i) => `<tr><td>${esc(s[0])}</td><td>${esc(s[1])}</td><td><code id="sf-rc-${i}">${esc(s[2])}</code></td><td><button type="button" class="btn-quiet" data-copy="sf-rc-${i}">Copy</button></td></tr>`).join('')}</tbody></table>` : '<p>Nothing to set up: this goal uses only Clickwise calculations.</p>'}
               ${recipe.skipped.length ? `<p class="flat">Search Console can't do these, so they only apply here: ${recipe.skipped.map(esc).join('; ')}.</p>` : ''}
             </div>
           </details>
         </div>
       </section>
-      ${errs.length ? `<div class="note warn" role="alert"><b>This filter can't run yet.</b><ul>${errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : `
-        <p class="sf-say">${esc(F.describe(spec))} <b>${res.rows.length.toLocaleString()} ${spec.target === 'page' ? (res.rows.length === 1 ? 'page' : 'pages') : (res.rows.length === 1 ? 'search' : 'searches')}</b> in ${esc(dataLabel(D).toLowerCase())}.</p>
-        <div class="strip">${stat(res.rows.length.toLocaleString(), spec.target === 'page' ? 'pages' : 'searches', 'gain')}${stat(fmtN(res.total.clicks), 'clicks')}${stat(fmtN(res.total.impr), 'impressions')}${stat(pctf(res.total.ctr), 'CTR')}${res.lost > 0 && spec.conds.some(c => c.f === 'clickChange') ? stat('−' + fmtN(res.lost), 'clicks lost', 'risk') : ''}</div>
-        <div class="sf-save"><input id="sf-name" type="text" maxlength="80" value="${esc((CUR.name || CUR.text || F.describe(spec)).slice(0, 80))}" aria-label="Name for this filter"><button type="button" class="btn-quiet" id="sf-savebtn">${svg('save')}Save to workflows</button></div>
-        ${resultBlock('t-sf', spec, res, 'smart-filter')}`}`;
+      ${errs.length ? `<div class="note warn" role="alert" id="sf-errs"><b>This goal can't run yet.</b><ul>${errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : `
+      <section class="panel" id="sf-preview">
+        <div class="panel-h"><h2>Preview</h2><p>${esc(dataLabel(D))} · ${esc(rangeLabel(D))}</p></div>
+        <div class="panel-b">
+          <p class="sf-say">${esc(F.describe(spec))} <b>${res.rows.length.toLocaleString()} ${noun(res.rows.length)}</b>${spec.limit && res.matched > res.rows.length ? ` (of ${res.matched.toLocaleString()} that match)` : ''}.</p>
+          ${fun && fun.length > 1 ? `<ol class="sf-fun" aria-label="How each condition narrows the list">${fun.map((s, i) => `<li><span>${esc(s.label)}</span><b>${s.n.toLocaleString()}</b>${i && s.n === 0 && fun[i - 1].n > 0 ? '<em>removes everything left</em>' : ''}</li>`).join('')}</ol>` : ''}
+          ${ran ? '<p class="flat sf-pv-h">Full results are below.</p>' : preview.length ? `<p class="flat sf-pv-h">First ${preview.length} of ${res.rows.length.toLocaleString()}:</p>${table('t-sf-p', filterCols(spec, res), preview, { sort: null, search: false, pageSize: 10, exportable: false })}` : `<p class="empty">Nothing matches. ${fun && fun.length > 1 ? 'The list above shows which condition removes everything; change or remove it.' : 'Try removing a condition.'}</p>`}
+          <div class="sf-run">
+            <button type="button" class="btn-primary" id="sf-runbtn">${svg('play')}Run workflow</button>
+            <input id="sf-name" type="text" maxlength="80" value="${esc((CUR.name || CUR.text || F.describe(spec)).slice(0, 80))}" aria-label="Name for this workflow">
+            <button type="button" class="btn-quiet" id="sf-savebtn">${svg('save')}${CUR.savedId ? 'Save changes' : 'Save workflow'}</button>
+          </div>
+        </div>
+      </section>
+      ${ran ? `<section class="panel" id="sf-result">
+        <div class="panel-h"><h2>Result</h2><p class="sf-status st-${esc(ran.record.status)}">${esc(STATUS[ran.record.status])} at ${esc(new Date(ran.record.at).toLocaleTimeString())} · ${ran.record.count.toLocaleString()} ${noun(ran.record.count)} · ${ran.record.ms} ms${CUR.savedId ? ' · added to this workflow\'s history' : ''}</p></div>
+        ${ran.record.errors.length ? `<div class="panel-b"><div class="note warn" role="alert"><ul>${ran.record.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div></div>` : `<div class="panel-b"><div class="strip">${stat(ran.record.count.toLocaleString(), noun(ran.record.count), 'gain')}${stat(fmtN(ran.result.total.clicks), 'clicks')}${stat(fmtN(ran.result.total.impr), 'impressions')}${stat(pctf(ran.result.total.ctr), 'CTR')}${ran.result.lost > 0 && spec.conds.some(c => c.f === 'clickChange') ? stat('−' + fmtN(ran.result.lost), 'clicks lost', 'risk') : ''}</div></div>`}
+      </section>${ran.result ? resultBlock('t-sf', spec, ran.result, 'goal') : ''}` : ''}`}`;
 
     // ── wire up ──
-    const rerender = () => { setParams('filters', { spec: JSON.stringify(CUR.spec) }); CUR.parsed = CUR.parsed && { ...CUR.parsed, unknown: [], notes: CUR.parsed.notes }; render(A); };
-    out.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { CUR.spec = { ...spec, conds: spec.conds.filter((_, i) => i !== +b.dataset.rm) }; CUR.dropped = null; rerender(); }));
+    const changed = () => { CUR.ran = null; CUR.editing = null; setParams('filters', { spec: JSON.stringify(CUR.spec) }); render(A); };
+    out.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { CUR.spec = { ...spec, conds: spec.conds.filter((_, i) => i !== +b.dataset.rm) }; CUR.dropped = null; changed(); }));
+    out.querySelectorAll('[data-ed]').forEach(b => b.addEventListener('click', () => { CUR.editing = +b.dataset.ed; render(A); const f = document.getElementById('sf-f'); if (f) f.focus(); }));
+    out.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => {
+      const q = p.questions[+b.dataset.q], o = q.options[+b.dataset.o];
+      const r = F.applyPatch(CUR.spec, o.patch);
+      CUR.spec = r.spec; CUR.dropped = r.dropped.join('; ') || null; CUR.answered = CUR.answered.concat(+b.dataset.q); changed();
+    }));
+    out.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('cw:change', { detail: b.dataset.act === 'dates' ? { days: +b.dataset.days } : { device: b.dataset.device } }));
+    }));
     out.querySelectorAll('[data-target]').forEach(b => b.addEventListener('click', () => {
       const t = b.dataset.target; if (t === spec.target) return;
-      const keep = spec.conds.filter(c => F.FIELDS[c.f].on.includes(t));
-      const drop = spec.conds.filter(c => !F.FIELDS[c.f].on.includes(t)).map(c => F.chip(c, spec.target));
-      CUR.spec = { ...spec, target: t, conds: keep, group: null }; CUR.dropped = drop.join('; ') || null; rerender();
+      const r = F.applyPatch(spec, { target: t }); CUR.spec = r.spec; CUR.dropped = r.dropped.join('; ') || null; changed();
     }));
-    document.getElementById('sf-grp').addEventListener('change', e => { CUR.spec = { ...spec, group: e.target.value || null }; rerender(); });
-    document.getElementById('sf-cs').addEventListener('change', e => { CUR.spec = { ...spec, caseSensitive: e.target.checked }; rerender(); });
-    builder(A, spec, R, cond => { CUR.spec = { ...spec, conds: spec.conds.concat([cond]) }; CUR.dropped = null; rerender(); });
+    document.getElementById('sf-grp').addEventListener('change', e => { CUR.spec = { ...spec, group: e.target.value || undefined }; changed(); });
+    document.getElementById('sf-lim').addEventListener('change', e => {
+      const n = parseInt(e.target.value, 10), s2 = { ...spec };
+      if (n) { s2.limit = n; if (!s2.sort) s2.sort = { f: spec.conds.some(c => ['opp', 'gain', 'confidence'].includes(c.f)) ? 'gain' : 'clicks', dir: 'desc' }; } else { delete s2.limit; }
+      CUR.spec = s2; changed();
+    });
+    document.getElementById('sf-cs').addEventListener('change', e => { CUR.spec = { ...spec, caseSensitive: e.target.checked }; changed(); });
+    const cancel = document.getElementById('sf-cancel'); if (cancel) cancel.addEventListener('click', () => { CUR.editing = null; render(A); });
+    builder(A, spec, R, CUR.editing != null ? spec.conds[CUR.editing] : null, cond => {
+      const conds = spec.conds.slice();
+      if (CUR.editing != null) conds[CUR.editing] = cond; else conds.push(cond);
+      CUR.spec = { ...spec, conds }; CUR.dropped = null; changed();
+    });
+    const rb = document.getElementById('sf-runbtn');
+    if (rb) rb.addEventListener('click', () => { runNow(A); render(A); const r = document.getElementById('sf-result'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'start' }); });
     const sb = document.getElementById('sf-savebtn');
     if (sb) sb.addEventListener('click', () => {
       const name = document.getElementById('sf-name').value.trim() || F.describe(spec);
-      const ok = saveItem(A, { type: 'filter', name: name.slice(0, 80), text: CUR.text || '', spec: CUR.spec });
+      const goal = W.makeGoal(name, CUR.text || '', CUR.spec);
+      const ge = W.validateGoal(goal);
+      if (ge.length) { flash(sb, ge[0]); return; }
+      let ok;
+      if (CUR.savedId) { const list = savedList(A).map(x => x.id === CUR.savedId ? { ...x, type: 'goal', name: goal.name, goal, at: new Date().toISOString() } : x); ok = store.set('saved:' + siteOf(A), list); }
+      else { const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); const list = savedList(A); list.unshift({ id, at: new Date().toISOString(), type: 'goal', name: goal.name, goal }); ok = store.set('saved:' + siteOf(A), list.slice(0, 50)); if (ok) CUR.savedId = id; }
+      CUR.name = goal.name;
       flash(sb, ok ? 'Saved — find it under Workflows' : 'Could not save (browser storage is off)');
     });
-    if (res) mountResult('t-sf', res);
+    if (preview.length && !ran) drawTable('t-sf-p');
+    if (ran && ran.result) mountResult('t-sf', ran.result);
   }
 
-  function builder(A, spec, R, onAdd) {
+  function builder(A, spec, R, editing, onAdd) {
     const fSel = document.getElementById('sf-f'), opSel = document.getElementById('sf-op'), vBox = document.getElementById('sf-v'), err = document.getElementById('sf-adderr');
     if (!fSel) return;
-    const enumValues = f => f === 'intent' ? Object.entries(CW.INTENT_LABEL) : f === 'pageType' ? R.types.map(t => [t, t]) : f === 'section' ? R.folders.map(x => [x, x]) : f === 'place' ? R.places[spec.target].map(x => [x, x]) : [];
+    const enumValues = f => f === 'intent' ? Object.entries(CW.INTENT_LABEL) : f === 'pageType' ? R.types.map(t => [t, t]) : f === 'section' ? R.folders.map(x => [x, x]) : f === 'place' ? R.places[spec.target].map(x => [x, x])
+      : f === 'opp' ? Object.entries(F.OPP).filter(([k]) => k === 'any' || k === 'growth' || R.oppKinds[spec.target].includes(k)).map(([k, o]) => [k, o.label]) : f === 'confidence' ? F.LEVELS.map(l => [l, l]) : [];
     const drawOps = () => {
       const f = F.FIELDS[fSel.value];
       opSel.innerHTML = F.OPS[f.kind].filter(o => o !== 'in').map(o => `<option value="${o}">${esc(OP_NAME[o])}</option>`).join('');
@@ -196,7 +304,14 @@
       else { const vals = enumValues(fSel.value); vBox.innerHTML = vals.length ? `<select id="sf-v1" aria-label="Value">${vals.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select>` : '<span class="flat">No values in this data</span>'; }
     };
     fSel.addEventListener('change', drawOps); opSel.addEventListener('change', drawValue);
-    drawOps();
+    // editing: load the condition's field, comparison and values into the controls
+    if (editing && [...fSel.options].some(o => o.value === editing.f)) {
+      fSel.value = editing.f; drawOps();
+      if ([...opSel.options].some(o => o.value === editing.op)) { opSel.value = editing.op; drawValue(); }
+      const v1 = document.getElementById('sf-v1'), v2 = document.getElementById('sf-v2');
+      if (v1) v1.value = typeof editing.v === 'boolean' ? (editing.v ? '1' : '0') : Array.isArray(editing.v) ? editing.v.join(', ') : editing.v;
+      if (v2 && editing.v2 != null) v2.value = editing.v2;
+    } else drawOps();
     const submit = () => {
       const f = fSel.value, kind = F.FIELDS[f].kind, op = kind === 'bool' ? 'is' : opSel.value;
       const v1 = document.getElementById('sf-v1'), v2 = document.getElementById('sf-v2');
@@ -206,7 +321,7 @@
       else if (kind === 'text') cond = { f, op, v: v1.value.trim() };
       else if (kind === 'bool') cond = { f, op, v: v1.value === '1' };
       else cond = { f, op, v: v1.value };
-      const errs = F.validate({ ...spec, conds: [cond] }, R);
+      const errs = F.validate({ ...spec, conds: [cond], limit: undefined, sort: undefined }, R);
       if (errs.length) { err.textContent = errs[0]; return; }
       onAdd(cond);
     };
@@ -239,9 +354,13 @@
     };
     const html = head('Workflows', 'Pick the outcome you want. Each workflow checks your data, applies proven thresholds and hands you a prioritised result — nothing to configure.') +
       (saved.length ? `<section class="panel"><div class="panel-h"><h2>Saved for ${esc(D.site)}</h2><p>Kept in this browser. Saved filters re-run on whatever data you load for this site.</p></div>
-        <div class="panel-b flush"><table><tbody>${saved.map(s => `<tr><td><span class="tag ${s.type === 'filter' ? '' : 'gain'}">${s.type === 'filter' ? 'Smart filter' : 'Workflow'}</span></td><td>${esc(s.name)}</td><td class="r"><a class="btn-quiet" href="${s.type === 'filter' ? '#filters?saved=' + encodeURIComponent(s.id) : '#wf=' + encodeURIComponent(s.wf)}">Run</a> <button type="button" class="btn-quiet" data-unsave="${esc(s.id)}">Remove</button></td></tr>`).join('')}</tbody></table></div></section>` : '') +
+        <div class="panel-b flush"><table class="saved-t"><thead><tr><th scope="col">Type</th><th scope="col">Name</th><th scope="col">Last run</th><th scope="col"></th></tr></thead><tbody>${saved.map(s => {
+          const isGoal = s.type === 'goal' || s.type === 'filter', lr = isGoal ? lastRun(A, s.id) : null;
+          const last = !isGoal ? '<span class="flat">—</span>' : lr ? `<span class="st-${esc(lr.status)}">${esc(STATUS[lr.status] || lr.status)}</span> <small class="flat">${esc(new Date(lr.at).toLocaleString())} · ${lr.status === 'done' ? lr.count.toLocaleString() + ' results' : esc((lr.errors || [])[0] || '')}</small>` : '<span class="flat">Not run yet</span>';
+          return `<tr data-row="${esc(s.id)}"><td><span class="tag ${isGoal ? '' : 'gain'}">${isGoal ? 'Your goal' : 'Workflow'}</span></td><td class="nm"><span>${esc(s.name)}</span> <button type="button" class="btn-link" data-rename="${esc(s.id)}" aria-label="Rename ${esc(s.name)}">Rename</button></td><td>${last}</td><td class="r"><a class="btn-quiet" href="${isGoal ? '#filters?saved=' + encodeURIComponent(s.id) + '&run=1' : '#wf=' + encodeURIComponent(s.wf)}">Run</a>${isGoal ? ` <a class="btn-quiet" href="#filters?saved=${encodeURIComponent(s.id)}">Edit</a>` : ''} <button type="button" class="btn-quiet" data-unsave="${esc(s.id)}">Remove</button></td></tr>`;
+        }).join('')}</tbody></table></div></section>` : '') +
       `<div class="wf-grid">${W.TEMPLATES.map(card).join('')}</div>
-       <div class="note"><b>Need something else?</b> <a href="#filters">Describe it in Smart filters</a> — for example “commercial keywords on page two” — and save it here as your own workflow.</div>`;
+       <div class="note"><b>Need something else?</b> <a href="#filters">Describe it in the Goal builder</a> — for example “which pages should I fix first” — and save it here as your own workflow.</div>`;
     const mount = () => {
       document.querySelectorAll('[data-savewf]').forEach(b => b.addEventListener('click', () => {
         const w = W.byId(b.dataset.savewf);
@@ -249,6 +368,24 @@
         setTimeout(() => { if (location.hash === '#workflows') window.dispatchEvent(new HashChangeEvent('hashchange')); }, 900);
       }));
       document.querySelectorAll('[data-unsave]').forEach(b => b.addEventListener('click', () => { removeItem(A, b.dataset.unsave); window.dispatchEvent(new HashChangeEvent('hashchange')); }));
+      // rename in place: the name is plain text, 1–80 characters
+      document.querySelectorAll('[data-rename]').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.rename, cell = b.closest('td'), item = savedList(A).find(x => x.id === id); if (!item) return;
+        cell.innerHTML = `<input type="text" maxlength="80" value="${esc(item.name)}" aria-label="New name"> <button type="button" class="btn-quiet" data-ok>Save</button> <button type="button" class="btn-link" data-no>Cancel</button> <span class="sf-err" role="alert"></span>`;
+        const inp = cell.querySelector('input'), msg = cell.querySelector('.sf-err');
+        inp.focus(); inp.select();
+        const done = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
+        const save = () => {
+          const name = inp.value.trim();
+          if (!name) { msg.textContent = 'Enter a name.'; return; }
+          const list = savedList(A).map(x => x.id !== id ? x : x.goal ? { ...x, name, goal: { ...x.goal, name } } : { ...x, name });
+          if (!store.set('saved:' + siteOf(A), list)) { msg.textContent = 'Could not save (browser storage is off).'; return; }
+          done();
+        };
+        cell.querySelector('[data-ok]').addEventListener('click', save);
+        cell.querySelector('[data-no]').addEventListener('click', done);
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') done(); });
+      }));
     };
     return { html, mount };
   };

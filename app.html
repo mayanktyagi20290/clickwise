@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=18">
+<link rel="stylesheet" href="styles.css?v=22">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -113,7 +113,7 @@
       <a href="#decay" data-view="decay" class="hot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 17-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/></svg><span>Losing ground</span></a>
       <p class="nav-group">Automation</p>
       <a href="#workflows" data-view="workflows"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg><span>Workflows</span></a>
-      <a href="#filters" data-view="filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span>Smart filters</span></a>
+      <a href="#filters" data-view="filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span>Goal builder</span></a>
       <p class="nav-group">AI search</p>
       <a href="#ai" data-view="ai" class="ai"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg><span>AI search visibility</span></a>
       <p class="nav-group">Explore</p>
@@ -170,6 +170,7 @@
       </div>
       <label class="field"><span>Folder or page (empty = whole site)</span><input type="text" id="scope-in" placeholder="e.g. /employers or https://example.com/pricing" autocomplete="off" spellcheck="false"></label>
       <label class="check"><input type="checkbox" id="scope-exact"> Exactly this page, not everything under it</label>
+      <label class="field"><span>Device</span><select id="scope-device"><option value="">All devices</option><option value="MOBILE">Mobile</option><option value="DESKTOP">Desktop</option><option value="TABLET">Tablet</option></select></label>
       <label class="check"><input type="checkbox" id="scope-compare"> Compare with the previous period</label>
     </div>
     <div id="scope-fixed" hidden>
@@ -203,14 +204,14 @@
   </form>
 </dialog>
 
-<script src="config.js?v=18"></script>
-<script src="engine.js?v=18"></script>
-<script src="demo.js?v=18"></script>
-<script src="opportunities.js?v=18"></script>
-<script src="filters.js?v=18"></script>
-<script src="workflows.js?v=18"></script>
-<script src="views.js?v=18"></script>
-<script src="automation.js?v=18"></script>
-<script src="app.js?v=18"></script>
+<script src="config.js?v=22"></script>
+<script src="engine.js?v=22"></script>
+<script src="demo.js?v=22"></script>
+<script src="opportunities.js?v=22"></script>
+<script src="filters.js?v=22"></script>
+<script src="workflows.js?v=22"></script>
+<script src="views.js?v=22"></script>
+<script src="automation.js?v=22"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

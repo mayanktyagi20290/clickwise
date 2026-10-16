@@ -225,5 +225,47 @@
     return { error: 'This workflow has no runner.' };
   }
 
-  window.CW_WORKFLOWS = { TEMPLATES, DATA, run, missing, weaker, byId, hasData };
+  // ── goals: workflows people describe in their own words ──
+  // A goal is plain data: { v: 1, name, text, spec }. It is checked before every run, because saved goals come
+  // back from browser storage and may be stale (data changed) or edited by hand.
+  const GOAL_VERSION = 1;
+  const COND_KEYS = new Set(['f', 'op', 'v', 'v2', 'note']);
+  function validateGoal(g) {
+    const e = [];
+    if (!g || typeof g !== 'object' || Array.isArray(g)) return ['This saved workflow is damaged and cannot be read.'];
+    if (g.v !== GOAL_VERSION) e.push('This saved workflow was made by a different version of Clickwise. Describe it again and save it.');
+    if (typeof g.name !== 'string' || !g.name.trim() || g.name.length > 80) e.push('Give the workflow a name of up to 80 characters.');
+    if (g.text != null && (typeof g.text !== 'string' || g.text.length > 300)) e.push('The description is too long.');
+    const sp = g.spec;
+    if (!sp || typeof sp !== 'object' || !Array.isArray(sp.conds)) e.push('The workflow has no conditions to run.');
+    else {
+      if (sp.conds.some(c => !c || typeof c !== 'object' || Object.keys(c).some(k => !COND_KEYS.has(k)))) e.push('One of the conditions is damaged.');
+      const extra = Object.keys(sp).filter(k => !['target', 'conds', 'group', 'caseSensitive', 'limit', 'sort'].includes(k));
+      if (extra.length) e.push('The workflow contains settings Clickwise does not recognise.');
+    }
+    return e;
+  }
+  const makeGoal = (name, text, spec) => ({ v: GOAL_VERSION, name: String(name || '').trim().slice(0, 80), text: String(text || '').slice(0, 300), spec: JSON.parse(JSON.stringify(spec)) });
+  // Runs a goal on the loaded data. Same input, same output; returns a record for the run history.
+  // status: done | needs-data (the data cannot answer it; nothing is wrong with the goal) | failed
+  function runGoal(g, A, now) {
+    const t0 = Date.now(), D = A.data || {};
+    const rec = { at: (now || new Date()).toISOString(), name: g && g.name, status: 'failed', count: 0, matched: 0, errors: [], data: { source: D.source || null, site: D.site || null, start: D.start || null, end: D.end || null, days: A.days } };
+    const ge = validateGoal(g);
+    if (ge.length) { rec.errors = ge; rec.ms = Date.now() - t0; return { record: rec }; }
+    const R = F.rows(A);
+    const errs = F.validate(g.spec, R);
+    if (errs.length) {
+      rec.errors = errs;
+      // needs-data: the request is fine but this data lacks a comparison period or query-page rows
+      rec.status = errs.every(x => /needs a comparison period|needs to know which page ranks/.test(x)) ? 'needs-data' : 'failed';
+      rec.ms = Date.now() - t0; return { record: rec };
+    }
+    const res = F.run(g.spec, A);
+    rec.status = 'done'; rec.count = res.rows.length; rec.matched = res.matched; rec.ms = Date.now() - t0;
+    rec.totals = { clicks: res.total.clicks, impr: res.total.impr };
+    return { record: rec, result: res };
+  }
+
+  window.CW_WORKFLOWS = { TEMPLATES, DATA, run, missing, weaker, byId, hasData, validateGoal, makeGoal, runGoal, GOAL_VERSION };
 })();

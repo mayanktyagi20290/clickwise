@@ -316,7 +316,7 @@
   // ── change property, dates or folder from the top bar ──
   // Search Console analyses re-run with the new choice; uploads and sample data are fixed, so the
   // dialog explains that and offers a new analysis instead.
-  function openChange(focus) {
+  function openChange(focus, preset) {
     if (!D) return;
     const live = D.source === 'api' && LAST;
     $('scope-fields').hidden = !live; $('scope-fixed').hidden = !!live;
@@ -327,6 +327,9 @@
       $('scope-site').innerHTML = list.map(u => `<option value="${esc(u)}"${u === LAST.site ? ' selected' : ''}>${esc(siteLabel(u))}</option>`).join('');
       $('scope-start').value = LAST.start; $('scope-end').value = LAST.end;
       $('scope-in').value = LAST.scopeInput || ''; $('scope-exact').checked = !!LAST.exact; $('scope-compare').checked = !!LAST.compare;
+      $('scope-device').value = LAST.device || '';
+      if (preset && preset.days) { const end = new Date(); end.setDate(end.getDate() - 2); const st = new Date(end); st.setDate(end.getDate() - preset.days + 1); $('scope-start').value = iso(st); $('scope-end').value = iso(end); }
+      if (preset && preset.device) $('scope-device').value = preset.device;
       markPreset();
     } else {
       $('scope-fixed-msg').textContent = D.source === 'demo'
@@ -352,6 +355,8 @@
   $('top-site-btn').addEventListener('click', () => openChange('site'));
   $('top-range-btn').addEventListener('click', () => openChange('dates'));
   $('top-scope').addEventListener('click', () => openChange('scope'));
+  // the Goal builder asks for other dates or one device: open the same dialog with those values filled in
+  document.addEventListener('cw:change', e => openChange(e.detail && e.detail.days ? 'dates' : 'site', e.detail || {}));
   $('scope-whole').addEventListener('click', () => { $('scope-in').value = ''; $('scope-exact').checked = false; });
   $('scope-cancel').addEventListener('click', () => $('scope-dialog').close());
   $('scope-new').addEventListener('click', () => { $('scope-dialog').close(); $('btn-new').click(); });
@@ -362,7 +367,7 @@
     const keepScope = site === LAST.site;
     const before = LOAD;
     await analyseProperty({ ...LAST, site, start: $('scope-start').value, end: $('scope-end').value, compare: $('scope-compare').checked,
-      scopeInput: keepScope ? $('scope-in').value : '', exact: keepScope && $('scope-exact').checked }, { error: $('scope-error'), go: $('scope-go') });
+      scopeInput: keepScope ? $('scope-in').value : '', exact: keepScope && $('scope-exact').checked, device: $('scope-device').value }, { error: $('scope-error'), go: $('scope-go') });
     if (LOAD !== before && $('scope-error').hidden && $('scope-dialog').open) $('scope-dialog').close();
   });
   // A new site may need brand terms first; loaded() shows that screen, so close the dialog then too.
@@ -487,7 +492,7 @@
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
     if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings and saved workflows from this browser.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); } catch (e) { }
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {

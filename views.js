@@ -37,7 +37,7 @@
     return `<div class="tools">
         ${opt.search !== false ? `<input type="search" data-ts="${id}" placeholder="${esc(opt.placeholder || 'Filter rows')}" aria-label="Filter rows">` : ''}
         ${filters}
-        <button class="btn-quiet" type="button" data-tx="${id}">Export CSV</button>
+        ${opt.exportable !== false ? `<button class="btn-quiet" type="button" data-tx="${id}">Export CSV</button>` : ''}
         <span class="meta" id="${id}-meta"></span>
       </div>
       <div class="tw"><table id="${id}"><thead><tr>${cols.map(c => `<th${c.r ? ' class="r"' : ''}${c.sort !== false ? ` data-sort="${c.k}"` : ''} scope="col">${esc(c.l)}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
@@ -290,6 +290,12 @@
         <p>${A.potential.hi >= 1 ? `An estimate from ${A.potential.n.toLocaleString()} non-branded searches${A.coverage ? ` (${(A.potential.hi / Math.max(1, A.potential.monthlySiteClicks) * 100).toFixed(1)}% of monthly clicks at the high end)` : ''}, counted once each.` : `Checked ${A.NBQ.length.toLocaleString()} non-branded searches: none rank where a better title or a few positions would add clicks.`} Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded. <a href="#plan">How it's estimated</a></p></div>
         <a class="btn-primary" href="#plan">See the action plan</a>
       </section>
+
+      <form class="sf-box ov-ask" id="ov-ask" autocomplete="off" role="search" aria-label="Describe an SEO goal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>
+        <input id="ov-ask-in" type="text" maxlength="300" placeholder="Ask in plain English, e.g. which pages should I fix first?" aria-label="Describe an SEO goal">
+        <button class="btn-primary" type="submit">Ask</button>
+      </form>
 
       <section class="panel">
         ${tiles(A)}
