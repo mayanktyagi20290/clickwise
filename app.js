@@ -46,6 +46,7 @@
   function kindOf(name, header) {
     const n = name.toLowerCase(), h = String(header || '').toLowerCase();
     const has = w => n.includes(w) || h.includes(w);
+    if (n.includes('filter') || h === 'filter') return 'Filters';
     return has('quer') ? 'Q' : has('appearance') ? 'Appearance' : has('page') ? 'P' : has('countr') ? 'Countries' : has('date') || n.includes('chart') ? 'C' : has('device') ? 'Dev' : null;
   }
   // Find metric columns by header; "Previous …" columns hold the comparison period.
@@ -65,6 +66,7 @@
 
   function addSheet(set, kind, rows) {
     if (set.found.has(kind)) return;
+    if (kind === 'Filters') { set.filters = rows.slice(1).map(r => [String(r[0] || ''), String(r[1] || '')]).filter(r => r[0]); return; }
     set.found.add(kind);
     const cols = columnsOf(rows[0]);
     rows.slice(1).forEach(r => {
@@ -138,6 +140,8 @@
       Q: cur.Q, P: cur.P, C: cur.C, Dev: cur.Dev, Countries: cur.Countries, Appearance: cur.Appearance,
       prevQ: hasPrev ? cur.prevQ : null, prevP: hasPrev ? cur.prevP : null, prevC: cur.prevC.length ? cur.prevC : null,
       prevStart: cur.prevStart || null, prevEnd: cur.prevEnd || null, compareNote: note,
+      // a Page filter set in Search Console before exporting tells us which folder or page this covers
+      scope: (() => { const f = (cur.filters || []).find(r => /^page$/i.test(r[0].trim())); return f ? 'Page filter: ' + f[1].trim() : null; })(),
       site: host, source: 'file', start: cur.start, end: cur.end, days: cur.C.length || null
     });
   }
@@ -188,6 +192,30 @@
     return data;
   }
   let FILTER = { type: 'web', device: '' };
+  // Turn what the user typed ("/employers", "employers/", or a full URL) into a page filter.
+  // The pattern is built here and fully escaped; users never write one.
+  function scopeOf(input, site, exact) {
+    let v = String(input || '').trim();
+    if (!v) return { regex: null, label: null };
+    const propHost = site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').toLowerCase();
+    let host = null, path = v;
+    if (/^https?:\/\//i.test(v)) {
+      let u; try { u = new URL(v); } catch (e) { return { error: 'That doesn\'t look like a valid address. Use a path such as /blog/ or a full URL.' }; }
+      host = u.hostname.toLowerCase(); path = u.pathname;
+      const h = host.replace(/^www\./, '');
+      if (h !== propHost && !h.endsWith('.' + propHost)) return { error: `That address is on ${host}, not on ${propHost}.` };
+    } else if (/^[a-z0-9-]+(\.[a-z0-9-]+)+\//i.test(v)) { host = v.split('/')[0].toLowerCase(); path = v.slice(host.length); }
+    path = '/' + path.replace(/^\/+/, '').replace(/[?#].*$/, '');
+    const trimmed = path.replace(/\/+$/, '');
+    if (!trimmed) return exact ? { regex: '^https?://' + (host ? esc2(host) : '(www\\.)?[^/]+') + '/?$', label: 'Home page only' } : { regex: null, label: null };
+    const re2 = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hostRx = host ? re2(host) : '[^/]+';
+    return {
+      regex: '^https?://' + hostRx + re2(trimmed) + (exact ? '/?(?:[?#].*)?$' : '(?:[/?#].*)?$'),
+      label: (exact ? 'Page: ' : 'Folder: ') + trimmed + (exact ? '' : '/')
+    };
+    function esc2(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  }
   // Pages through the API 25,000 rows at a time. `from` skips rows already fetched; quiet pulls
   // run in the background and do not write to the picker's progress line.
   async function pull(site, start, end, dims, max, label, from = 0, quiet = false) {
@@ -195,7 +223,10 @@
     for (let startRow = from; startRow < max; startRow += 25000) {
       if (!quiet) progress(`Fetching ${label}… ${out.length.toLocaleString()} rows`);
       const body = { startDate: start, endDate: end, dimensions: dims, type: FILTER.type, rowLimit: Math.min(25000, max - startRow), startRow };
-      if (FILTER.device && !dims.includes('device')) body.dimensionFilterGroups = [{ filters: [{ dimension: 'device', operator: 'equals', expression: FILTER.device }] }];
+      const filters = [];
+      if (FILTER.device && !dims.includes('device')) filters.push({ dimension: 'device', operator: 'equals', expression: FILTER.device });
+      if (FILTER.page) filters.push({ dimension: 'page', operator: 'includingRegex', expression: FILTER.page });
+      if (filters.length) body.dimensionFilterGroups = [{ groupType: 'and', filters }];
       const d = await api(`sites/${encodeURIComponent(site)}/searchAnalytics/query`, body);
       const rows = d.rows || [];
       out.push(...rows);
@@ -232,6 +263,10 @@
     e.preventDefault();
     const site = $('pick-site').value, start = $('pick-start').value, end = $('pick-end').value, compare = $('pick-compare').checked;
     FILTER = { type: $('pick-type').value, device: $('pick-device').value };
+    // Optional scope: a folder ("/blog/") or one page, sent to Google as a page filter.
+    const sc = scopeOf($('pick-scope').value, site, $('pick-exact').checked);
+    if (sc.error) { $('pick-error').textContent = sc.error; $('pick-error').hidden = false; return; }
+    FILTER.page = sc.regex; FILTER.scope = sc.label;
     if (!site || !start || !end || start > end) { $('pick-error').textContent = 'Choose a property and a valid date range.'; $('pick-error').hidden = false; return; }
     $('pick-error').hidden = true; $('pick-go').disabled = true;
     const id = ++LOAD, t0 = Date.now();
@@ -252,7 +287,7 @@
       clearInterval(tick); progress('Analysing…');
       const more = { q: q.length === FIRST && CFG.maxRows > FIRST, p: p.length === FIRST && CFG.maxRows > FIRST };
       const data = {
-        site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER },
+        site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER }, scope: FILTER.scope || null,
         prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
         Dev: dev.map(r => mapRow(r, ['d'])), QP: null, prevQ: null, prevP: null, prevC: null,
@@ -322,6 +357,7 @@
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
     $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
     $('top-sample').hidden = D.source !== 'demo';
+    $('top-scope').textContent = D.scope || ''; $('top-scope').hidden = !D.scope;
     counts();
     show('app');
     if (!knownRoute(location.hash.slice(1))) history.replaceState(null, '', '#overview');

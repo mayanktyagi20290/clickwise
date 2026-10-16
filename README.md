@@ -39,6 +39,10 @@ Open `http://localhost:8080` → "See it on sample data", or `app.html?demo`.
 
 Any static host works: GitHub Pages, Netlify, Vercel, Cloudflare Pages. Use your own domain (Google won't verify a `github.io` origin for branding).
 
+## Analysing one folder or page
+
+With Search Console connected, type a folder (`/blog/`) or a full URL in **Only a folder or page** on the property screen; tick **Exactly this page** for a single URL. Clickwise sends Google a page filter (built and escaped by the app), so every query, page, daily total and comparison covers only that part of the site. For uploads, set the Page filter in Search Console before exporting; Clickwise reads the export's Filters sheet and shows the scope in the top bar.
+
 ## Reports
 
 - **Overview** — headline monthly click potential, non-brand KPIs vs previous period, top 3 actions, trend, brand split, sections

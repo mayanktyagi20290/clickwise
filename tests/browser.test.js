@@ -301,6 +301,55 @@ function writeComparisonExports(dir) {
     await ctx2.close();
   });
 
+  await testAsync('Search Console: analyse only one folder (page filter sent to Google)', async () => {
+    const { load } = require('./lib/harness');
+    const S = load(['engine.js', 'demo.js']).CW_DEMO.build();
+    const bodies = [];
+    const ctx3 = await browser.newContext();
+    await ctx3.route('**/*', async r => {
+      const u = r.request().url();
+      const lib = Object.keys(LOCAL).find(k => u.includes('cdnjs') && u.endsWith(k));
+      if (lib) return r.fulfill({ path: LOCAL[lib], contentType: 'text/javascript' });
+      if (u.startsWith(base)) return r.continue();
+      if (u.includes('searchconsole.googleapis.com')) {
+        if (u.endsWith('/sites')) return r.fulfill({ json: { siteEntry: [{ siteUrl: 'sc-domain:trailcraft.co', permissionLevel: 'siteOwner' }] } });
+        const body = JSON.parse(r.request().postData() || '{}'); bodies.push(body);
+        const f = ((body.dimensionFilterGroups || [])[0] || { filters: [] }).filters.find(x => x.dimension === 'page');
+        const rx = f ? new RegExp(f.expression) : null;
+        const k = body.dimensions.join(','), m = (list, keys, page) => list.filter(r => !rx || !page || rx.test(page(r))).map(r => ({ keys: keys(r), clicks: r.clicks, impressions: r.impr, ctr: r.ctr / 100, position: r.pos }));
+        const rows = k === 'page' ? m(S.P, r => [r.p], r => r.p) : k === 'query,page' ? m(S.QP, r => [r.q, r.p], r => r.p) : k === 'query' ? m(S.QP.filter(r => !rx || rx.test(r.p)), r => [r.q]) : k === 'date' ? m(S.C, r => [r.d]) : m(S.Dev, r => [r.d]);
+        return r.fulfill({ json: { rows: rows.slice(body.startRow || 0, (body.startRow || 0) + body.rowLimit) } });
+      }
+      return r.fulfill({ status: 204, body: '' });
+    });
+    const p3 = await ctx3.newPage();
+    await p3.addInitScript(() => { window.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => setTimeout(() => c.callback({ access_token: 'test', expires_in: 3600 }), 10) }), revoke: () => { } } } }; });
+    await p3.goto(base + 'app.html'); await p3.click('#btn-connect');
+    await p3.waitForFunction(() => document.querySelector('#pick-site').value.includes('trailcraft'));
+    await p3.fill('#pick-scope', 'https://elsewhere.com/gear'); await p3.click('#pick-go'); await p3.waitForTimeout(200);
+    assert.ok(/not on trailcraft\.co/.test(await p3.$eval('#pick-error', e => e.textContent)), 'other domain rejected');
+    await p3.fill('#pick-scope', '/gear'); await p3.click('#pick-go');
+    await p3.waitForSelector('#setup:not([hidden]), #app:not([hidden])', { timeout: 15000 });
+    if (await p3.isVisible('#setup')) await p3.click('#setup-form button[type=submit]');
+    await p3.waitForSelector('#app:not([hidden])');
+    assert.ok(bodies.length && bodies.every(b => (b.dimensionFilterGroups || [])[0] && b.dimensionFilterGroups[0].filters.some(f => f.dimension === 'page' && f.operator === 'includingRegex')), 'every request carries the page filter');
+    assert.equal(await p3.$eval('#top-scope', e => e.textContent), 'Folder: /gear/');
+    await p3.evaluate(() => { location.hash = '#pages'; }); await p3.waitForTimeout(250);
+    const urls = await p3.$$eval('#view td.u', t => t.map(x => x.textContent));
+    assert.ok(urls.length && urls.every(u => u.startsWith('/gear/')), 'only pages in the folder: ' + urls.slice(0, 3).join(', '));
+    await ctx3.close();
+  });
+
+  await testAsync('Excel export with a Page filter shows which folder it covers', async () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Top queries', 'Clicks', 'Impressions', 'CTR', 'Position'], ['ats software', 40, 900, 0.044, 5.1], ['campus hiring', 25, 700, 0.036, 6.3]]), 'Queries');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Top pages', 'Clicks', 'Impressions', 'CTR', 'Position'], ['https://example.com/employers/ats', 40, 900, 0.044, 5.1], ['https://example.com/employers/campus', 25, 700, 0.036, 6.3]]), 'Pages');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Filter', 'Value'], ['Search type', 'Web'], ['Date', 'Last 3 months'], ['Page', '+https://example.com/employers']]), 'Filters');
+    const f = path.join(dir, 'example.com-employers.xlsx'); XLSX.writeFile(wb, f);
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', f); await toApp();
+    assert.equal(await text('#top-scope'), 'Page filter: +https://example.com/employers');
+  });
+
   await testAsync('landing and legal pages: no broken local links', async () => {
     for (const f of ['index.html', 'privacy.html', 'terms.html']) {
       await page.goto(base + f);

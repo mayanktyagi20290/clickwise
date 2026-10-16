@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -71,6 +71,8 @@
           <select id="pick-device"><option value="">All devices</option><option value="MOBILE">Mobile</option><option value="DESKTOP">Desktop</option><option value="TABLET">Tablet</option></select>
         </label>
       </div>
+      <label class="field"><span>Only a folder or page (optional)</span><input type="text" id="pick-scope" placeholder="e.g. /blog/ or https://example.com/pricing" autocomplete="off" spellcheck="false"></label>
+      <label class="check"><input type="checkbox" id="pick-exact"> Exactly this page, not everything under it</label>
       <label class="check"><input type="checkbox" id="pick-compare" checked> Compare with the previous period (needed for content decay)</label>
       <button class="btn-primary" type="submit" id="pick-go">Analyse property</button>
       <p class="progress" id="pick-progress" aria-live="polite"></p>
@@ -135,6 +137,7 @@
           <span class="top-site"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span id="top-site"></span></span>
           <span class="top-range"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span id="top-range"></span></span>
           <span class="tag" id="top-filters" hidden></span>
+          <span class="tag" id="top-scope" hidden></span>
           <span class="tag watch" id="top-sample" hidden title="Numbers are generated for a fictional site">Sample data</span>
           <span class="tag loading" id="top-loading" role="status" aria-live="polite" hidden></span>
         </div>
@@ -164,13 +167,13 @@
   </form>
 </dialog>
 
-<script src="config.js?v=10"></script>
-<script src="engine.js?v=10"></script>
-<script src="demo.js?v=10"></script>
-<script src="filters.js?v=10"></script>
-<script src="workflows.js?v=10"></script>
-<script src="views.js?v=10"></script>
-<script src="automation.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="config.js?v=11"></script>
+<script src="engine.js?v=11"></script>
+<script src="demo.js?v=11"></script>
+<script src="filters.js?v=11"></script>
+<script src="workflows.js?v=11"></script>
+<script src="views.js?v=11"></script>
+<script src="automation.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
