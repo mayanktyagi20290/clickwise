@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clickwise — Search Console intelligence</title>
+<meta name="description" content="Turn your Google Search Console data into a prioritised list of SEO, AEO and GEO actions. Quick wins, CTR fixes, cannibalisation, content decay and AI search signals.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<!-- ============ START SCREEN ============ -->
+<main id="start" class="start">
+  <div class="start-inner">
+    <div class="brandmark"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
+    <h1 class="start-h">Find the clicks your site is already close to winning.</h1>
+    <p class="start-p">Connect Search Console or drop in an export. Clickwise ranks every query and page by how many clicks it could add, and tells you what to fix first.</p>
+
+    <div class="start-grid">
+      <button class="source source-google" id="btn-connect" type="button">
+        <svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45 24.5c0-1.6-.1-2.8-.4-4.1H24v7.7h11.8c-.5 2.9-2.2 5.3-4.7 6.9l7.2 5.6C42.5 36.7 45 31.1 45 24.5z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.3-5.4l-7.2-5.6c-1.9 1.3-4.4 2.2-7.1 2.2-5.5 0-10.1-3.7-11.8-8.7l-7.4 5.7C8.1 41.3 15.4 46 24 46z"/><path fill="#FBBC05" d="M12.2 28.5c-.4-1.3-.7-2.7-.7-4.5s.3-3.2.7-4.5l-7.4-5.7C3.3 16.8 2.5 20.3 2.5 24s.8 7.2 2.3 10.2l7.4-5.7z"/><path fill="#EA4335" d="M24 10.8c3.1 0 5.9 1.1 8.1 3.1l6.1-6.1C34.9 4.8 29.9 2.5 24 2.5 15.4 2.5 8.1 7.2 4.8 13.8l7.4 5.7c1.7-5 6.3-8.7 11.8-8.7z"/></svg>
+        <span><strong>Connect Search Console</strong><small>Read-only access. Pulls queries, pages, dates and devices.</small></span>
+      </button>
+
+      <label class="source source-file" id="dropzone">
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+        <span><strong>Upload an export</strong><small>The .xlsx from Search Console › Performance › Export.</small></span>
+      </label>
+
+      <button class="source source-demo" id="btn-demo" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
+        <span><strong>Try it with sample data</strong><small>A fictional outdoor-gear site, 90 days of traffic.</small></span>
+      </button>
+    </div>
+    <p class="start-error" id="start-error" role="alert" hidden></p>
+    <p class="start-foot">Your data stays in this browser. Nothing is uploaded to our servers.</p>
+  </div>
+</main>
+
+<!-- ============ PROPERTY PICKER ============ -->
+<main id="picker" class="start" hidden>
+  <div class="start-inner narrow">
+    <div class="brandmark"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
+    <h1 class="start-h small">Choose a property</h1>
+    <form id="picker-form" class="form">
+      <label class="field"><span>Property</span>
+        <select id="pick-site" required><option>Loading your properties…</option></select>
+      </label>
+      <div class="field-row">
+        <label class="field"><span>From</span><input type="date" id="pick-start" required></label>
+        <label class="field"><span>To</span><input type="date" id="pick-end" required></label>
+      </div>
+      <div class="presets" id="presets">
+        <button type="button" data-days="28">Last 28 days</button>
+        <button type="button" data-days="90" class="on">Last 3 months</button>
+        <button type="button" data-days="180">Last 6 months</button>
+      </div>
+      <label class="check"><input type="checkbox" id="pick-compare" checked> Compare with the previous period (needed for content decay)</label>
+      <button class="btn-primary" type="submit" id="pick-go">Analyse property</button>
+      <p class="progress" id="pick-progress" aria-live="polite"></p>
+      <p class="start-error" id="pick-error" role="alert" hidden></p>
+      <button class="btn-link" type="button" id="pick-back">Back</button>
+    </form>
+  </div>
+</main>
+
+<!-- ============ SETUP (brand terms) ============ -->
+<main id="setup" class="start" hidden>
+  <div class="start-inner narrow">
+    <div class="brandmark"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
+    <h1 class="start-h small">Which searches mention your brand?</h1>
+    <p class="start-p">Branded searches inflate CTR and hide real SEO performance, so Clickwise reports them separately. We guessed these from your domain and top queries. Add misspellings and old names.</p>
+    <form id="setup-form" class="form">
+      <label class="field"><span>Brand terms, separated by commas</span>
+        <textarea id="brand-terms" rows="3"></textarea>
+      </label>
+      <div class="suggest" id="brand-suggest"></div>
+      <button class="btn-primary" type="submit">Build my dashboard</button>
+    </form>
+  </div>
+</main>
+
+<!-- ============ APP ============ -->
+<div id="app" class="app" hidden>
+  <aside class="nav" id="nav">
+    <div class="brandmark sm"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
+    <nav aria-label="Sections">
+      <p class="nav-group">Start here</p>
+      <a href="#overview" data-view="overview">Overview</a>
+      <a href="#plan" data-view="plan">Action plan</a>
+      <p class="nav-group">Win more clicks</p>
+      <a href="#quickwins" data-view="quickwins">Almost page one</a>
+      <a href="#ctr" data-view="ctr">Titles to rewrite</a>
+      <a href="#cannibal" data-view="cannibal">Competing pages</a>
+      <a href="#decay" data-view="decay">Losing ground</a>
+      <p class="nav-group">AI search</p>
+      <a href="#ai" data-view="ai">AEO &amp; GEO signals</a>
+      <p class="nav-group">Explore</p>
+      <a href="#queries" data-view="queries">Queries</a>
+      <a href="#pages" data-view="pages">Pages</a>
+      <a href="#sections" data-view="sections">Site sections</a>
+      <a href="#intent" data-view="intent">Search intent</a>
+      <a href="#regex" data-view="regex">Regex library</a>
+    </nav>
+    <div class="nav-foot">
+      <button type="button" class="btn-quiet" id="btn-settings">Brand terms</button>
+      <button type="button" class="btn-quiet" id="btn-new">New analysis</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <button type="button" class="menu-btn" id="menu-btn" aria-label="Open menu" aria-controls="nav" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="top-meta">
+        <span class="top-site" id="top-site"></span>
+        <span class="top-range" id="top-range"></span>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="btn-quiet" id="btn-print">Print report</button>
+      </div>
+    </header>
+    <div class="view" id="view" tabindex="-1"></div>
+  </div>
+</div>
+
+<dialog id="settings" class="dialog">
+  <form method="dialog" id="settings-form">
+    <h2>Brand terms</h2>
+    <p>Queries containing any of these count as branded. Pages matching the login or account patterns are excluded from page analysis.</p>
+    <label class="field"><span>Brand terms</span><textarea id="set-brand" rows="3"></textarea></label>
+    <label class="field"><span>Pages to exclude (URL contains)</span><input id="set-exclude" type="text"></label>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn-quiet">Cancel</button>
+      <button value="save" class="btn-primary sm">Save and recalculate</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="config.js"></script>
+<script src="engine.js"></script>
+<script src="demo.js"></script>
+<script src="views.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
