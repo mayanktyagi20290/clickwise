@@ -14,7 +14,7 @@ window.CW_CONFIG = {
   maxRows: 100000,
 
   // Rows pulled for the query × page report used by cannibalisation.
-  maxQueryPageRows: 50000,
+  maxQueryPageRows: 25000,
 
   // Default URL fragments treated as non-SEO pages (login, account, cart…).
   defaultExcludes: ['/login', '/signin', '/sign-in', '/signup', '/register', '/account', '/cart', '/checkout', '/auth/'],

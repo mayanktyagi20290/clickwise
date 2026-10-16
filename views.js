@@ -403,7 +403,7 @@
     return { html, mount: () => { drawTable('t-ctrp'); drawTable('t-ctrq'); if (A.setAside.length) drawTable('t-ctrx'); } };
   };
 
-  V.cannibal = (A) => {
+  V.cannibal = (A, D) => {
     const exact = A.cannibalMode === 'exact';
     const rows = A.cannibal;
     const sevTag = s => `<span class="tag ${s === 'high' ? 'risk' : s === 'medium' ? 'watch' : ''}">${s === 'high' ? 'High' : s === 'medium' ? 'Medium' : 'Low'}</span>`;
@@ -417,7 +417,8 @@
     const html = head('Competing pages', exact
       ? 'Searches where two or more of your own URLs each take at least 10% of impressions. These are candidates to investigate, not confirmed problems.'
       : 'Groups of similar searches with very different positions. This is a likely sign of competing pages; connect Search Console for exact page-level matches.') +
-      (exact ? '' : '<div class="note"><b>Estimated mode.</b> File exports do not include which page ranks for which query. Connecting Search Console unlocks exact competing-page detection.</div>') +
+      (!exact && D.pending && D.pending.qp ? '<div class="note">Loading which query lands on which page from Search Console. Exact results replace this estimate by themselves in a moment.</div>' : '') +
+      (exact || (D.pending && D.pending.qp) ? '' : '<div class="note"><b>Estimated mode.</b> File exports do not include which page ranks for which query. Connecting Search Console unlocks exact competing-page detection.</div>') +
       `<div class="strip">${stat(rows.filter(r => r.sev === 'high').length, 'high severity', 'risk')}${stat(rows.filter(r => r.sev === 'medium').length, 'medium severity', 'watch')}${stat('up to ' + fmtN(rows.reduce((s, r) => s + r.loss, 0)), 'clicks a month at stake (if one page ranked as well as the best)', 'risk')}</div>
       <section class="panel">${table('t-can', cols, rows, { sort: 'sevN', file: 'competing-pages', pageSize: 25, sub, empty: 'No competing pages found.' })}</section>
       <div class="note"><b>Fixing it.</b> Choose the page that best matches the intent. Then merge the weaker page into it with a 301, or rewrite the weaker page to target a different angle, and update internal links to point to the winner.</div>`;
@@ -426,6 +427,7 @@
 
   V.decay = (A, D) => {
     const dc = A.decay;
+    if (!dc && D.pending && D.pending.prev) return { html: head('Losing ground', 'Pages and queries that lost clicks compared with the previous period.') + '<div class="note">Loading the previous period from Search Console. This screen fills in by itself in a moment.</div>' };
     if (!dc) {
       const t = A.trend;
       return { html: head('Losing ground', 'Pages and queries that lost clicks compared with the previous period.') +

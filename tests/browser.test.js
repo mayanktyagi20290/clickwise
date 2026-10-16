@@ -236,6 +236,71 @@ function writeComparisonExports(dir) {
     assert.ok(/Date › Compare/.test(await text('#view')) && /both files together/.test(await text('#view')), 'how to get a comparison from Excel');
   });
 
+  await testAsync('Search Console: dashboard opens fast; slow data fills in by itself; busy errors are retried', async () => {
+    // A fake Search Console API built from the sample site: query-page pairs are slow (4 s) and the
+    // first devices request answers 429 (busy), as large properties and quotas do.
+    const { load } = require('./lib/harness');
+    const S = load(['engine.js', 'demo.js']).CW_DEMO.build();
+    const cutoff = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+    let busy = 1;
+    const rowsFor = (dims, prev) => {
+      const k = dims.join(',');
+      const m = (list, keys) => (list || []).map(r => ({ keys: keys(r), clicks: r.clicks, impressions: r.impr, ctr: r.ctr / 100, position: r.pos }));
+      if (k === 'query') return m(prev ? S.prevQ : S.Q, r => [r.q]);
+      if (k === 'page') return m(prev ? S.prevP : S.P, r => [r.p]);
+      if (k === 'date') return m(S.C, r => [r.d]);
+      if (k === 'device') return m(S.Dev, r => [r.d]);
+      if (k === 'query,page') return m(S.QP, r => [r.q, r.p]);
+      return [];
+    };
+    const ctx2 = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    await ctx2.route('**/*', async r => {
+      const u = r.request().url();
+      const lib = Object.keys(LOCAL).find(k => u.includes('cdnjs') && u.endsWith(k));
+      if (lib) return r.fulfill({ path: LOCAL[lib], contentType: 'text/javascript' });
+      if (u.startsWith(base)) return r.continue();
+      if (u.includes('searchconsole.googleapis.com')) {
+        if (u.endsWith('/sites')) return r.fulfill({ json: { siteEntry: [{ siteUrl: 'sc-domain:trailcraft.co', permissionLevel: 'siteOwner' }] } });
+        const body = JSON.parse(r.request().postData() || '{}');
+        if (body.dimensions.join(',') === 'device' && busy-- > 0) return r.fulfill({ status: 429, headers: { 'Retry-After': '1' }, json: { error: { message: 'busy' } } });
+        if (body.dimensions.join(',') === 'query,page') await new Promise(res => setTimeout(res, 4000));
+        const all = rowsFor(body.dimensions, body.startDate < cutoff);
+        return r.fulfill({ json: { rows: all.slice(body.startRow || 0, (body.startRow || 0) + body.rowLimit) } });
+      }
+      return r.fulfill({ status: 204, body: '' });
+    });
+    const p2 = await ctx2.newPage();
+    const errs = []; p2.on('pageerror', e => errs.push(e.message));
+    // stand-in for Google's sign-in library: hands back a token straight away
+    await p2.addInitScript(() => { window.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => setTimeout(() => c.callback({ access_token: 'test', expires_in: 3600 }), 10) }), revoke: () => { } } } }; });
+    const t2 = s => p2.$eval(s, e => e.textContent.replace(/\s+/g, ' ').trim()).catch(() => '');
+    const go2 = async h => { await p2.evaluate(h => { location.hash = h; }, h); await p2.waitForTimeout(250); };
+    await p2.goto(base + 'app.html');
+    await p2.click('#btn-connect');
+    await p2.waitForSelector('#picker:not([hidden])');
+    await p2.waitForFunction(() => document.querySelector('#pick-site').value.includes('trailcraft'));
+    const t0 = Date.now();
+    await p2.click('#pick-go');
+    await p2.waitForSelector('#setup:not([hidden]), #app:not([hidden])', { timeout: 15000 });
+    const firstPaint = Date.now() - t0;
+    if (await p2.isVisible('#setup')) await p2.click('#setup-form button[type=submit]');
+    await p2.waitForSelector('#app:not([hidden])');
+    assert.ok(firstPaint < 3500, `dashboard waited ${firstPaint} ms (query-page pairs take 4 s)`);
+    assert.ok(/Loading/.test(await t2('#top-loading')), 'background status shown: ' + await t2('#top-loading'));
+    await go2('#cannibal');
+    assert.ok(/Loading which query lands on which page/.test(await t2('#view')), 'Competing pages says it is loading');
+    await p2.waitForFunction(() => /All data loaded|^$/.test(document.getElementById('top-loading').textContent), null, { timeout: 20000 });
+    await go2('#cannibal');
+    assert.ok(/at least 10% of impressions/.test(await t2('#view .v-head p')), 'exact competing pages after loading');
+    assert.ok((await p2.$$('#t-can tbody tr')).length > 0, 'competing pages listed');
+    await go2('#decay');
+    assert.ok((await p2.$$('#t-dp tbody tr')).length > 0, 'Losing ground filled from the previous period');
+    await go2('#overview');
+    assert.ok(await p2.$('.tiles .tile .tile-d'), 'site tiles compare with the previous period');
+    assert.equal(errs.length, 0, 'JS errors: ' + errs.join(' | '));
+    await ctx2.close();
+  });
+
   await testAsync('landing and legal pages: no broken local links', async () => {
     for (const f of ['index.html', 'privacy.html', 'terms.html']) {
       await page.goto(base + f);

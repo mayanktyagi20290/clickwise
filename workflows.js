@@ -18,7 +18,9 @@
     return k === 'queries' ? A.Q.length > 0 : k === 'pages' ? A.P.length > 0 : k === 'prev' ? !!(D.prevQ && D.prevQ.length || D.prevP && D.prevP.length)
       : k === 'qp' ? !!(D.QP && D.QP.length) : k === 'dates' ? !!(D.C && D.C.length) : false;
   }
-  function missing(w, A) { return (w.needs || []).filter(k => !hasData(k, A)).map(k => ({ key: k, ...DATA[k] })); }
+  const LOADING = { prev: 'prev', qp: 'qp' };
+  const isLoading = (k, A) => !!(A.data && A.data.pending && LOADING[k] && A.data.pending[LOADING[k]]);
+  function missing(w, A) { return (w.needs || []).filter(k => !hasData(k, A)).map(k => isLoading(k, A) ? { key: k, ...DATA[k], how: 'Still loading from Search Console — this fills in by itself in a moment.' } : { key: k, ...DATA[k] }); }
   function weaker(w, A) { return (w.better || []).filter(k => !hasData(k, A)).map(k => ({ key: k, ...DATA[k] })); }
 
   const TEMPLATES = [

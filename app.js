@@ -188,10 +188,12 @@
     return data;
   }
   let FILTER = { type: 'web', device: '' };
-  async function pull(site, start, end, dims, max, label) {
+  // Pages through the API 25,000 rows at a time. `from` skips rows already fetched; quiet pulls
+  // run in the background and do not write to the picker's progress line.
+  async function pull(site, start, end, dims, max, label, from = 0, quiet = false) {
     const out = [];
-    for (let startRow = 0; startRow < max; startRow += 25000) {
-      progress(`Fetching ${label}… ${out.length.toLocaleString()} rows`);
+    for (let startRow = from; startRow < max; startRow += 25000) {
+      if (!quiet) progress(`Fetching ${label}… ${out.length.toLocaleString()} rows`);
       const body = { startDate: start, endDate: end, dimensions: dims, type: FILTER.type, rowLimit: Math.min(25000, max - startRow), startRow };
       if (FILTER.device && !dims.includes('device')) body.dimensionFilterGroups = [{ filters: [{ dimension: 'device', operator: 'equals', expression: FILTER.device }] }];
       const d = await api(`sites/${encodeURIComponent(site)}/searchAnalytics/query`, body);
@@ -232,34 +234,60 @@
     FILTER = { type: $('pick-type').value, device: $('pick-device').value };
     if (!site || !start || !end || start > end) { $('pick-error').textContent = 'Choose a property and a valid date range.'; $('pick-error').hidden = false; return; }
     $('pick-error').hidden = true; $('pick-go').disabled = true;
+    const id = ++LOAD, t0 = Date.now();
+    const tick = setInterval(() => progress(`Fetching queries, pages and daily totals… ${Math.round((Date.now() - t0) / 1000)} s`), 1000);
     try {
       const days = Math.round((new Date(end) - new Date(start)) / 864e5) + 1;
       const pe = new Date(start); pe.setDate(pe.getDate() - 1);
       const ps = new Date(pe); ps.setDate(pe.getDate() - days + 1);
-      const [q, p, c, dev, qp] = [
-        await pull(site, start, end, ['query'], CFG.maxRows, 'queries'),
-        await pull(site, start, end, ['page'], CFG.maxRows, 'pages'),
-        await pull(site, start, end, ['date'], 1000, 'daily totals'),
-        await pull(site, start, end, ['device'], 10, 'devices'),
-        await pull(site, start, end, ['query', 'page'], CFG.maxQueryPageRows, 'query and page pairs')
-      ];
-      let prevQ = null, prevP = null, prevC = null;
-      if (compare) {
-        prevC = (await pull(site, iso(ps), iso(pe), ['date'], 1000, 'previous-period daily totals')).map(r => mapRow(r, ['d']));
-        prevQ = (await pull(site, iso(ps), iso(pe), ['query'], CFG.maxRows, 'previous-period queries')).map(r => mapRow(r, ['q']));
-        prevP = (await pull(site, iso(ps), iso(pe), ['page'], CFG.maxRows, 'previous-period pages')).map(r => mapRow(r, ['p']));
-      }
+      // Step 1, in parallel: enough to show the dashboard (first 25,000 queries and pages, dates, devices).
+      const FIRST = 25000;
+      const [q, p, c, dev] = await Promise.all([
+        pull(site, start, end, ['query'], Math.min(FIRST, CFG.maxRows), 'queries', 0, true),
+        pull(site, start, end, ['page'], Math.min(FIRST, CFG.maxRows), 'pages', 0, true),
+        pull(site, start, end, ['date'], 1000, 'daily totals', 0, true),
+        pull(site, start, end, ['device'], 10, 'devices', 0, true)
+      ]);
       if (!q.length && !p.length) throw new Error('Search Console has no data for this property in that range.');
-      progress('Analysing…');
-      loaded({
+      clearInterval(tick); progress('Analysing…');
+      const more = { q: q.length === FIRST && CFG.maxRows > FIRST, p: p.length === FIRST && CFG.maxRows > FIRST };
+      const data = {
         site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER },
         prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
-        Dev: dev.map(r => mapRow(r, ['d'])), QP: qp.map(r => mapRow(r, ['q', 'p'])), prevQ, prevP, prevC
-      });
+        Dev: dev.map(r => mapRow(r, ['d'])), QP: null, prevQ: null, prevP: null, prevC: null,
+        pending: { qp: true, prev: compare, more: more.q || more.p }
+      };
+      loaded(data);
+      // Step 2, in the background: query-page pairs, the comparison period and any rows beyond 25,000.
+      background(id, data, { site, start, end, ps: iso(ps), pe: iso(pe), compare, more, FIRST });
     } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; progress(''); }
-    finally { $('pick-go').disabled = false; }
+    finally { clearInterval(tick); $('pick-go').disabled = false; }
   });
+
+  let LOAD = 0;
+  function status(t) { const el = $('top-loading'); el.textContent = t; el.hidden = !t; }
+  async function background(id, data, o) {
+    const left = new Set();
+    const job = (name, p, apply) => { left.add(name); return p.then(rows => { if (id !== LOAD) return; apply(rows); left.delete(name); refresh(); }, err => { if (id !== LOAD) return; left.delete(name); data.failed = (data.failed || []).concat(name + ': ' + err.message); refresh(); }); };
+    const label = () => left.size ? `Loading ${[...left].join(', ')}…` : '';
+    const refresh = () => {
+      data.pending = { qp: left.has('query-page pairs'), prev: left.has('previous period'), more: left.has('more rows') };
+      status(label() || (data.failed ? 'Some extra data could not load' : ''));
+      if (A && D === data) { const y = window.scrollY; A = analyse(); counts(); route(); window.scrollTo(0, y); }
+    };
+    const jobs = [job('query-page pairs', pull(o.site, o.start, o.end, ['query', 'page'], CFG.maxQueryPageRows, '', 0, true), rows => { data.QP = rows.map(r => mapRow(r, ['q', 'p'])); })];
+    if (o.compare) jobs.push(job('previous period', Promise.all([
+      pull(o.site, o.ps, o.pe, ['date'], 1000, '', 0, true), pull(o.site, o.ps, o.pe, ['query'], CFG.maxRows, '', 0, true), pull(o.site, o.ps, o.pe, ['page'], CFG.maxRows, '', 0, true)
+    ]), ([c, q, p]) => { data.prevC = c.map(r => mapRow(r, ['d'])); data.prevQ = q.map(r => mapRow(r, ['q'])); data.prevP = p.map(r => mapRow(r, ['p'])); }));
+    if (o.more.q || o.more.p) jobs.push(job('more rows', Promise.all([
+      o.more.q ? pull(o.site, o.start, o.end, ['query'], CFG.maxRows, '', o.FIRST, true) : [], o.more.p ? pull(o.site, o.start, o.end, ['page'], CFG.maxRows, '', o.FIRST, true) : []
+    ]), ([q, p]) => { data.Q = data.Q.concat(q.map(r => mapRow(r, ['q']))); data.P = data.P.concat(p.map(r => mapRow(r, ['p']))); }));
+    status(label());
+    await Promise.all(jobs);
+    if (id === LOAD && !data.failed) { status('All data loaded'); setTimeout(() => { if (id === LOAD && $('top-loading').textContent === 'All data loaded') status(''); }, 4000); }
+    else if (id === LOAD) status('Some extra data could not load: ' + data.failed.join('; '));
+  }
 
   // ── after data is loaded ──
   function loaded(data) {
@@ -345,7 +373,7 @@
   // Print the one-page opportunity report (the browser can save it as PDF).
   $('btn-print').addEventListener('click', () => { if (location.hash !== '#wf=report') { location.hash = '#wf=report'; setTimeout(() => window.print(), 400); } else window.print(); });
   function revoke() { try { if (token && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(token, () => { }); } catch (e) { } token = null; tokenExpires = 0; }
-  function reset() { A = null; D = null; revoke(); history.replaceState(null, '', location.pathname); fi.value = ''; $('start-info').hidden = true; show('start'); }
+  function reset() { LOAD++; status(''); A = null; D = null; revoke(); history.replaceState(null, '', location.pathname); fi.value = ''; $('start-info').hidden = true; show('start'); }
   $('btn-new').addEventListener('click', reset);
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
