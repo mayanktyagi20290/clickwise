@@ -189,18 +189,41 @@
   // Non-brand subset and how much of the site the query and page rows cover.
   function subsetStrip(A, D) {
     const nb = A.totNB, p = A.prev, cov = A.coverage;
-    const rows = cov ? (cov.rowLimit ? `top ${cov.rowsQ.toLocaleString()} queries` : `${cov.rowsQ.toLocaleString()} queries`) : `${A.Q.length.toLocaleString()} queries`;
-    const d = (c, pr, inv, unit) => { const t = tileDelta(c, pr, inv, unit); return t ? `<small>${t.replace(/<[^>]+>/g, '')}</small>` : ''; };
-    const covLine = !cov ? '' : `<p class="cov">${cov.rowLimit ? `<b>This export lists only the top ${cov.rowsQ.toLocaleString()} queries and ${cov.rowsP.toLocaleString()} pages.</b> ` : ''}Query rows cover <b>${cov.q.clicks.toFixed(1)}%</b> of clicks and <b>${cov.q.impr.toFixed(1)}%</b> of impressions; page rows cover <b>${cov.p.clicks.toFixed(1)}%</b> of clicks and <b>${cov.p.impr.toFixed(1)}%</b> of impressions. ${cov.notShown.clicks > 0 ? `<b>${fmtN(cov.notShown.clicks)} clicks (${cov.notShown.share.toFixed(1)}%)</b> ${cov.source === 'file' ? 'are not represented in this export: searches beyond its row limit plus queries Google keeps private.' : 'have no reported query: Google withholds rare queries for privacy, and row limits may apply.'}` : ''}</p>`;
+    const rows = cov && cov.rowLimit ? `top ${cov.rowsQ.toLocaleString()} queries` : `${(cov ? cov.rowsQ : A.Q.length).toLocaleString()} queries`;
+    // change vs previous period as a coloured pill; for position, lower is better
+    const chg = (c, pr, inv, unit) => {
+      if (pr == null || !isFinite(pr) || pr === 0) return '';
+      const d = unit === 'pt' ? c - pr : (c - pr) / pr * 100;
+      if (Math.abs(d) < 0.05) return '<span class="chg flat">no change</span>';
+      const good = inv ? d < 0 : d > 0;
+      return `<span class="chg ${good ? 'good' : 'bad'}" title="${good ? 'Better' : 'Worse'} than the previous period">${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'}</span>`;
+    };
+    const kpi = (icon, tone, label, value, change, hint) => `<div class="kpi2 k-${tone}"><div class="kpi2-top"><span class="kpi2-ico">${svg(icon)}</span><span>${label}</span></div><b>${value}</b>${change}${hint ? `<small>${hint}</small>` : ''}</div>`;
+    const brandPct = A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0;
+    const bar = (label, v, tone) => v == null ? '' : `<div class="cbar"><span class="cbar-l">${label}</span><span class="cbar-t"><span class="cbar-f ${tone}" style="width:${Math.min(100, v).toFixed(1)}%"></span></span><b>${v.toFixed(1)}%</b></div>`;
     return `<section class="panel subset">
-      <div class="panel-h"><h2>Non-branded searches</h2><p>Figures below come from the ${esc(rows)}, with branded searches removed. Opportunity estimates use this subset.</p></div>
-      <div class="panel-b"><div class="kv">
-        <div><span>Clicks</span><b>${fmtN(nb.clicks)}</b>${d(nb.clicks, p && p.nb.clicks)}</div>
-        <div><span>Impressions</span><b>${fmtN(nb.impr)}</b>${d(nb.impr, p && p.nb.impr)}</div>
-        <div><span>CTR</span><b>${pctf(nb.ctr, 2)}</b>${d(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
-        <div><span>Position</span><b>${nb.pos.toFixed(1)}</b>${d(nb.pos, p && p.nb.pos, true)}</div>
-        <div><span>Branded share of query clicks</span><b>${A.totAll.clicks ? (A.totB.clicks / A.totAll.clicks * 100).toFixed(0) : 0}%</b></div>
-      </div>${covLine}</div>
+      <div class="subset-h">
+        <div><h2>Non-branded searches</h2><p>What SEO earns on its own. From the ${esc(rows)}, branded searches removed; every estimate uses this subset.</p></div>
+        <span class="pill indigo">${A.NBQ.length.toLocaleString()} searches</span>
+      </div>
+      <div class="kpi2s">
+        ${kpi('clicks', 'blue', 'Clicks', fmtN(nb.clicks), chg(nb.clicks, p && p.nb.clicks))}
+        ${kpi('eye', 'green', 'Impressions', fmtN(nb.impr), chg(nb.impr, p && p.nb.impr))}
+        ${kpi('pulse', 'amber', 'CTR', pctf(nb.ctr, 2), chg(nb.ctr, p && p.nb.ctr, false, 'pt'))}
+        ${kpi('target', 'red', 'Avg. position', nb.pos.toFixed(1), chg(nb.pos, p && p.nb.pos, true), nb.pos <= 10 ? 'page one' : nb.pos <= 20 ? 'page two' : 'beyond page two')}
+        <div class="kpi2 k-violet brandmix"><div class="kpi2-top"><span class="kpi2-ico">${svg('star')}</span><span>Query clicks by type</span></div>
+          <div class="mix" role="img" aria-label="${brandPct.toFixed(0)}% branded, ${(100 - brandPct).toFixed(0)}% non-branded"><span class="mix-b" style="width:${brandPct.toFixed(1)}%"></span><span class="mix-n" style="width:${(100 - brandPct).toFixed(1)}%"></span></div>
+          <div class="mix-l"><span><i class="mix-b"></i>Branded <b>${brandPct.toFixed(0)}%</b></span><span><i class="mix-n"></i>Non-branded <b>${(100 - brandPct).toFixed(0)}%</b></span></div>
+        </div>
+      </div>
+      ${cov ? `<div class="coverage">
+        <div class="cov-h"><h3>How much of the site this data covers</h3>${cov.rowLimit ? `<span class="pill amber">Export lists top ${cov.rowsQ.toLocaleString()} only</span>` : ''}</div>
+        <div class="cov-grid">
+          <div><p class="cov-k">Query rows</p>${bar('Clicks', cov.q.clicks, 'blue')}${bar('Impressions', cov.q.impr, 'green')}</div>
+          <div><p class="cov-k">Page rows</p>${bar('Clicks', cov.p.clicks, 'blue')}${bar('Impressions', cov.p.impr, 'green')}</div>
+        </div>
+        ${cov.notShown.clicks > 0 ? `<p class="cov-note">${svg('alert')}<span><b>${fmtN(cov.notShown.clicks)} clicks (${cov.notShown.share.toFixed(1)}%)</b> ${cov.source === 'file' ? 'are not represented in this export: searches beyond its row limit plus queries Google keeps private.' : 'have no reported query: Google withholds rare queries for privacy, and row limits may apply.'}</span></p>` : ''}
+      </div>` : ''}
     </section>`;
   }
   function signalBox(cls, icon, title, items, empty) {

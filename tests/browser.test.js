@@ -128,7 +128,7 @@ function writeComparisonExports(dir) {
     await go('#overview');
     const tiles = await page.$$eval('.tiles .tile', t => t.map(x => x.textContent.replace(/\s+/g, ' ')));
     assert.ok(/102\.4M\s*Impressions/.test(tiles[1]), 'site impressions tile: ' + tiles[1]);
-    const cov = await text('.cov');
+    const cov = await text('.coverage');
     assert.ok(/62\.5%/.test(cov) && /10\.7%/.test(cov), 'coverage line: ' + cov);
     assert.ok(/not represented in this export/.test(cov), 'export wording');
     assert.ok(!/anonymous/i.test(await text('#view')), 'no "anonymous" claim for uploads');
@@ -163,7 +163,7 @@ function writeComparisonExports(dir) {
   if (files.xlsx) await testAsync('CSV files selected together load like the Excel download', async () => {
     await page.click('#btn-new'); await page.setInputFiles('#file-input', files.csvs); await toApp();
     await go('#overview');
-    assert.ok(/62\.5%/.test(await text('.cov')), 'coverage from CSVs');
+    assert.ok(/62\.5%/.test(await text('.coverage')), 'coverage from CSVs');
   });
 
   await testAsync('upload validation messages', async () => {
@@ -198,7 +198,7 @@ function writeComparisonExports(dir) {
   const checkComparison = async (label) => {
     await go('#overview');
     assert.ok(await page.$('.tiles .tile .tile-d'), label + ': site tiles show change vs previous');
-    assert.ok(/vs previous/.test(await text('.subset')), label + ': non-brand panel shows change');
+    assert.ok(await page.$('.subset .chg.good, .subset .chg.bad'), label + ': non-brand panel shows change');
     await go('#decay');
     assert.ok(!/Needs a comparison period/.test(await text('#view')), label + ': Losing ground has data');
     const stat = await text('#view .strip .stat');
