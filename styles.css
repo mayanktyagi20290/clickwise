@@ -612,3 +612,9 @@ td a.btn-quiet{text-decoration:none;color:var(--ink);display:inline-block}
 .tag.loading:not(:empty)::before{content:"";display:inline-block;width:9px;height:9px;margin-right:6px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:cwspin .8s linear infinite;vertical-align:-1px}
 @keyframes cwspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.tag.loading::before{animation:none}}
+
+.scope-tag{cursor:pointer;font:inherit;font-size:12px}
+.scope-tag:disabled{cursor:default}
+.scope-tag .scope-edit{margin-left:6px;color:var(--signal-ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.scope-tag:not(:disabled):hover{border-color:var(--signal)}
+.dialog code{font-size:12.5px;background:var(--sunk);padding:1px 5px;border-radius:5px}

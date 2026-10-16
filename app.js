@@ -235,7 +235,7 @@
     return out;
   }
   const mapRow = (r, keys) => { const o = { clicks: r.clicks, impr: r.impressions, ctr: r.ctr * 100, pos: r.position }; keys.forEach((k, i) => o[k] = r.keys[i]); return o; };
-  function progress(t) { $('pick-progress').textContent = t; }
+  function progress(t) { $('pick-progress').textContent = t; $('scope-progress').textContent = t; }
 
   const iso = d => d.toISOString().slice(0, 10);
   function setRange(days) {
@@ -259,16 +259,19 @@
     } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; }
   }
 
-  $('picker-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const site = $('pick-site').value, start = $('pick-start').value, end = $('pick-end').value, compare = $('pick-compare').checked;
-    FILTER = { type: $('pick-type').value, device: $('pick-device').value };
+  // Runs an analysis from Search Console. Used by the property screen and by the scope switcher
+  // in the top bar, which re-runs the same property and dates for another folder or page.
+  let LAST = null;
+  async function analyseProperty(o, ui) {
+    const { site, start, end, compare } = o;
+    FILTER = { type: o.type, device: o.device };
     // Optional scope: a folder ("/blog/") or one page, sent to Google as a page filter.
-    const sc = scopeOf($('pick-scope').value, site, $('pick-exact').checked);
-    if (sc.error) { $('pick-error').textContent = sc.error; $('pick-error').hidden = false; return; }
+    const sc = scopeOf(o.scopeInput, site, o.exact);
+    if (sc.error) { ui.error.textContent = sc.error; ui.error.hidden = false; return; }
     FILTER.page = sc.regex; FILTER.scope = sc.label;
-    if (!site || !start || !end || start > end) { $('pick-error').textContent = 'Choose a property and a valid date range.'; $('pick-error').hidden = false; return; }
-    $('pick-error').hidden = true; $('pick-go').disabled = true;
+    if (!site || !start || !end || start > end) { ui.error.textContent = 'Choose a property and a valid date range.'; ui.error.hidden = false; return; }
+    ui.error.hidden = true; ui.go.disabled = true;
+    LAST = { ...o };
     const id = ++LOAD, t0 = Date.now();
     const tick = setInterval(() => progress(`Fetching queries, pages and daily totals… ${Math.round((Date.now() - t0) / 1000)} s`), 1000);
     try {
@@ -296,8 +299,28 @@
       loaded(data);
       // Step 2, in the background: query-page pairs, the comparison period and any rows beyond 25,000.
       background(id, data, { site, start, end, ps: iso(ps), pe: iso(pe), compare, more, FIRST });
-    } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; progress(''); }
-    finally { clearInterval(tick); $('pick-go').disabled = false; }
+    } catch (err) { ui.error.textContent = err.message; ui.error.hidden = false; progress(''); }
+    finally { clearInterval(tick); ui.go.disabled = false; }
+  }
+  $('picker-form').addEventListener('submit', e => {
+    e.preventDefault();
+    analyseProperty({ site: $('pick-site').value, start: $('pick-start').value, end: $('pick-end').value, compare: $('pick-compare').checked,
+      type: $('pick-type').value, device: $('pick-device').value, scopeInput: $('pick-scope').value, exact: $('pick-exact').checked }, { error: $('pick-error'), go: $('pick-go') });
+  });
+
+  // ── scope switcher in the top bar ──
+  $('top-scope').addEventListener('click', () => {
+    if (!D || D.source !== 'api' || !LAST) return;
+    $('scope-in').value = LAST.scopeInput || ''; $('scope-exact').checked = !!LAST.exact;
+    $('scope-error').hidden = true; $('scope-progress').textContent = '';
+    $('scope-dialog').showModal(); $('scope-in').focus();
+  });
+  $('scope-whole').addEventListener('click', () => { $('scope-in').value = ''; $('scope-exact').checked = false; });
+  $('scope-cancel').addEventListener('click', () => $('scope-dialog').close());
+  $('scope-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    await analyseProperty({ ...LAST, scopeInput: $('scope-in').value, exact: $('scope-exact').checked }, { error: $('scope-error'), go: $('scope-go') });
+    if (D && LAST && D.scope === (FILTER.scope || null) && $('scope-error').hidden) $('scope-dialog').close();
   });
 
   let LOAD = 0;
@@ -357,7 +380,11 @@
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
     $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
     $('top-sample').hidden = D.source !== 'demo';
-    $('top-scope').textContent = D.scope || ''; $('top-scope').hidden = !D.scope;
+    // API analyses can switch folder from the top bar; uploads only show the scope they came with
+    const canSwitch = D.source === 'api';
+    $('top-scope').innerHTML = esc(D.scope || (canSwitch ? 'All pages' : '')) + (canSwitch ? ' <span class="scope-edit">Change</span>' : '');
+    $('top-scope').hidden = !D.scope && !canSwitch; $('top-scope').disabled = !canSwitch;
+    $('top-scope').title = canSwitch ? 'Analyse another folder or page' : 'Set by the Page filter in the export';
     counts();
     show('app');
     if (!knownRoute(location.hash.slice(1))) history.replaceState(null, '', '#overview');

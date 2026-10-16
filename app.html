@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -137,7 +137,7 @@
           <span class="top-site"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span id="top-site"></span></span>
           <span class="top-range"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span id="top-range"></span></span>
           <span class="tag" id="top-filters" hidden></span>
-          <span class="tag" id="top-scope" hidden></span>
+          <button type="button" class="tag scope-tag" id="top-scope" hidden></button>
           <span class="tag watch" id="top-sample" hidden title="Numbers are generated for a fictional site">Sample data</span>
           <span class="tag loading" id="top-loading" role="status" aria-live="polite" hidden></span>
         </div>
@@ -149,6 +149,22 @@
     <div class="view" id="view" tabindex="-1"></div>
   </div>
 </div>
+
+<dialog id="scope-dialog" class="dialog">
+  <form id="scope-form">
+    <h2>Analyse a folder or page</h2>
+    <p>Same property and dates. Type a folder such as <code>/blog/</code>, or paste a full URL. Leave it empty for the whole site.</p>
+    <label class="field"><span>Folder or page</span><input type="text" id="scope-in" placeholder="e.g. /employers or https://example.com/pricing" autocomplete="off" spellcheck="false"></label>
+    <label class="check"><input type="checkbox" id="scope-exact"> Exactly this page, not everything under it</label>
+    <p class="progress" id="scope-progress" aria-live="polite"></p>
+    <p class="start-error" id="scope-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn-quiet" id="scope-whole" style="margin-right:auto">Whole site</button>
+      <button type="button" class="btn-quiet" id="scope-cancel">Cancel</button>
+      <button type="submit" class="btn-primary sm" id="scope-go">Analyse</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="settings" class="dialog">
   <form method="dialog" id="settings-form">
@@ -167,13 +183,13 @@
   </form>
 </dialog>
 
-<script src="config.js?v=11"></script>
-<script src="engine.js?v=11"></script>
-<script src="demo.js?v=11"></script>
-<script src="filters.js?v=11"></script>
-<script src="workflows.js?v=11"></script>
-<script src="views.js?v=11"></script>
-<script src="automation.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="config.js?v=12"></script>
+<script src="engine.js?v=12"></script>
+<script src="demo.js?v=12"></script>
+<script src="filters.js?v=12"></script>
+<script src="workflows.js?v=12"></script>
+<script src="views.js?v=12"></script>
+<script src="automation.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

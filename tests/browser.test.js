@@ -333,10 +333,23 @@ function writeComparisonExports(dir) {
     if (await p3.isVisible('#setup')) await p3.click('#setup-form button[type=submit]');
     await p3.waitForSelector('#app:not([hidden])');
     assert.ok(bodies.length && bodies.every(b => (b.dimensionFilterGroups || [])[0] && b.dimensionFilterGroups[0].filters.some(f => f.dimension === 'page' && f.operator === 'includingRegex')), 'every request carries the page filter');
-    assert.equal(await p3.$eval('#top-scope', e => e.textContent), 'Folder: /gear/');
+    assert.ok((await p3.$eval('#top-scope', e => e.textContent)).startsWith('Folder: /gear/'), 'scope shown');
     await p3.evaluate(() => { location.hash = '#pages'; }); await p3.waitForTimeout(250);
     const urls = await p3.$$eval('#view td.u', t => t.map(x => x.textContent));
     assert.ok(urls.length && urls.every(u => u.startsWith('/gear/')), 'only pages in the folder: ' + urls.slice(0, 3).join(', '));
+    // switch folder from the top bar without going back to the property screen
+    const before = bodies.length;
+    await p3.click('#top-scope'); await p3.waitForSelector('#scope-dialog[open]');
+    await p3.fill('#scope-in', '/trails'); await p3.click('#scope-go');
+    await p3.waitForFunction(() => document.getElementById('top-scope').textContent.includes('/trails/'), null, { timeout: 15000 });
+    assert.ok(!(await p3.$('#scope-dialog[open]')), 'dialog closes after the switch');
+    assert.ok(bodies.slice(before).some(b => b.dimensionFilterGroups[0].filters.some(f => f.expression.includes('/trails'))), 'new filter sent');
+    await p3.evaluate(() => { location.hash = '#overview'; location.hash = '#pages'; }); await p3.waitForTimeout(300);
+    const urls2 = await p3.$$eval('#view td.u', t => t.map(x => x.textContent));
+    assert.ok(urls2.length && urls2.every(u => u.startsWith('/trails/')), 'pages now from /trails/: ' + urls2.slice(0, 3).join(', '));
+    // and back to the whole site
+    await p3.click('#top-scope'); await p3.click('#scope-whole'); await p3.click('#scope-go');
+    await p3.waitForFunction(() => /All pages/.test(document.getElementById('top-scope').textContent), null, { timeout: 15000 });
     await ctx3.close();
   });
 
