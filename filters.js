@@ -151,7 +151,7 @@
       const name = labelOf(c.f, spec.target);
       if (!f.on.includes(spec.target)) { errs.push(`${name} only applies to ${f.on[0] === 'page' ? 'pages' : 'searches'}.`); return; }
       if (!OPS[f.kind].includes(c.op)) { errs.push(`${name}: that comparison isn't supported.`); return; }
-      if (f.needs === 'prev' && ctx && !ctx.hasPrev) errs.push(`${name} needs a comparison period. Connect Search Console with “Compare with the previous period” ticked, or use the sample data.`);
+      if (f.needs === 'prev' && ctx && !ctx.hasPrev) errs.push(`${name} needs a comparison period. Upload an export made with Date › Compare, or two exports together (this period and the one before), or connect Search Console with the comparison ticked.`);
       if (f.kind === 'num') {
         const vals = c.op === 'between' ? [c.v, c.v2] : [c.v];
         if (vals.some(v => typeof v !== 'number' || !isFinite(v))) errs.push(`${name}: enter a number.`);

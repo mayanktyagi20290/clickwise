@@ -178,6 +178,8 @@
       site.pos = D.C.reduce((s, r) => s + r.pos * r.impr, 0) / Math.max(1, site.impr);
     }
 
+    // whole-site totals for the comparison period, when the export or API provides them
+    const prevSite = D.prevC && D.prevC.length ? agg(D.prevC.map(r => ({ ...r, pos: r.pos || 0 }))) : null;
     let prev = null;
     if (D.prevQ && D.prevQ.length) {
       const pQ = D.prevQ.filter(r => !isBrand(r.q));
@@ -497,7 +499,7 @@
     return {
       Q, NBQ, BQ, P, totNB, totB, totAll, site, prev, days, perMonth, imprFloor,
       quickWins, ctrPages, ctrQueries, cannibal, cannibalMode, decay, trend, ai, readiness,
-      intents, sections1, sections2, tiers, potential, potentialMonthly, plan, signals, posDist, ctrByPos, coverage, method, curve, pageCurve, setAside, pageFlags,
+      prevSite, intents, sections1, sections2, tiers, potential, potentialMonthly, plan, signals, posDist, ctrByPos, coverage, method, curve, pageCurve, setAside, pageFlags,
       brandRx: brandRegex(S.brand), isBrand, isExcluded, data: D, ignored: ign
     };
   }

@@ -170,12 +170,12 @@
   function tiles(A) {
     const nb = A.totNB, p = A.prev, cov = A.coverage;
     if (cov) {
-      const st = A.site, bench = expCtr(st.pos);
+      const st = A.site, ps = A.prevSite;
       return `<section class="tiles" aria-label="Whole-site performance">
-        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">All searches, from daily totals</div></div>
-        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">All searches, from daily totals</div></div>
-        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Whole site, branded included</div></div>
-        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">Weighted by impressions</div></div>
+        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">All searches, from daily totals</div>${tileDelta(st.clicks, ps && ps.clicks)}</div>
+        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">All searches, from daily totals</div>${tileDelta(st.impr, ps && ps.impr)}</div>
+        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Whole site, branded included</div>${tileDelta(st.ctr, ps && ps.ctr, false, 'pt')}</div>
+        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">Weighted by impressions</div>${tileDelta(st.pos, ps && ps.pos, true)}</div>
       </section>`;
     }
     const bench = expCtr(nb.pos);
@@ -429,14 +429,18 @@
     if (!dc) {
       const t = A.trend;
       return { html: head('Losing ground', 'Pages and queries that lost clicks compared with the previous period.') +
-        `<div class="note"><b>Needs a comparison period.</b> Connect Search Console and keep “Compare with the previous period” ticked to see which pages are decaying.</div>` +
+        `<div class="note"><b>Needs a comparison period.</b> This export covers one period only. To see which pages and searches are losing clicks, use one of these:<ul>
+          <li>In Search Console › Performance, open <b>Date › Compare</b>, pick “Compare last 3 months to previous period”, then <b>Export › Download Excel</b> and upload that file.</li>
+          <li>Or export this period and the period before it separately, and select <b>both files together</b> when uploading.</li>
+          <li>Or connect Search Console with “Compare with the previous period” ticked.</li></ul></div>` +
         (t ? `<section class="panel"><div class="panel-h"><h2>First half vs second half of this range</h2></div><div class="panel-b"><div class="strip">${stat((t.clicks >= 0 ? '▲ ' : '▼ ') + Math.abs(t.clicks).toFixed(1) + '%', 'clicks', t.clicks >= 0 ? 'gain' : 'risk')}${stat((t.impr >= 0 ? '▲ ' : '▼ ') + Math.abs(t.impr).toFixed(1) + '%', 'impressions', t.impr >= 0 ? 'gain' : 'risk')}${stat((t.ctr >= 0 ? '▲ ' : '▼ ') + Math.abs(t.ctr).toFixed(2) + ' pts', 'CTR', t.ctr >= 0 ? 'gain' : 'risk')}</div></div></section>` : '') };
     }
     const pcols = [C.page, { k: 'prevC', l: 'Clicks before', r: 1, f: r => fmtN(r.prev.clicks), csv: r => r.prev.clicks }, { k: 'curC', l: 'Clicks now', r: 1, f: r => fmtN(r.cur.clicks), csv: r => r.cur.clicks }, { k: 'ch', l: 'Change', r: 1, f: r => `<span class="lossv">${r.ch.toFixed(0)}%</span>` }, { k: 'reason', l: 'Likely cause', sort: false }];
     dc.pages.forEach(r => { r.prevC = r.prev.clicks; r.curC = r.cur.clicks; });
     dc.queries.forEach(r => { r.prevC = r.prev.clicks; r.curC = r.cur.clicks; });
     dc.rising.forEach(r => { r.curC = r.cur.clicks; r.prevC = r.prev ? r.prev.clicks : 0; });
-    const html = head('Losing ground', `Compared with ${esc(D.prevStart || 'the previous period')}${D.prevEnd ? ' – ' + esc(D.prevEnd) : ''}. Pages that lost at least a quarter of their clicks, with the most likely cause.`) +
+    const html = head('Losing ground', `Compared with ${D.prevStart ? esc(D.prevStart) + (D.prevEnd ? ' – ' + esc(D.prevEnd) : '') : 'the previous period in your export'}. Pages that lost at least a quarter of their clicks, with the most likely cause.`) +
+      (D.compareNote ? `<div class="note warn">${esc(D.compareNote)}</div>` : '') +
       `<div class="strip">${stat(dc.pages.length, 'pages losing clicks', 'risk')}${stat('−' + fmtN(dc.lost), 'clicks lost across those pages', 'risk')}${stat(dc.rising.length, 'pages gaining', 'gain')}</div>
       <section class="panel"><div class="panel-h"><h2>Pages losing clicks</h2></div>${table('t-dp', pcols, dc.pages, { sort: 'lost', file: 'losing-ground-pages', searchKeys: ['path'], empty: 'No page lost more than 25% of its clicks.' })}</section>
       <section class="panel"><div class="panel-h"><h2>Queries losing clicks</h2></div>${table('t-dq', [C.q, pcols[1], pcols[2], pcols[3], pcols[4]], dc.queries, { sort: 'lost', file: 'losing-ground-queries' })}</section>

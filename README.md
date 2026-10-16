@@ -46,7 +46,7 @@ Any static host works: GitHub Pages, Netlify, Vercel, Cloudflare Pages. Use your
 - **Almost page one** — non-brand queries at positions 4–20, gain if moved to top 3 / top 7
 - **Titles to rewrite** — page-one pages/queries under benchmark CTR, with each page's top searches (API)
 - **Competing pages** — exact query × page cannibalisation (API) or stem-based estimate (file)
-- **Losing ground** — page/query decay vs previous period with likely cause; gaining pages
+- **Losing ground** — page/query decay vs previous period with likely cause; gaining pages. Works with Search Console connected, with an Excel export made using Date › Compare, or with two exports (this period and the previous one) uploaded together
 - **AEO & GEO signals** — AI Overview suspects, question/conversational/comparison/freshness queries, position-one holders, readiness score
 - **Workflows** — one-click templates: quick wins, branded vs non-branded, positions 4–20, high-impression low-CTR pages, traffic declines, questions, page types, location keywords, cannibalisation candidates, internal-link targets, ignored searches, opportunity report. Each lists the data it needs, its thresholds and its output; saved per site in the browser
 - **Smart filters** — type what you want in plain English (“blog pages that lost clicks”, “non-branded keywords ranking 5 to 15”). A deterministic parser turns it into a structured filter shown as removable chips; every value is validated and matched as plain text, never as a user-supplied pattern. Step-by-step builder for anything the parser misses; an optional Advanced panel shows how to recreate the filter in Search Console

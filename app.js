@@ -38,6 +38,9 @@
   }
   // Accepts the Excel download, or the CSV files from Search Console's CSV download (unzipped,
   // selected together). Sheets are recognised by sheet or file name and their header row.
+  // Comparison data can come two ways:
+  //  1. an export made with Date › Compare: each sheet has "Previous …" columns next to the current ones;
+  //  2. two exports uploaded together (this period and the one before): the older one becomes the comparison.
   const MAX_BYTES = 50 * 1024 * 1024;
   const KIND_LABEL = { Q: 'Queries', P: 'Pages', C: 'Dates', Dev: 'Devices', Countries: 'Countries', Appearance: 'Search appearance' };
   function kindOf(name, header) {
@@ -45,7 +48,45 @@
     const has = w => n.includes(w) || h.includes(w);
     return has('quer') ? 'Q' : has('appearance') ? 'Appearance' : has('page') ? 'P' : has('countr') ? 'Countries' : has('date') || n.includes('chart') ? 'C' : has('device') ? 'Dev' : null;
   }
+  // Find metric columns by header; "Previous …" columns hold the comparison period.
+  const PREV_RX = /\b(previous|prev|compared|comparison|before|earlier)\b/i;
+  const METRIC_RX = { clicks: /click(?!.?through)/i, impr: /impression/i, ctr: /\bctr\b|click.?through/i, pos: /position/i };
+  function columnsOf(header) {
+    const h = header.map(x => String(x == null ? '' : x));
+    const find = (re, prev) => h.findIndex((x, i) => i > 0 && re.test(x) && PREV_RX.test(x) === prev);
+    const cur = {}, prev = {};
+    Object.entries(METRIC_RX).forEach(([k, re]) => { cur[k] = find(re, false); prev[k] = find(re, true); });
+    if (Object.values(cur).some(i => i < 0)) Object.assign(cur, { clicks: 1, impr: 2, ctr: 3, pos: 4 }); // unnamed columns: Search Console's order
+    return { cur, prev: Object.values(prev).every(i => i > 0) ? prev : null };
+  }
+  const metricsOf = (r, c) => ({ clicks: num(r[c.clicks]), impr: num(r[c.impr]), ctr: ctrVal(r[c.ctr]), pos: num(r[c.pos]) });
   const readBuffer = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(new Uint8Array(e.target.result)); r.onerror = () => rej(new Error('read failed')); r.readAsArrayBuffer(file); });
+  const emptySet = name => ({ name, Q: [], P: [], C: [], Dev: [], Countries: [], Appearance: [], prevQ: [], prevP: [], prevC: [], found: new Set() });
+
+  function addSheet(set, kind, rows) {
+    if (set.found.has(kind)) return;
+    set.found.add(kind);
+    const cols = columnsOf(rows[0]);
+    rows.slice(1).forEach(r => {
+      if (r[0] === '' || r[0] == null) return;
+      const key = String(r[0]);
+      const row = metricsOf(r, cols.cur), prev = cols.prev ? metricsOf(r, cols.prev) : null;
+      if (kind === 'Q') { set.Q.push({ q: key, ...row }); if (prev) set.prevQ.push({ q: key, ...prev }); }
+      else if (kind === 'P') { set.P.push({ p: key, ...row }); if (prev) set.prevP.push({ p: key, ...prev }); }
+      else if (kind === 'C') { const d = typeof r[0] === 'number' ? excelDate(r[0]) : key.slice(0, 10); set.C.push({ d, ...row }); if (prev) set.prevC.push({ d, ...prev }); }
+      else if (kind === 'Dev') set.Dev.push({ d: key.toUpperCase(), ...row });
+      else set[kind].push({ d: key, ...row });
+    });
+  }
+  const finish = set => {
+    set.C = set.C.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.d)).sort((a, b) => a.d.localeCompare(b.d));
+    set.start = set.C.length ? set.C[0].d : null; set.end = set.C.length ? set.C[set.C.length - 1].d : null;
+    // rows that existed only in the previous period still matter for declines
+    set.prevQ = set.prevQ.filter(r => r.clicks > 0 || r.impr > 0); set.prevP = set.prevP.filter(r => r.clicks > 0 || r.impr > 0);
+    set.Q = set.Q.filter(r => r.clicks > 0 || r.impr > 0); set.P = set.P.filter(r => r.clicks > 0 || r.impr > 0);
+    return set;
+  };
+
   async function readFiles(files) {
     startError('');
     if (!window.XLSX) { startError('The spreadsheet reader is still loading. Try again in a moment.'); return; }
@@ -53,41 +94,52 @@
     if (zip) { startError('That is Search Console\'s CSV download, which comes as a .zip. Unzip it and select the CSV files together, or use Export › Download Excel instead.'); return; }
     const big = files.find(f => f.size > MAX_BYTES);
     if (big) { startError(`“${big.name}” is larger than 50 MB. Search Console exports are much smaller; check that this is the Performance export.`); return; }
-    const out = { Q: [], P: [], C: [], Dev: [], Countries: [], Appearance: [] };
-    const found = new Set(), unread = [];
+    // each Excel file is its own export; all CSV files together form one export
+    const sets = [], csv = emptySet('CSV files'), unread = [];
     for (const file of files) {
       let wb;
       // raw: CSV cells stay text, so a query such as "=total" is not turned into a formula and lost
       try { wb = XLSX.read(await readBuffer(file), { type: 'array', raw: true }); } catch (e) { unread.push(file.name); continue; }
       if (!wb || !wb.SheetNames || !wb.SheetNames.length) { unread.push(file.name); continue; }
+      const isCsv = /\.csv$/i.test(file.name) || wb.SheetNames.length === 1;
+      const set = isCsv ? csv : emptySet(file.name);
       wb.SheetNames.forEach(name => {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' }).filter(r => r.some(c => c !== ''));
         if (rows.length < 2) return;
         // a CSV has one sheet named "Sheet1": use the file name instead
-        const kind = kindOf(wb.SheetNames.length === 1 ? file.name + ' ' + name : name, rows[0][0]);
-        if (!kind || found.has(kind)) return;
-        found.add(kind);
-        rows.slice(1).forEach(r => {
-          if (r[0] === '' || r[0] == null) return;
-          const row = { clicks: num(r[1]), impr: num(r[2]), ctr: ctrVal(r[3]), pos: num(r[4]) };
-          if (kind === 'Q') out.Q.push({ q: String(r[0]), ...row });
-          else if (kind === 'P') out.P.push({ p: String(r[0]), ...row });
-          else if (kind === 'C') out.C.push({ d: typeof r[0] === 'number' ? excelDate(r[0]) : String(r[0]).slice(0, 10), ...row });
-          else if (kind === 'Dev') out.Dev.push({ d: String(r[0]).toUpperCase(), ...row });
-          else out[kind].push({ d: String(r[0]), ...row });
-        });
+        const kind = kindOf(isCsv ? file.name + ' ' + name : name, rows[0][0]);
+        if (kind) addSheet(set, kind, rows);
       });
+      if (!isCsv && set.found.size) sets.push(set);
     }
-    if (!out.Q.length && !out.P.length) {
+    if (csv.found.size) sets.push(csv);
+    const usable = sets.map(finish).filter(x => x.Q.length || x.P.length);
+    if (!usable.length) {
+      const found = new Set(sets.flatMap(x => [...x.found]));
       startError(unread.length && !found.size ? `Couldn't read ${unread.map(n => '“' + n + '”').join(', ')} as a spreadsheet. Upload the file from Search Console › Performance › Export › Download Excel.`
         : found.size ? `Found ${[...found].map(k => KIND_LABEL[k]).join(', ')}, but no Queries or Pages. Export from Search Console › Performance with the Queries and Pages tabs included.`
         : 'That file has no Queries or Pages sheet. Export it from Search Console › Performance › Export › Download Excel.');
       return;
     }
-    out.C = out.C.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.d)).sort((a, b) => a.d.localeCompare(b.d));
+    if (usable.length > 2) { startError('Upload one export, or two exports together: this period and the one before it.'); return; }
+    let cur = usable[0], note = '';
+    if (usable.length === 2) {
+      if (!usable[0].end || !usable[1].end) { startError('To compare two exports, both need their Dates sheet so Clickwise can tell which period is newer.'); return; }
+      const [older, newer] = usable.slice().sort((a, b) => a.end.localeCompare(b.end));
+      if (older.end >= newer.start) { startError(`The two exports overlap (${older.start} to ${older.end} and ${newer.start} to ${newer.end}). Export two separate periods, for example the last 3 months and the 3 months before.`); return; }
+      cur = newer;
+      cur.prevQ = older.Q; cur.prevP = older.P; cur.prevC = older.C; cur.prevStart = older.start; cur.prevEnd = older.end;
+      if (Math.abs(older.C.length - newer.C.length) > 3) note = `The two periods have different lengths (${newer.C.length} and ${older.C.length} days), so changes are not like-for-like.`;
+    }
     const first = files[0];
-    const host = (out.P[0] && hostOf(out.P[0].p)) || (first.name.match(/([a-z0-9-]+\.[a-z.]{2,})/i) || [])[1] || 'Your site';
-    loaded({ ...out, site: host, source: 'file', start: out.C[0] && out.C[0].d, end: out.C.length ? out.C[out.C.length - 1].d : null, days: out.C.length || null });
+    const host = (cur.P[0] && hostOf(cur.P[0].p)) || (first.name.match(/([a-z0-9-]+\.[a-z.]{2,})/i) || [])[1] || 'Your site';
+    const hasPrev = cur.prevQ.length || cur.prevP.length;
+    loaded({
+      Q: cur.Q, P: cur.P, C: cur.C, Dev: cur.Dev, Countries: cur.Countries, Appearance: cur.Appearance,
+      prevQ: hasPrev ? cur.prevQ : null, prevP: hasPrev ? cur.prevP : null, prevC: cur.prevC.length ? cur.prevC : null,
+      prevStart: cur.prevStart || null, prevEnd: cur.prevEnd || null, compareNote: note,
+      site: host, source: 'file', start: cur.start, end: cur.end, days: cur.C.length || null
+    });
   }
   function excelDate(n) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
   function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return null; } }
@@ -191,8 +243,9 @@
         await pull(site, start, end, ['device'], 10, 'devices'),
         await pull(site, start, end, ['query', 'page'], CFG.maxQueryPageRows, 'query and page pairs')
       ];
-      let prevQ = null, prevP = null;
+      let prevQ = null, prevP = null, prevC = null;
       if (compare) {
+        prevC = (await pull(site, iso(ps), iso(pe), ['date'], 1000, 'previous-period daily totals')).map(r => mapRow(r, ['d']));
         prevQ = (await pull(site, iso(ps), iso(pe), ['query'], CFG.maxRows, 'previous-period queries')).map(r => mapRow(r, ['q']));
         prevP = (await pull(site, iso(ps), iso(pe), ['page'], CFG.maxRows, 'previous-period pages')).map(r => mapRow(r, ['p']));
       }
@@ -202,7 +255,7 @@
         site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER },
         prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
-        Dev: dev.map(r => mapRow(r, ['d'])), QP: qp.map(r => mapRow(r, ['q', 'p'])), prevQ, prevP
+        Dev: dev.map(r => mapRow(r, ['d'])), QP: qp.map(r => mapRow(r, ['q', 'p'])), prevQ, prevP, prevC
       });
     } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; progress(''); }
     finally { $('pick-go').disabled = false; }

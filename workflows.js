@@ -9,7 +9,7 @@
   const DATA = {
     queries: { label: 'Search queries', how: 'Upload a Search Console export or connect Search Console.' },
     pages: { label: 'Page performance', how: 'Upload a Search Console export or connect Search Console.' },
-    prev: { label: 'A comparison period', how: 'Connect Search Console with “Compare with the previous period” ticked.' },
+    prev: { label: 'A comparison period', how: 'Upload an export made with Search Console’s Date › Compare option, or two exports together (this period and the one before), or connect Search Console with “Compare with the previous period” ticked.' },
     qp: { label: 'Which query lands on which page', how: 'Connect Search Console. File exports do not include it.' },
     dates: { label: 'Daily totals', how: 'Include the Dates sheet in your export, or connect Search Console.' }
   };

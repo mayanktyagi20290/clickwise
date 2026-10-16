@@ -41,11 +41,45 @@ function writeExports(dir) {
   return { xlsx, csvs, evil, zip };
 }
 
+// Comparison exports built from the fictional sample site, so these tests never need private data.
+function writeComparisonExports(dir) {
+  const { load } = require('./lib/harness');
+  const W = load(['engine.js', 'demo.js']);
+  const D = W.CW_DEMO.build();
+  const shift = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const prevC = D.C.map(r => ({ ...r, d: shift(r.d, -D.C.length), clicks: Math.round(r.clicks * 1.1), impr: Math.round(r.impr * 1.05) }));
+  const row = (label, r) => [label, r.clicks, r.impr, r.ctr / 100, r.pos];
+  const sheet = (head, rows) => XLSX.utils.aoa_to_sheet([[head, 'Clicks', 'Impressions', 'CTR', 'Position'], ...rows]);
+  const book = (Q, P, C) => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet('Date', C.map(r => row(r.d, r))), 'Chart'); XLSX.utils.book_append_sheet(wb, sheet('Top queries', Q.map(r => row(r.q, r))), 'Queries'); XLSX.utils.book_append_sheet(wb, sheet('Top pages', P.map(r => row(r.p, r))), 'Pages'); return wb; };
+  const cur = path.join(dir, 'trailcraft-current.xlsx'), old = path.join(dir, 'trailcraft-previous.xlsx'), overlap = path.join(dir, 'trailcraft-overlap.xlsx');
+  XLSX.writeFile(book(D.Q, D.P, D.C), cur);
+  XLSX.writeFile(book(D.prevQ, D.prevP, prevC), old);
+  XLSX.writeFile(book(D.prevQ, D.prevP, D.C.slice(10)), overlap);
+  // one export made with Date › Compare: "Last 3 months …" and "Previous 3 months …" columns side by side
+  const L = 'Last 3 months', Pv = 'Previous 3 months';
+  const cmpHead = first => [first, `${L} Clicks`, `${Pv} Clicks`, `${L} Impressions`, `${Pv} Impressions`, `${L} CTR`, `${Pv} CTR`, `${L} Position`, `${Pv} Position`];
+  const zero = { clicks: 0, impr: 0, ctr: 0, pos: 0 };
+  const cmpRows = (curRows, prevRows, key) => {
+    const pm = new Map(prevRows.map(r => [r[key], r])), keys = [...new Set(curRows.map(r => r[key]).concat(prevRows.map(r => r[key])))];
+    const cm = new Map(curRows.map(r => [r[key], r]));
+    return keys.map(k => { const a = cm.get(k) || zero, b = pm.get(k) || zero; return [k, a.clicks, b.clicks, a.impr, b.impr, a.ctr / 100, b.ctr / 100, a.pos, b.pos]; });
+  };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cmpHead('Date'), ...D.C.map((r, i) => [r.d, r.clicks, prevC[i].clicks, r.impr, prevC[i].impr, r.ctr / 100, prevC[i].ctr / 100, r.pos, prevC[i].pos])]), 'Chart');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cmpHead('Top queries'), ...cmpRows(D.Q, D.prevQ, 'q')]), 'Queries');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cmpHead('Top pages'), ...cmpRows(D.P, D.prevP, 'p')]), 'Pages');
+  const compare = path.join(dir, 'trailcraft-compare.xlsx'); XLSX.writeFile(wb, compare);
+  // what the app should find: the engine run on the same data
+  const A = W.CW.analyse({ ...D, source: 'file', QP: null }, { brand: ['trailcraft'], exclude: [] });
+  return { cur, old, overlap, compare, expected: { declining: A.decay.pages.length } };
+}
+
 (async () => {
   const srv = await serve();
   const base = `http://localhost:${srv.address().port}/`;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cw-'));
   const files = writeExports(dir);
+  const cmp = writeComparisonExports(dir);
   if (!files.xlsx) console.log('browser: real-data upload tests skipped (private fixture not present)');
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, acceptDownloads: true });
@@ -158,6 +192,48 @@ function writeExports(dir) {
     assert.ok(await page.isVisible('#start'), 'back to start');
     await page.goto('about:blank'); await page.goto(base + 'app.html#overview');
     assert.ok(await page.isVisible('#start-info'), 'reload explanation shown');
+  });
+
+  // Every screen that depends on a comparison period, checked for both ways of uploading one.
+  const checkComparison = async (label) => {
+    await go('#overview');
+    assert.ok(await page.$('.tiles .tile .tile-d'), label + ': site tiles show change vs previous');
+    assert.ok(/vs previous/.test(await text('.subset')), label + ': non-brand panel shows change');
+    await go('#decay');
+    assert.ok(!/Needs a comparison period/.test(await text('#view')), label + ': Losing ground has data');
+    const stat = await text('#view .strip .stat');
+    assert.ok(/pages losing clicks/.test(stat), label + ': ' + stat);
+    assert.ok((await page.$$('#t-dp tbody tr')).length > 0, label + ': declining pages listed');
+    assert.ok((await page.$$('#t-dq tbody tr')).length > 0, label + ': declining searches listed');
+    await go('#wf=declines');
+    assert.ok(!/needs more data/.test(await text('#view')) && (await page.$$('#view tbody tr')).length > 0, label + ': Discover traffic declines runs');
+    await go('#filters?q=' + encodeURIComponent('pages that lost clicks'));
+    assert.ok(/\d+ pages/.test(await text('.sf-say')), label + ': smart filter on lost clicks: ' + await text('#sf-out'));
+    await go('#wf=report');
+    assert.ok(!/Needs a comparison period/.test(await text('#report')), label + ': report lists declines');
+    const href = await page.$eval('.cards a.card', a => a.getAttribute('href')).catch(() => null);
+    if (href) { await go(href); assert.ok(await page.$('.tile .tile-d'), label + ': folder deep dive shows change'); }
+    return stat;
+  };
+
+  await testAsync('comparison: one export made with Date › Compare fills Losing ground', async () => {
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', cmp.compare); await toApp();
+    const stat = await checkComparison('compare export');
+    assert.equal(parseInt(stat, 10), cmp.expected.declining, 'same declining pages as the engine on the same data');
+  });
+
+  await testAsync('comparison: two exports uploaded together (in any order)', async () => {
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', [cmp.old, cmp.cur]); await toApp();
+    const stat = await checkComparison('two exports');
+    assert.equal(parseInt(stat, 10), cmp.expected.declining, 'same declining pages as the engine');
+    assert.ok(/Compared with \d{4}-\d{2}-\d{2}/.test(await (async () => { await go('#decay'); return text('#view .v-head p'); })()), 'shows the previous dates');
+  });
+
+  await testAsync('comparison: overlapping exports and a single export are explained', async () => {
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', [cmp.cur, cmp.overlap]); await page.waitForTimeout(500);
+    assert.ok(/overlap/.test(await text('#start-error')), 'overlap explained');
+    await page.setInputFiles('#file-input', cmp.cur); await toApp(); await go('#decay');
+    assert.ok(/Date › Compare/.test(await text('#view')) && /both files together/.test(await text('#view')), 'how to get a comparison from Excel');
   });
 
   await testAsync('landing and legal pages: no broken local links', async () => {
