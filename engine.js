@@ -119,6 +119,7 @@
     minObs: 30,        // queries needed at a position before the site's own CTR replaces the benchmark
     capShare: 0.10,    // no single query may contribute more than this share of a list's upper estimate
     serpRatio: 0.35,   // CTR under this share of expected at positions 1–8 → likely a results-page feature
+    minEvidence: 20,   // …but only when at least this many clicks were expected over the period (otherwise it is just low volume)
     lowTargetStep: 2   // conservative case: the query climbs this many positions
   };
   const DEFAULT_UTILITY = ['dashboard', 'admin', 'panel', 'account', 'accounts', 'my-account', 'profile', 'settings', 'login', 'logout', 'signin', 'sign-in', 'signup', 'sign-up', 'register', 'auth', 'cart', 'checkout', 'billing', 'inbox', 'notifications', 'wp-admin', 'preview'];
@@ -196,7 +197,10 @@
     // Pages blend many queries at different positions, so they get their own curve built from page rows.
     const pageCurve = buildCurve(P, S.minObs || EST.minObs);
     const rel = r => { const e = expAt(r.pos); return e > 0 ? r.ctr / e : 1; };
-    const isSerp = r => r.pos <= 8 && rel(r) < EST.serpRatio;
+    // A results-page feature (answer box, AI Overview) is only assumed with evidence: enough impressions
+    // that clearly more clicks were expected. Zero clicks on a few impressions is normal, not a feature.
+    const expected = (r, e) => r.impr * e / 100;
+    const isSerp = r => r.pos <= 8 && rel(r) < EST.serpRatio && expected(r, expAt(r.pos)) >= EST.minEvidence;
     const pos0 = v => Math.max(0, v);
 
     // ── page flags: likely branded sitelinks and utility pages ──
@@ -216,7 +220,7 @@
         return sh >= 0.5 ? { kind: 'sitelink', certain: true, reason: `${Math.round(sh * 100)}% of its impressions come from branded searches` } : null;
       }
       // compared with what queries at that position earn: a sitelink is shown under brand results, not ranked on its own
-      if (segs.length === 1 && r.pos <= 3 && rel(r) < EST.serpRatio && brandShare >= 0.2)
+      if (segs.length === 1 && r.pos <= 3 && rel(r) < EST.serpRatio && expected(r, expAt(r.pos)) >= EST.minEvidence && brandShare >= 0.2)
         return { kind: 'sitelink', certain: false, reason: `Top-level page at position ${r.pos.toFixed(1)} with ${r.ctr.toFixed(1)}% CTR on a site where ${Math.round(brandShare * 100)}% of query clicks are branded — probably shown as a sitelink under brand results` };
       return null;
     }
@@ -227,12 +231,13 @@
     // A query keeps its own click behaviour relative to its position, so pages that lose
     // clicks to answer boxes are not projected to a full top-3 CTR.
     const quickWins = capList(NBQ.filter(r => r.pos > 3.5 && r.pos <= 20 && r.impr >= imprFloor).map(r => {
-      const ratio = rel(r), k = Math.min(1, ratio);
+      // keep the query's own click rate only where there is evidence it is held back (see isSerp)
+      const ratio = rel(r), serp = isSerp(r), k = serp ? Math.min(1, ratio) : 1;
       const target = r.pos <= 10 ? 3 : 7;
       const lowTarget = Math.max(target, r.pos - EST.lowTargetStep);
       const gainHi = perMonth(pos0(r.impr * (expAt(target) * k - r.ctr) / 100));
       const gainLo = perMonth(pos0(r.impr * (expAt(lowTarget) * k - r.ctr) / 100));
-      return { ...r, target, lowTarget, exp: expAt(r.pos), ratio, gainLo, gainHi, gain: gainLo, serp: isSerp(r) };
+      return { ...r, target, lowTarget, exp: expAt(r.pos), ratio, gainLo, gainHi, gain: gainLo, serp };
     }).filter(r => r.gainHi >= 1), EST.capShare).sort(byEstimate);
 
     // ── Titles to rewrite (CTR below expected at current position) ──
@@ -248,7 +253,7 @@
     // low is 0 and high is at most double the current CTR (never above 35% of expected).
     const ctrEst = (r, page) => {
       const bench = page ? Math.min(pageCurve.at(r.pos), expAt(r.pos)) : expAt(r.pos), ratio = bench > 0 ? r.ctr / bench : 1;
-      const serp = r.pos <= 8 && ratio < EST.serpRatio;
+      const serp = r.pos <= 8 && ratio < EST.serpRatio && expected(r, bench) >= EST.minEvidence;
       const hiTarget = serp ? Math.min(bench * EST.serpRatio, r.ctr * 2) : bench * 0.85;
       const gainHi = perMonth(pos0(r.impr * (hiTarget - r.ctr) / 100));
       const gainLo = serp ? 0 : perMonth(pos0(r.impr * (bench * 0.6 - r.ctr) / 100));
@@ -347,7 +352,7 @@
     // ── AI search (AEO / GEO) signals ──
     const ai = {
       // possible answer boxes or AI Overviews: top-5 rankings far below the site's own CTR at that position
-      overview: capList(NBQ.filter(r => r.pos <= 5 && r.impr >= imprFloor && rel(r) < EST.serpRatio)
+      overview: capList(NBQ.filter(r => r.pos <= 5 && r.impr >= imprFloor && isSerp(r))
         .map(r => { const gainHi = perMonth(pos0(r.impr * (Math.min(expAt(r.pos) * EST.serpRatio, r.ctr * 2) - r.ctr) / 100)); return { ...r, bench: expAt(r.pos), gainLo: 0, gainHi, gain: 0, serp: true }; })
         .filter(r => r.gainHi >= 1), EST.capShare).sort((a, b) => b.impr - a.impr),
       questions: NBQ.filter(r => RX.question.test(r.q)).sort((a, b) => b.impr - a.impr),

@@ -100,6 +100,23 @@ test('a huge query that rarely gets clicked is not projected to a full top-3 CTR
   assert.ok(r.gainHi < naive * 0.2, `estimate ${Math.round(r.gainHi)} is far below the old ${Math.round(naive)}`);
 });
 
+test('zero-click queries with few impressions are still opportunities (B2B pages)', () => {
+  // page two, 0 clicks: normal for low volume, not a results-page feature
+  const Q = filler(40, 3, 12).concat(filler(40, 9, 2), [q('ats software india', 0, 900, 12), q('campus hiring platform', 0, 700, 9)]);
+  const A = CW.analyse({ site: 's', source: 'file', Q, P: [pg('/a', 5, 50, 3)], C: days(30, 1000, 100000), days: 30 }, S0);
+  ['ats software india', 'campus hiring platform'].forEach(t => {
+    const r = A.quickWins.find(x => x.q === t);
+    assert.ok(r && r.gainHi > 0 && !r.serp, t + ' is a quick win: ' + JSON.stringify(r && { hi: r.gainHi, serp: r.serp }));
+  });
+});
+test('a results-page feature needs evidence: enough expected clicks', () => {
+  const Q = filler(40, 4, 8).concat([q('tiny', 0, 40, 4), q('big answered', 10, 20000, 4)]);
+  const A = CW.analyse({ site: 's', source: 'file', Q, P: [pg('/a', 5, 50, 3)], C: days(30, 1000, 100000), days: 30 }, S0);
+  const all = A.quickWins.concat(A.ctrQueries);
+  assert.ok(!all.some(r => r.q === 'tiny' && r.serp), 'few impressions: no flag');
+  assert.ok(all.some(r => r.q === 'big answered' && r.serp), 'lots of impressions, few clicks: flagged');
+});
+
 // ── de-duplication ──
 test('headline counts each query once across lists', () => {
   const Q = filler(40, 3, 12).concat(filler(40, 5, 6), [q('both lists', 20, 5000, 5)]);
