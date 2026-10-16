@@ -658,3 +658,13 @@ td a.btn-quiet{text-decoration:none;color:var(--ink);display:inline-block}
 .cov-note svg{flex:none;width:16px;height:16px;color:var(--watch);margin-top:1px}
 @media (max-width:1100px){.kpi2s{grid-template-columns:repeat(2,minmax(0,1fr))}.brandmix{grid-column:1/-1}}
 @media (max-width:640px){.cov-grid{grid-template-columns:1fr}.subset-h{flex-direction:column}}
+/* top bar: property and dates are buttons that open the change dialog */
+.top-btn{font-family:inherit;cursor:pointer;background:var(--surface);color:inherit;transition:box-shadow .15s,border-color .15s}
+.top-site.top-btn:hover{border-color:var(--signal,#4F46E5)}
+.top-range.top-btn{border:0;background:linear-gradient(135deg,#3B82F6,#4F46E5)}
+.top-range.top-btn:hover{box-shadow:0 4px 14px rgba(79,70,229,.35)}
+.top-btn .chev{width:14px!important;height:14px!important;opacity:.7;margin-left:-2px}
+.top-btn:focus-visible{outline:2px solid #4F46E5;outline-offset:2px}
+#scope-dialog{width:min(520px,calc(100vw - 32px))}
+#scope-dialog .presets{margin:10px 0 14px}
+#scope-dialog .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}

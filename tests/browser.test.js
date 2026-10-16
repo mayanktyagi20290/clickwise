@@ -312,7 +312,7 @@ function writeComparisonExports(dir) {
       if (lib) return r.fulfill({ path: LOCAL[lib], contentType: 'text/javascript' });
       if (u.startsWith(base)) return r.continue();
       if (u.includes('searchconsole.googleapis.com')) {
-        if (u.endsWith('/sites')) return r.fulfill({ json: { siteEntry: [{ siteUrl: 'sc-domain:trailcraft.co', permissionLevel: 'siteOwner' }] } });
+        if (u.endsWith('/sites')) return r.fulfill({ json: { siteEntry: [{ siteUrl: 'sc-domain:trailcraft.co', permissionLevel: 'siteOwner' }, { siteUrl: 'https://shop.example/', permissionLevel: 'siteOwner' }] } });
         const body = JSON.parse(r.request().postData() || '{}'); bodies.push(body);
         const f = ((body.dimensionFilterGroups || [])[0] || { filters: [] }).filters.find(x => x.dimension === 'page');
         const rx = f ? new RegExp(f.expression) : null;
@@ -325,7 +325,8 @@ function writeComparisonExports(dir) {
     const p3 = await ctx3.newPage();
     await p3.addInitScript(() => { window.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => setTimeout(() => c.callback({ access_token: 'test', expires_in: 3600 }), 10) }), revoke: () => { } } } }; });
     await p3.goto(base + 'app.html'); await p3.click('#btn-connect');
-    await p3.waitForFunction(() => document.querySelector('#pick-site').value.includes('trailcraft'));
+    await p3.waitForFunction(() => document.querySelectorAll('#pick-site option').length === 2);
+    await p3.selectOption('#pick-site', 'sc-domain:trailcraft.co');
     await p3.fill('#pick-scope', 'https://elsewhere.com/gear'); await p3.click('#pick-go'); await p3.waitForTimeout(200);
     assert.ok(/not on trailcraft\.co/.test(await p3.$eval('#pick-error', e => e.textContent)), 'other domain rejected');
     await p3.fill('#pick-scope', '/gear'); await p3.click('#pick-go');
@@ -350,7 +351,31 @@ function writeComparisonExports(dir) {
     // and back to the whole site
     await p3.click('#top-scope'); await p3.click('#scope-whole'); await p3.click('#scope-go');
     await p3.waitForFunction(() => /All pages/.test(document.getElementById('top-scope').textContent), null, { timeout: 15000 });
+    // change the dates from the date pill
+    const b2 = bodies.length, range0 = await p3.$eval('#top-range', e => e.textContent);
+    await p3.click('#top-range-btn'); await p3.waitForSelector('#scope-dialog[open]');
+    assert.ok(await p3.isVisible('#scope-start'), 'date fields shown');
+    await p3.click('#scope-presets [data-days="28"]'); await p3.click('#scope-go');
+    await p3.waitForFunction(r => document.getElementById('top-range').textContent !== r, range0, { timeout: 15000 });
+    const end = new Date(); end.setDate(end.getDate() - 2); const st = new Date(end); st.setDate(end.getDate() - 27);
+    assert.ok(bodies.slice(b2).some(b => b.startDate === st.toISOString().slice(0, 10) && b.endDate === end.toISOString().slice(0, 10)), 'new dates sent');
+    // switch property from the site pill
+    await p3.click('#top-site-btn'); await p3.waitForSelector('#scope-dialog[open]');
+    assert.equal(await p3.$$eval('#scope-site option', o => o.length), 2, 'all properties offered');
+    await p3.selectOption('#scope-site', 'https://shop.example/'); await p3.click('#scope-go');
+    await p3.waitForSelector('#setup:not([hidden])', { timeout: 15000 });
+    await p3.click('#setup-form button[type=submit]'); await p3.waitForSelector('#app:not([hidden])');
+    assert.equal(await p3.$eval('#top-site', e => e.textContent), 'shop.example', 'new property shown');
+    assert.ok(!(await p3.$('#scope-dialog[open]')), 'dialog closed');
     await ctx3.close();
+  });
+
+  await testAsync('sample data: date and site pills explain the range is fixed', async () => {
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.click('#top-range-btn'); await page.waitForSelector('#scope-dialog[open]');
+    assert.ok(/sample data/.test(await text('#scope-fixed-msg')), 'explains sample data');
+    assert.ok(await page.isVisible('#scope-new') && !(await page.isVisible('#scope-go')), 'offers a new analysis');
+    await page.click('#scope-cancel');
   });
 
   await testAsync('Excel export with a Page filter shows which folder it covers', async () => {

@@ -247,6 +247,8 @@
   $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRange(+b.dataset.days); });
   $('pick-back').addEventListener('click', () => show('start'));
 
+  let SITES = [];
+  const siteLabel = u => u.replace(/^sc-domain:/, '') + (u.startsWith('sc-domain:') ? ' (domain)' : '');
   async function openPicker() {
     show('picker'); setRange(90); $('pick-error').hidden = true; progress('');
     const sel = $('pick-site');
@@ -255,7 +257,8 @@
       const d = await api('sites');
       const sites = (d.siteEntry || []).filter(s => s.permissionLevel !== 'siteUnverifiedUser').sort((a, b) => a.siteUrl.localeCompare(b.siteUrl));
       if (!sites.length) throw new Error('This Google account has no verified Search Console properties. Sign in with the account that owns the property.');
-      sel.innerHTML = sites.map(s => `<option value="${esc(s.siteUrl)}">${esc(s.siteUrl.replace(/^sc-domain:/, '') + (s.siteUrl.startsWith('sc-domain:') ? ' (domain)' : ''))}</option>`).join('');
+      SITES = sites.map(s => s.siteUrl);
+      sel.innerHTML = SITES.map(u => `<option value="${esc(u)}">${esc(siteLabel(u))}</option>`).join('');
     } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; }
   }
 
@@ -308,20 +311,60 @@
       type: $('pick-type').value, device: $('pick-device').value, scopeInput: $('pick-scope').value, exact: $('pick-exact').checked }, { error: $('pick-error'), go: $('pick-go') });
   });
 
-  // ── scope switcher in the top bar ──
-  $('top-scope').addEventListener('click', () => {
-    if (!D || D.source !== 'api' || !LAST) return;
-    $('scope-in').value = LAST.scopeInput || ''; $('scope-exact').checked = !!LAST.exact;
+  // ── change property, dates or folder from the top bar ──
+  // Search Console analyses re-run with the new choice; uploads and sample data are fixed, so the
+  // dialog explains that and offers a new analysis instead.
+  function openChange(focus) {
+    if (!D) return;
+    const live = D.source === 'api' && LAST;
+    $('scope-fields').hidden = !live; $('scope-fixed').hidden = !!live;
+    $('scope-go').hidden = !live; $('scope-whole').hidden = !live; $('scope-new').hidden = !!live;
     $('scope-error').hidden = true; $('scope-progress').textContent = '';
-    $('scope-dialog').showModal(); $('scope-in').focus();
+    if (live) {
+      const list = SITES.length ? SITES : [LAST.site];
+      $('scope-site').innerHTML = list.map(u => `<option value="${esc(u)}"${u === LAST.site ? ' selected' : ''}>${esc(siteLabel(u))}</option>`).join('');
+      $('scope-start').value = LAST.start; $('scope-end').value = LAST.end;
+      $('scope-in').value = LAST.scopeInput || ''; $('scope-exact').checked = !!LAST.exact; $('scope-compare').checked = !!LAST.compare;
+      markPreset();
+    } else {
+      $('scope-fixed-msg').textContent = D.source === 'demo'
+        ? 'This is sample data for a fictional site, so its property and dates are fixed. Connect Search Console to analyse your own site and pick any dates.'
+        : 'This analysis comes from an uploaded export, which already holds one property and one date range. To change them, export again from Search Console with the dates you want, or connect Search Console to switch freely.';
+    }
+    $('scope-dialog').showModal();
+    const f = live && { site: 'scope-site', dates: 'scope-start', scope: 'scope-in' }[focus];
+    (f ? $(f) : $('scope-cancel')).focus();
+  }
+  function markPreset() {
+    const end = new Date(); end.setDate(end.getDate() - 2);
+    const days = Math.round((new Date($('scope-end').value) - new Date($('scope-start').value)) / 864e5) + 1;
+    document.querySelectorAll('#scope-presets button').forEach(b => b.classList.toggle('on', $('scope-end').value === iso(end) && +b.dataset.days === days));
+  }
+  $('scope-presets').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const end = new Date(); end.setDate(end.getDate() - 2);
+    const start = new Date(end); start.setDate(end.getDate() - +b.dataset.days + 1);
+    $('scope-start').value = iso(start); $('scope-end').value = iso(end); markPreset();
   });
+  ['scope-start', 'scope-end'].forEach(id => $(id).addEventListener('change', markPreset));
+  $('top-site-btn').addEventListener('click', () => openChange('site'));
+  $('top-range-btn').addEventListener('click', () => openChange('dates'));
+  $('top-scope').addEventListener('click', () => openChange('scope'));
   $('scope-whole').addEventListener('click', () => { $('scope-in').value = ''; $('scope-exact').checked = false; });
   $('scope-cancel').addEventListener('click', () => $('scope-dialog').close());
+  $('scope-new').addEventListener('click', () => { $('scope-dialog').close(); $('btn-new').click(); });
   $('scope-form').addEventListener('submit', async e => {
     e.preventDefault();
-    await analyseProperty({ ...LAST, scopeInput: $('scope-in').value, exact: $('scope-exact').checked }, { error: $('scope-error'), go: $('scope-go') });
-    if (D && LAST && D.scope === (FILTER.scope || null) && $('scope-error').hidden) $('scope-dialog').close();
+    const site = $('scope-site').value || LAST.site;
+    // The folder belongs to the old property; drop it when switching to a different site.
+    const keepScope = site === LAST.site;
+    const before = LOAD;
+    await analyseProperty({ ...LAST, site, start: $('scope-start').value, end: $('scope-end').value, compare: $('scope-compare').checked,
+      scopeInput: keepScope ? $('scope-in').value : '', exact: keepScope && $('scope-exact').checked }, { error: $('scope-error'), go: $('scope-go') });
+    if (LOAD !== before && $('scope-error').hidden && $('scope-dialog').open) $('scope-dialog').close();
   });
+  // A new site may need brand terms first; loaded() shows that screen, so close the dialog then too.
+  $('scope-site').addEventListener('change', () => { if ($('scope-site').value !== LAST.site) { $('scope-in').value = ''; $('scope-exact').checked = false; } });
 
   let LOAD = 0;
   function status(t) { const el = $('top-loading'); el.textContent = t; el.hidden = !t; }

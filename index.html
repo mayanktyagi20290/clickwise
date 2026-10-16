@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clickwise — Find the clicks your site is already close to winning</title>
-<meta name="description" content="Clickwise reads your Google Search Console data and ranks every SEO, AEO and GEO fix by the clicks it could add. Quick wins, title rewrites, competing pages, content decay and AI Overview signals.">
+<title>Clickwise — Ask Search Console what to fix next</title>
+<meta name="description" content="Clickwise turns Google Search Console data into a ranked list of SEO fixes with honest click estimates: one-click workflows, plain-English filters, folder-level analysis, content decay and AI answer signals. Free, read-only, runs in your browser.">
 <link rel="canonical" href="https://clickwise.example/">
 <meta property="og:title" content="Clickwise — Search Console intelligence">
 <meta property="og:description" content="Turn Search Console data into a ranked list of fixes, with the clicks each one could add.">
@@ -12,8 +12,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=15">
-<link rel="stylesheet" href="landing.css?v=15">
+<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="landing.css?v=17">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Clickwise","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"Search Console intelligence that ranks SEO, AEO and GEO fixes by the clicks they could add.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
@@ -25,6 +25,7 @@
     <a class="brandmark" href="./"><span class="logo-dot" aria-hidden="true"></span>Clickwise</a>
     <nav class="site-nav" aria-label="Main">
       <a href="#features">Features</a>
+      <a href="#compare">Compare</a>
       <a href="#ai-search">AI search</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
@@ -34,24 +35,30 @@
 </header>
 
 <main>
-  <!-- HERO: the product's own output is the hero -->
+  <!-- HERO: the product itself, running on a sample site -->
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <h1>Find the clicks your site is already close to winning.</h1>
-        <p class="lede">Clickwise reads your Google Search Console data and ranks every fix by the clicks it could add each month. Titles to rewrite, queries stuck on page two, pages competing with each other, and searches AI Overviews are answering for you.</p>
+        <h1>Ask Search Console what to fix next, in plain English.</h1>
+        <p class="lede">Clickwise turns your Google Search Console data into a ranked list of fixes — titles to rewrite, searches close to page one, pages losing clicks, answers AI is taking — with an honest estimate of the clicks each could add.</p>
         <div class="hero-cta">
           <a class="btn-primary" href="app.html">Start free audit</a>
-          <a class="btn-ghost" href="app.html?demo">See it on sample data</a>
+          <a class="btn-ghost" href="app.html?demo">Explore the sample report</a>
         </div>
-        <p class="fine">Free during early access. Read-only Google sign-in, or upload an export. Your data stays in your browser.</p>
+        <ul class="trust">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="m9 12 2 2 4-4"/></svg>Read-only Google access</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Your data stays in your browser</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 18h4"/></svg>Works with the Excel export too</li>
+        </ul>
       </div>
 
-      <figure class="specimen" aria-label="Example Clickwise output for a sample site">
-        <div class="spec-bar"><span class="spec-site" id="spec-site">trailcraft.co</span><span class="spec-tag">Sample report</span></div>
-        <p class="spec-head">Could gain about <b id="spec-gain">—</b> clicks a month from searches it already ranks for.</p>
-        <ol class="spec-list" id="spec-list"></ol>
-        <figcaption>Live output from Clickwise's engine, run on a sample outdoor-gear site.</figcaption>
+      <figure class="demo" aria-label="Live demo: a plain-English filter running on a sample site">
+        <div class="demo-bar"><span class="demo-dot"></span><span>trailcraft.co</span><span class="demo-tag">Sample site</span></div>
+        <div class="demo-ask" aria-live="polite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg><span id="demo-text"></span><span class="caret" aria-hidden="true"></span></div>
+        <div class="demo-chips" id="demo-chips"></div>
+        <p class="demo-count" id="demo-count"></p>
+        <ol class="demo-rows" id="demo-rows"></ol>
+        <figcaption>Not a screenshot: Clickwise's own filter engine, running in this page on a fictional site.</figcaption>
       </figure>
     </div>
   </section>
@@ -61,41 +68,61 @@
     <div class="wrap two-col">
       <h2>Search Console tells you what happened. It doesn't tell you what to do next.</h2>
       <div class="prose">
-        <p>The Performance report gives you thousands of rows of queries and pages. Finding the ten that matter means exports, pivot tables and a long afternoon, every month.</p>
-        <p>Clickwise does that work in seconds. It compares every query's click-through rate with what its position should earn, separates branded searches from real SEO traffic, and turns the gap into a number you can prioritise: clicks per month.</p>
+        <p>The Performance report is thousands of rows. Finding the ten that matter means exports, pivot tables and regex filters, every month.</p>
+        <p>Clickwise reads the same data and does that work for you: it separates branded searches from real SEO traffic, compares every search with what its position usually earns on your own site, and ranks the gaps by clicks per month.</p>
       </div>
     </div>
   </section>
 
-  <!-- FEATURES -->
-  <section class="features" id="features">
+  <!-- FEATURES: each one shown, not described -->
+  <section class="showcase" id="features">
     <div class="wrap">
-      <h2 class="sec-h">Six reports that turn data into decisions</h2>
-      <div class="feat-grid">
-        <article class="feat">
-          <h3>Almost page one</h3>
-          <p>Non-branded queries on positions 4–20 with real demand, ranked by the clicks you'd gain in the top 3.</p>
-        </article>
-        <article class="feat">
-          <h3>Titles to rewrite</h3>
-          <p>Page-one URLs earning far below benchmark CTR, with the searches each page is shown for, so you write titles for real queries.</p>
-        </article>
-        <article class="feat">
-          <h3>Competing pages</h3>
-          <p>Searches where two or more of your own URLs split impressions. Exact page-level detection when you connect Search Console.</p>
-        </article>
-        <article class="feat">
-          <h3>Losing ground</h3>
-          <p>Pages that lost clicks against the previous period, with the likely cause: lost rank, lost demand, or lost CTR.</p>
-        </article>
-        <article class="feat">
-          <h3>Site sections and page tiers</h3>
-          <p>Folders grouped automatically from your URLs, and pages tiered by how much of your traffic they carry.</p>
-        </article>
-        <article class="feat">
-          <h3>Smart filters and one-click workflows</h3>
-          <p>Ask in plain English — “pages with high impressions but low CTR” — or run a ready workflow. No regex, no formulas, no setup.</p>
-        </article>
+      <h2 class="sec-h">What you get</h2>
+
+      <div class="show">
+        <div class="show-copy">
+          <h3>A to-do list ranked by clicks, with honest ranges</h3>
+          <p>Every recommendation comes with a low–high estimate of clicks per month. Estimates use your own site's click rates where there's enough data, count each search once, and flag searches where an answer box is probably taking the click — so you don't chase numbers that won't come.</p>
+        </div>
+        <div class="show-ui ui-plan"><div class="ui-h">Action plan <span>sample site</span></div><ol id="ui-plan"></ol></div>
+      </div>
+
+      <div class="show flip">
+        <div class="show-copy">
+          <h3>One-click workflows instead of filters and formulas</h3>
+          <p>Pick an outcome — quick wins, traffic declines, question searches, internal-link targets, a printable report — and run it. Each workflow tells you what data it needs, which thresholds it uses and what you'll get. Or type what you want in plain English and save it as your own workflow.</p>
+        </div>
+        <div class="show-ui ui-wf"><div class="ui-h">Workflows <span id="ui-wf-n"></span></div><div class="wf-chips" id="ui-wf"></div></div>
+      </div>
+
+      <div class="show">
+        <div class="show-copy">
+          <h3>Zoom into one folder or one page</h3>
+          <p>Analyse just <code>/blog/</code>, <code>/pricing</code> or the section your team owns. Clickwise asks Google for that part of the site only, so every query, total and comparison is about your pages — and switch folders from the top bar without starting over.</p>
+        </div>
+        <div class="show-ui ui-scope">
+          <div class="scope-row"><span class="pillish">example.com</span><span class="pillish strong">Folder: /blog/ <u>Change</u></span></div>
+          <div class="scope-box"><label>Folder or page</label><div class="fake-in">/pricing</div><label class="fake-check"><span class="box on"></span>Exactly this page</label><span class="fake-btn">Analyse</span></div>
+        </div>
+      </div>
+
+      <div class="show flip">
+        <div class="show-copy">
+          <h3>Advice that knows a sitelink from a weak title</h3>
+          <p>A category page shown under your brand results can look like it has a terrible click rate. Clickwise sets likely sitelinks and dashboard or account pages aside with the reason, instead of telling you to rewrite them — and lets you include any of them back with one click.</p>
+        </div>
+        <div class="show-ui ui-aside"><div class="ui-h">Set aside <span>example</span></div>
+          <div class="aside-row"><b>/careers</b><p>Top-level page at position 1.6 with 1.1% CTR on a site where 70% of query clicks are branded — probably shown as a sitelink.</p><span class="fake-btn quiet">Include</span></div>
+          <div class="aside-row"><b>/account/settings</b><p>URL looks like a dashboard, account or other utility page.</p><span class="fake-btn quiet">Include</span></div>
+        </div>
+      </div>
+
+      <div class="show">
+        <div class="show-copy">
+          <h3>See what's losing ground — even from an Excel export</h3>
+          <p>Compare this period with the last and get every page and search that lost clicks, with the likely cause: lost rank, lost demand or lost click-through. Connect Search Console, or just upload an export made with Date › Compare, or two exports together.</p>
+        </div>
+        <div class="show-ui ui-decay"><div class="ui-h">Losing ground <span>sample site</span></div><ol id="ui-decay"></ol></div>
       </div>
     </div>
   </section>
@@ -104,15 +131,35 @@
   <section class="ai-band" id="ai-search">
     <div class="wrap two-col">
       <div>
-        <h2>See where AI search is taking your clicks.</h2>
-        <p class="prose-l">When an AI Overview answers a query, you can rank #2 and still get almost no traffic. Clickwise flags those queries, finds the question- and prompt-shaped searches AI engines draw from, and scores how ready your content is to be cited.</p>
+        <h2>See where AI answers are taking your clicks.</h2>
+        <p class="prose-l">When an AI Overview or answer box responds on the results page, you can rank #2 and still get almost no traffic. Clickwise flags those searches only when the evidence is there, finds the question- and prompt-shaped searches AI engines draw from, and gives a directional readiness score.</p>
       </div>
       <dl class="ai-list">
-        <div><dt>Likely answered by AI Overviews</dt><dd>Top-5 rankings with CTR under a third of benchmark.</dd></div>
-        <div><dt>Question and conversational searches</dt><dd>The 7+ word, natural-language queries that mirror how people prompt ChatGPT and Gemini.</dd></div>
-        <div><dt>Comparisons and freshness</dt><dd>Formats AI engines prefer to cite: structured comparisons and recently updated pages.</dd></div>
-        <div><dt>AI search readiness score</dt><dd>One directional number, built only from your Search Console data.</dd></div>
+        <div><dt>Possible answer boxes</dt><dd>Top-5 searches getting far fewer clicks than your site usually earns at that position, with enough impressions to be sure.</dd></div>
+        <div><dt>Question and conversational searches</dt><dd>The 7+ word, natural-language searches that mirror how people prompt ChatGPT and Gemini.</dd></div>
+        <div><dt>Comparisons and freshness</dt><dd>The formats AI engines prefer to cite: structured comparisons and recently updated pages.</dd></div>
       </dl>
+    </div>
+  </section>
+
+  <!-- COMPARISON -->
+  <section class="compare" id="compare">
+    <div class="wrap">
+      <h2 class="sec-h">Why not just use the Performance report?</h2>
+      <div class="tw-c">
+        <table class="cmp">
+          <thead><tr><th scope="col"></th><th scope="col">Search Console report</th><th scope="col">Spreadsheet by hand</th><th scope="col" class="us">Clickwise</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Branded searches separated</th><td>Manual regex filter</td><td>Yes, with work</td><td class="us">Automatic, typos included</td></tr>
+            <tr><th scope="row">Ranked list of what to fix</th><td>No</td><td>Hours each month</td><td class="us">In seconds</td></tr>
+            <tr><th scope="row">Clicks each fix could add</th><td>No</td><td>Your own formula</td><td class="us">Low–high range, per month</td></tr>
+            <tr><th scope="row">Pages losing clicks, with the cause</th><td>Compare by eye</td><td>VLOOKUPs</td><td class="us">Listed with likely cause</td></tr>
+            <tr><th scope="row">Your own pages competing</th><td>No</td><td>Pivot tables</td><td class="us">Flagged as candidates</td></tr>
+            <tr><th scope="row">Ask in plain English</th><td>No</td><td>No</td><td class="us">Yes</td></tr>
+            <tr><th scope="row">Analyse one folder or page</th><td>Page filter</td><td>Filter by hand</td><td class="us">Yes, switch any time</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -121,9 +168,9 @@
     <div class="wrap">
       <h2 class="sec-h">From sign-in to action plan in about a minute</h2>
       <ol class="steps">
-        <li><h3>Connect or upload</h3><p>Sign in with Google for read-only access, or drop in the Excel export from Search Console.</p></li>
-        <li><h3>Confirm your brand terms</h3><p>We guess them from your domain. Add misspellings so branded clicks don't hide real SEO performance.</p></li>
-        <li><h3>Work the plan</h3><p>Start with the top action, open the exact list of queries or pages, export to CSV, and print the report for your team.</p></li>
+        <li><h3>Connect or upload</h3><p>Sign in with Google for read-only access, or drop in the Excel export from Search Console. Pick the whole site or one folder.</p></li>
+        <li><h3>Confirm your brand</h3><p>We guess your brand names from your domain and spot common misspellings, so branded clicks don't hide real SEO performance.</p></li>
+        <li><h3>Work the plan</h3><p>Start with the top action, open the exact searches or pages behind it, export to CSV, or print the one-page report for your team.</p></li>
       </ol>
     </div>
   </section>
@@ -139,7 +186,8 @@
           <p class="price"><b>$0</b></p>
           <p class="plan-for">For checking one site now and then.</p>
           <ul>
-            <li>All six reports and AI search signals</li>
+            <li>Every report, workflow and smart filter</li>
+            <li>Whole site or one folder</li>
             <li>Google sign-in or file upload</li>
             <li>CSV export and printable report</li>
             <li>Analysis runs in your browser</li>
@@ -149,12 +197,12 @@
         <article class="plan plan-main">
           <h3>Pro</h3>
           <p class="price"><b>$19</b><span>/ month</span></p>
-          <p class="plan-for">For in-house SEOs and site owners.</p>
+          <p class="plan-for">For in-house SEOs and site owners. Coming soon.</p>
           <ul>
             <li>Everything in Free</li>
             <li>Up to 10 properties</li>
-            <li>Daily sync, history kept beyond Google's 16 months</li>
-            <li>Weekly email digest of new opportunities</li>
+            <li>Daily sync, history beyond Google's 16 months</li>
+            <li>Weekly email of new opportunities</li>
             <li>GA4 conversions joined to pages</li>
           </ul>
           <a class="btn-ghost" href="mailto:hello@clickwise.example?subject=Clickwise%20Pro%20early%20access">Join the Pro waitlist</a>
@@ -162,7 +210,7 @@
         <article class="plan">
           <h3>Agency</h3>
           <p class="price"><b>$49</b><span>/ month</span></p>
-          <p class="plan-for">For teams managing client sites.</p>
+          <p class="plan-for">For teams managing client sites. Coming soon.</p>
           <ul>
             <li>Everything in Pro</li>
             <li>Unlimited properties</li>
@@ -180,18 +228,19 @@
     <div class="wrap narrow-w">
       <h2 class="sec-h">Questions</h2>
       <details><summary>What access does Clickwise need?</summary><p>Read-only access to Search Console (the <code>webmasters.readonly</code> scope). Clickwise can't change anything in your account, and you can revoke access any time from your Google account settings.</p></details>
-      <details><summary>Where is my data stored?</summary><p>In the free version, nowhere but your browser. Data is fetched from Google directly into the page and analysed there. Your brand terms are saved in your browser so you don't retype them.</p></details>
-      <details><summary>How are the “clicks to gain” estimates calculated?</summary><p>Each query's CTR is compared with a benchmark curve for its position, roughly 28% at #1, 11% at #3 and 2.4% at #10. The gap times impressions is the opportunity. Branded searches are excluded. Use the numbers to prioritise, not as a forecast.</p></details>
-      <details><summary>Can I use it without signing in with Google?</summary><p>Yes. Export the Performance report from Search Console as Excel and upload it. A few reports are richer with sign-in: exact competing-page detection and content decay need data the export doesn't include.</p></details>
-      <details><summary>Does it work for any website?</summary><p>Any site with a verified Search Console property: blogs, ecommerce, SaaS, marketplaces. Site sections are detected from your own URL structure, and brand terms come from your domain.</p></details>
-      <details><summary>How is this different from Ahrefs or Semrush?</summary><p>Those tools estimate your rankings from their own crawls. Clickwise uses Google's first-party data for your site — real impressions, clicks and positions — and focuses on what to fix next rather than on keyword research.</p></details>
+      <details><summary>Where is my data stored?</summary><p>Nowhere but your browser. Data is fetched from Google straight into the page and analysed there; reloading clears it. Only your settings — brand names, ignored searches, saved workflows — are kept in your browser, and Settings › Forget this site deletes them.</p></details>
+      <details><summary>How are the click estimates worked out?</summary><p>For each search, Clickwise compares its click-through rate with what your own site usually earns at that position (an industry benchmark where you don't have enough data), and shows the gap as a low–high range of clicks per month. Each search is counted once, outliers are capped, and searches that look answered on the results page are flagged. Use the numbers to prioritise, not as a forecast.</p></details>
+      <details><summary>Can I use it without signing in with Google?</summary><p>Yes. Export the Performance report from Search Console as Excel and upload it. To see pages losing clicks, export with Date › Compare, or upload two exports together. A few details need sign-in, such as which search lands on which page.</p></details>
+      <details><summary>Can I analyse just one section of my site?</summary><p>Yes. Type a folder like <code>/blog/</code> or paste a page URL when you pick your property, and switch to another folder from the top bar at any time. For uploads, set the Page filter in Search Console before exporting.</p></details>
+      <details><summary>Does it work for any website?</summary><p>Any site with a Search Console property: blogs, ecommerce, SaaS, marketplaces, B2B. Sections and page types are read from your own URL structure, and brand names from your domain.</p></details>
+      <details><summary>How is this different from Ahrefs or Semrush?</summary><p>Those tools estimate your rankings from their own crawls. Clickwise uses Google's first-party data for your site — real impressions, clicks and positions — and focuses on what to fix next rather than keyword research.</p></details>
     </div>
   </section>
 
   <section class="final">
     <div class="wrap row-c">
       <h2>Your next ten SEO tasks are already in Search Console.</h2>
-      <a class="btn-primary" href="app.html">Start free audit</a>
+      <div class="hero-cta"><a class="btn-primary" href="app.html">Start free audit</a><a class="btn-ghost" href="app.html?demo">Explore the sample report</a></div>
     </div>
   </section>
 </main>
@@ -205,20 +254,57 @@
   <div class="wrap foot-legal">Not affiliated with Google. Google Search Console is a trademark of Google LLC.</div>
 </footer>
 
-<script src="config.js?v=15"></script>
-<script src="engine.js?v=15"></script>
-<script src="demo.js?v=15"></script>
+<script src="config.js?v=17"></script>
+<script src="engine.js?v=17"></script>
+<script src="demo.js?v=17"></script>
+<script src="filters.js?v=17"></script>
+<script src="workflows.js?v=17"></script>
 <script>
-// Hero specimen: run the real engine on the sample site.
+// Everything on the right-hand side is produced by the real engine on the fictional sample site.
 (function () {
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = id => document.getElementById(id);
+  let A;
   try {
-    const D = CW_DEMO.build();
-    const A = CW.analyse(D, { brand: ['trailcraft', 'trail craft'], exclude: CW_CONFIG.defaultExcludes });
-    document.getElementById('spec-gain').textContent = CW.fmtN(A.potentialMonthly);
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    document.getElementById('spec-list').innerHTML = A.plan.slice(0, 3).map(a =>
-      `<li><span>${esc(a.title)}</span><b>${a.gain ? '+' + CW.fmtN(a.gain) : '—'}</b></li>`).join('');
-  } catch (e) { document.querySelector('.specimen').hidden = true; }
+    A = CW.analyse(CW_DEMO.build(), { brand: ['trailcraft', 'trail craft', 'trialcraft'], exclude: CW_CONFIG.defaultExcludes, utilityHints: CW_CONFIG.utilityHints });
+  } catch (e) { document.querySelectorAll('.demo,.show-ui[class*="ui-plan"],.ui-decay').forEach(x => x.hidden = true); return; }
+  const n = CW.fmtN, range = (lo, hi) => hi < 1 ? '—' : lo >= 1 && n(lo) !== n(hi) ? '+' + n(lo) + '–' + n(hi) : lo >= 1 ? '+' + n(hi) : 'up to +' + n(hi);
+
+  // feature visuals
+  $('ui-plan').innerHTML = A.plan.slice(0, 3).map(a => `<li><span>${esc(a.title)}</span><b>${range(a.gain, a.gainHi || 0)}<small>clicks / month</small></b></li>`).join('');
+  const T = CW_WORKFLOWS.TEMPLATES;
+  $('ui-wf-n').textContent = T.length + ' ready to run';
+  $('ui-wf').innerHTML = T.map((w, i) => `<span class="wfc${i === 0 ? ' on' : ''}">${esc(w.name)}</span>`).join('');
+  $('ui-decay').innerHTML = (A.decay ? A.decay.pages.slice(0, 3) : []).map(r => `<li><span><b>${esc(r.path)}</b><small>${esc(r.reason)}</small></span><em>${n(r.prev.clicks)} → ${n(r.cur.clicks)}</em></li>`).join('');
+
+  // hero demo: type a request, run the real parser and filter, show the result
+  const asks = ['Pages with high impressions but not enough clicks', 'Non-branded keywords ranking between positions 5 and 15', 'Question searches on page two', 'Location-based keywords grouped by city'];
+  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function show(text) {
+    const p = CW_FILTERS.parse(text, A), r = CW_FILTERS.run(p.spec, A);
+    $('demo-chips').innerHTML = p.spec.conds.map(c => `<span>${esc(CW_FILTERS.chip(c, p.spec.target))}</span>`).join('') + (p.spec.group ? `<span>Grouped by ${esc(CW_FILTERS.GROUPS[p.spec.group])}</span>` : '');
+    if (!r.ok) { $('demo-count').textContent = ''; $('demo-rows').innerHTML = ''; return; }
+    const noun = p.spec.target === 'page' ? 'pages' : 'searches';
+    if (r.groups) {
+      $('demo-count').innerHTML = `<b>${r.rows.length}</b> ${noun} in <b>${r.groups.length}</b> groups`;
+      $('demo-rows').innerHTML = r.groups.slice(0, 3).map(g => `<li><span>${esc(g.key)}</span><em>${g.n} ${noun} · ${n(g.clicks)} clicks</em></li>`).join('');
+    } else {
+      $('demo-count').innerHTML = `<b>${r.rows.length}</b> ${noun} found`;
+      $('demo-rows').innerHTML = r.rows.slice(0, 3).map(x => `<li><span>${esc(x.q || x.path)}</span><em>#${x.pos.toFixed(1)} · ${n(x.impr)} impr.</em></li>`).join('');
+    }
+  }
+  const box = $('demo-text'), fig = document.querySelector('.demo');
+  if (still) { box.textContent = asks[0]; show(asks[0]); fig.classList.add('done'); return; }
+  let i = 0;
+  (function next() {
+    const text = asks[i++ % asks.length];
+    let k = 0; box.textContent = ''; fig.classList.remove('done');
+    $('demo-chips').innerHTML = ''; $('demo-count').textContent = ''; $('demo-rows').innerHTML = '';
+    const t = setInterval(() => {
+      box.textContent = text.slice(0, ++k);
+      if (k >= text.length) { clearInterval(t); setTimeout(() => { show(text); fig.classList.add('done'); setTimeout(next, 4200); }, 350); }
+    }, 38);
+  })();
 })();
 </script>
 </body>
