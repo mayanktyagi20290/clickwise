@@ -135,10 +135,12 @@
     cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
     compass: '<circle cx="12" cy="12" r="9"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/>',
     star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
-    chev: '<path d="m6 9 6 6 6-6"/>'
+    chev: '<path d="m6 9 6 6 6-6"/>',
+    code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>'
   };
   const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
   // Collapsible card header: coloured icon, title, description, count pill, chevron
+  const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
   const accHead = (icon, tone, title, desc, pill, pillTone) => `<summary><span class="ico ${tone}">${svg(icon)}</span><div><h3>${esc(title)}</h3><p>${esc(desc)}</p></div><span class="pill ${pillTone || tone}">${esc(pill)}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true">${ICON.chev}</svg></summary>`;
   function tileDelta(cur, prev, invert, unit) {
     if (prev == null || !isFinite(prev) || prev === 0) return '';
@@ -164,12 +166,12 @@
     if (!list.length) return '<p class="empty">No pages found.</p>';
     const max = Math.max(...list.map(s => s.clicks), 1);
     return `<div class="cards ${cls || ''}">${list.map(s => `
-      <article class="card s-${s.status}">
+      <a class="card s-${s.status}" href="#section=${encodeURIComponent(s.key)}" title="Open ${esc(s.key)}">
         <div class="card-top"><span class="card-n" title="${esc(s.key)}">${esc(s.key)}</span><span class="badge b-${s.status}">${STATUS[s.status]}</span></div>
         <div class="card-v">${fmtN(s.clicks)}</div>
         <div class="card-m">CTR ${pctf(s.ctr)} · pos ${s.pos.toFixed(1)} · ${s.n} page${s.n === 1 ? '' : 's'}</div>
         <div class="card-bar"><span style="width:${(s.clicks / max * 100).toFixed(1)}%"></span></div>
-      </article>`).join('')}</div>`;
+      </a>`).join('')}</div>`;
   }
 
   // Aggregate the daily series by day / week / month
@@ -253,7 +255,7 @@
 
       <div class="grid-2">
         <section class="panel">
-          <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Strong, Steady, Fix CTR (ranks but under-clicked), or Needs work (mostly page two).</p></div>
+          <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Click a folder to dive into its URLs. Badges: Strong, Steady, Fix CTR (ranks but under-clicked), Needs work (mostly page two).</p></div>
           <div class="panel-b cards-wrap">${sectionCards(A.sections1.filter(x => x.key !== '/').slice(0, 6), 'two')}</div>
         </section>
         <section class="panel">
@@ -407,7 +409,7 @@
       </div>
       <div class="stack">${groups.map(g => `
         <details class="acc" ${g.id === 'ov' ? 'open' : ''}>
-          ${accHead(g.icon, g.tone, g.title, g.desc, g.rows.length.toLocaleString() + (g.page ? ' pages' : ' queries'))}
+          ${accHead(g.icon, g.tone, g.title, g.desc, g.page ? plural(g.rows.length, 'page', 'pages') : plural(g.rows.length, 'query', 'queries'))}
           <div class="acc-tip"><b>What to do:</b> ${esc(g.tip)}</div>
           ${table('t-ai-' + g.id, cols(g), g.rows, { sort: g.gain ? 'gain' : 'impr', file: 'ai-' + g.id, pageSize: 25, searchKeys: g.page ? ['path'] : ['q'] })}
         </details>`).join('')}</div>
@@ -442,10 +444,87 @@
   V.sections = (A) => {
     const list2 = A.sections2;
     const html = head('Site sections', 'Your URLs grouped by folder, built automatically from your site structure. Position is weighted by impressions.') +
-      `<section class="panel"><div class="panel-h"><h2>Top-level folders</h2><p>Strong: top-5 and clicked well. Steady: page one, normal CTR. Fix CTR: ranks but under-clicked. Needs work: mostly page two.</p></div><div class="panel-b cards-wrap">${sectionCards(A.sections1)}</div></section>
+      `<section class="panel"><div class="panel-h"><h2>Top-level folders</h2><p>Click any folder to open its pages, sub-folders and queries. Strong: top-5 and clicked well. Steady: page one, normal CTR. Fix CTR: ranks but under-clicked. Needs work: mostly page two.</p></div><div class="panel-b cards-wrap">${sectionCards(A.sections1)}</div></section>
        <section class="panel"><div class="panel-h"><h2>Second-level folders</h2><p>Finer breakdown, useful for large sections like /blog/ or /products/.</p></div>
-       ${table('t-sec', [{ k: 'key', l: 'Section', cls: 'u' }, { k: 'n', l: 'Pages', r: 1 }, C.clicks, C.impr, C.ctr, C.pos], list2, { sort: 'clicks', file: 'sections', placeholder: 'Filter sections' })}</section>`;
+       ${table('t-sec', [{ k: 'key', l: 'Section', cls: 'u', f: r => `<a href="#section=${encodeURIComponent(r.key)}">${esc(r.key)}</a>` }, { k: 'n', l: 'Pages', r: 1 }, C.clicks, C.impr, C.ctr, C.pos], list2, { sort: 'clicks', file: 'sections', placeholder: 'Filter sections' })}</section>`;
     return { html, mount: () => drawTable('t-sec') };
+  };
+
+
+  // ── Folder deep dive ──
+  function statusOf(a) { const b = expCtr(a.pos); return a.pos > 10 ? 'work' : a.ctr < b * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= b * 0.8 ? 'strong' : 'steady'; }
+  const segsOf = path => path.split('/').filter(Boolean);
+  V.section = (A, D, key) => {
+    const agg = window.CW.agg;
+    const depth = segsOf(key).length;
+    const inSec = r => key === '/' ? r.path === '/' : (r.path === key.replace(/\/$/, '') || r.path.startsWith(key));
+    const pages = A.P.filter(inSec).sort((a, b) => b.clicks - a.clicks);
+    if (!pages.length) return { html: head('Folder not found', `No pages under ${esc(key)} in this data.`) + '<p><a href="#sections">Back to all sections</a></p>' };
+    const tot = agg(pages); const status = statusOf(tot);
+    const urlSet = new Set(pages.map(r => r.p));
+
+    // sub-folders one level down; pages sitting directly in this folder stay in the page list
+    const kids = new Map();
+    pages.forEach(r => {
+      const sg = segsOf(r.path);
+      if (sg.length > depth + 1) { const k = '/' + sg.slice(0, depth + 1).join('/') + '/'; if (!kids.has(k)) kids.set(k, []); kids.get(k).push(r); }
+    });
+    const sub = [...kids.entries()].map(([k, rows]) => { const a = agg(rows); return { key: k, rows, ...a, status: statusOf(a) }; }).sort((a, b) => b.clicks - a.clicks);
+
+    // previous period for this folder
+    let prevTot = null;
+    if (D.prevP && D.prevP.length) {
+      const pp = D.prevP.filter(r => inSec({ path: window.CW.pathOf(r.p) }));
+      if (pp.length) prevTot = agg(pp);
+    }
+
+    // queries that land on this folder (needs query × page data)
+    let topQ = [];
+    if (D.QP && D.QP.length) {
+      const m = new Map();
+      const isB = q => A.BQ.some(b => b.q === q);
+      D.QP.forEach(r => { if (!urlSet.has(r.p)) return; const o = m.get(r.q) || { q: r.q, clicks: 0, impr: 0, posW: 0 }; o.clicks += r.clicks; o.impr += r.impr; o.posW += r.pos * r.impr; m.set(r.q, o); });
+      topQ = [...m.values()].map(o => ({ q: o.q, clicks: o.clicks, impr: o.impr, ctr: o.impr ? o.clicks / o.impr * 100 : 0, pos: o.posW / Math.max(1, o.impr), brand: isB(o.q) })).sort((a, b) => b.clicks - a.clicks);
+    }
+    const ctrHere = A.ctrPages.filter(r => urlSet.has(r.p));
+    const decayHere = A.decay ? A.decay.pages.filter(r => urlSet.has(r.p)) : [];
+    const qwHere = topQ.length ? A.quickWins.filter(q => topQ.some(t => t.q === q.q)) : [];
+
+    // breadcrumb
+    const sg = segsOf(key);
+    const crumbs = [`<a href="#sections">All sections</a>`].concat(sg.map((s2, i) => {
+      const k = '/' + sg.slice(0, i + 1).join('/') + '/';
+      return i === sg.length - 1 ? `<span>${esc(s2)}</span>` : `<a href="#section=${encodeURIComponent(k)}">${esc(s2)}</a>`;
+    })).join('<span class="sep">/</span>');
+
+    const d = (cur, prev, inv, unit) => prev ? tileDelta(cur, prev, inv, unit) : '';
+    const html = `
+      <nav class="crumbs" aria-label="Breadcrumb">${crumbs}</nav>
+      <header class="v-head sec-head"><h1>${esc(key)}</h1><span class="badge b-${status}">${STATUS[status]}</span>
+        <p>${pages.length.toLocaleString()} page${pages.length === 1 ? '' : 's'}${sub.length ? ` in ${sub.length} sub-folder${sub.length === 1 ? '' : 's'}` : ''}. ${prevTot ? 'Changes compare with the previous period.' : ''}</p></header>
+
+      <section class="tiles" aria-label="Folder performance">
+        <div class="tile t-blue"><div class="tile-v">${fmtN(tot.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">${(tot.clicks / Math.max(1, A.P.reduce((s3, r) => s3 + r.clicks, 0)) * 100).toFixed(1)}% of all page clicks</div>${d(tot.clicks, prevTot && prevTot.clicks)}</div>
+        <div class="tile t-green"><div class="tile-v">${fmtN(tot.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">${pages.length} pages</div>${d(tot.impr, prevTot && prevTot.impr)}</div>
+        <div class="tile t-amber"><div class="tile-v">${pctf(tot.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Benchmark ~${expCtr(tot.pos).toFixed(1)}%</div>${d(tot.ctr, prevTot && prevTot.ctr, false, 'pt')}</div>
+        <div class="tile t-red"><div class="tile-v">${tot.pos.toFixed(1)}</div><div class="tile-l">Avg. position</div><div class="tile-s">Weighted by impressions</div>${d(tot.pos, prevTot && prevTot.pos, true)}</div>
+      </section>
+
+      ${sub.length ? `<section class="panel"><div class="panel-h"><h2>Sub-folders</h2><p>Click to go one level deeper.</p></div><div class="panel-b cards-wrap">${sectionCards(sub)}</div></section>` : ''}
+
+      ${(ctrHere.length || decayHere.length || qwHere.length) ? `<div class="stack">
+        ${ctrHere.length ? `<details class="acc" open>${accHead('pulse', 'amber', 'Titles to rewrite in this folder', 'Page-one pages earning well below benchmark CTR.', plural(ctrHere.length, 'page', 'pages'))}${table('t-sx-ctr', [C.page, C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain], ctrHere, { sort: 'gain', file: 'folder-titles', searchKeys: ['path'], pageSize: 10 })}</details>` : ''}
+        ${qwHere.length ? `<details class="acc">${accHead('bolt', 'orange', 'Almost page one', 'Queries landing here that rank 4–20.', plural(qwHere.length, 'query', 'queries'))}${table('t-sx-qw', [C.q, C.impr, C.clicks, C.ctr, C.pos, C.gain], qwHere, { sort: 'gain', file: 'folder-quick-wins', pageSize: 10 })}</details>` : ''}
+        ${decayHere.length ? `<details class="acc">${accHead('down', 'red', 'Losing ground', 'Pages here that lost at least 25% of clicks.', plural(decayHere.length, 'page', 'pages'))}${table('t-sx-dec', [C.page, { k: 'prevC', l: 'Clicks before', r: 1, f: r => fmtN(r.prev.clicks), csv: r => r.prev.clicks }, { k: 'curC', l: 'Clicks now', r: 1, f: r => fmtN(r.cur.clicks), csv: r => r.cur.clicks }, { k: 'ch', l: 'Change', r: 1, f: r => `<span class="lossv">${r.ch.toFixed(0)}%</span>` }, { k: 'reason', l: 'Likely cause', sort: false }], decayHere.map(r => ({ ...r, prevC: r.prev.clicks, curC: r.cur.clicks })), { sort: 'lost', file: 'folder-decay', searchKeys: ['path'], pageSize: 10 })}</details>` : ''}
+      </div>` : ''}
+
+      <section class="panel"><div class="panel-h"><h2>All URLs in ${esc(key)}</h2><p>Every page under this folder, including sub-folders.</p></div>
+        ${table('t-sx-pages', [C.page, C.clicks, C.impr, C.ctr, C.pos], pages, { sort: 'clicks', file: 'folder-pages', searchKeys: ['path'], placeholder: 'Filter URLs' })}</section>
+
+      <section class="panel"><div class="panel-h"><h2>Queries landing here</h2><p>${topQ.length ? 'Searches that sent impressions to pages in this folder.' : 'Connect Search Console to see which searches land on this folder (file exports don\'t include query-to-page data).'}</p></div>
+        ${topQ.length ? table('t-sx-q', [C.q, C.clicks, C.impr, C.ctr, C.pos, { k: 'brand', l: 'Type', f: r => r.brand ? '<span class="tag watch">Branded</span>' : '<span class="tag">Non-branded</span>', csv: r => r.brand ? 'Branded' : 'Non-branded' }], topQ, { sort: 'clicks', file: 'folder-queries', placeholder: 'Filter queries' }) : ''}</section>`;
+    const mount = () => ['t-sx-ctr', 't-sx-qw', 't-sx-dec', 't-sx-pages', 't-sx-q'].forEach(drawTable);
+    return { html, mount };
   };
 
   V.intent = (A) => {
@@ -467,12 +546,51 @@
 
   V.regex = (A) => {
     const lib = window.CW.regexLibrary(A.brandRx);
-    const html = head('Regex library', 'Ready-made filters for Search Console. In Performance, add a Query or Page filter, choose “Custom (regex)”, and paste. Counts show how many rows match in this analysis.') +
-      `<div class="rx-list">${lib.map((x, i) => {
-        const n = x.rxNote ? null : window.CW.countRegex(x.rx, x.use === 'Page' ? A.P : A.Q, x.use === 'Page' ? 'p' : 'q');
-        return `<article class="rx"><h3>${esc(x.title)}</h3><div class="rx-n">${n == null ? '' : `<b>${n.toLocaleString()}</b>matching ${x.use === 'Page' ? 'pages' : 'queries'}`}</div><p>${esc(x.why)}</p><code id="rx-${i}">${esc(x.rx)}</code><div class="rx-actions"><span class="tag">${x.use} filter</span><button class="btn-quiet" type="button" data-copy="rx-${i}">Copy regex</button></div></article>`;
-      }).join('')}</div>`;
-    return { html };
+    const match = (rx, rows, key) => { try { const r = new RegExp(rx, 'i'); return rows.filter(x => r.test(x[key])); } catch (e) { return null; } };
+    const colsFor = use => use === 'Page' ? [C.page, C.clicks, C.impr, C.ctr, C.pos] : [C.q, C.clicks, C.impr, C.ctr, C.pos];
+    const items = lib.map((x, i) => {
+      const isPage = x.use === 'Page';
+      const rows = match(x.rx, isPage ? A.P : A.Q, isPage ? 'p' : 'q');
+      return { ...x, i, isPage, rows: rows || [], ok: rows !== null };
+    });
+    const html = head('Regex library', 'Ready-made filters for Search Console. Click any pattern to see every matching query or page in your data, then copy it into Search Console › Performance › Add filter › Custom (regex).') +
+      `<section class="panel rx-test">
+        <div class="panel-h"><h2>Test your own regex</h2><p>Type a pattern to see matching rows instantly. Case-insensitive.</p></div>
+        <div class="tools rx-tools">
+          <input type="text" id="rx-in" placeholder="e.g. ^(how|what) .*(price|cost)  ·  pages match the full URL" aria-label="Your regex" spellcheck="false" autocomplete="off">
+          <select id="rx-on" aria-label="Match against"><option value="q">Queries</option><option value="p">Pages</option></select>
+          <span class="meta" id="rx-msg">Enter a pattern</span>
+        </div>
+        <div id="rx-out" hidden>${table('t-rx-custom', colsFor('Query'), [], { sort: 'clicks', file: 'regex-matches', pageSize: 25, search: false })}</div>
+      </section>
+      <div class="stack">${items.map(x => `
+        <details class="acc rx-acc">
+          ${accHead(x.isPage ? 'file' : 'code', x.isPage ? 'teal' : 'violet', x.title, x.why, x.ok ? (x.isPage ? plural(x.rows.length, 'page', 'pages') : plural(x.rows.length, 'query', 'queries')) : 'Search Console only', x.rows.length ? (x.isPage ? 'teal' : 'violet') : 'amber')}
+          <div class="rx-code"><code id="rx-${x.i}">${esc(x.rx)}</code><button class="btn-quiet" type="button" data-copy="rx-${x.i}">Copy regex</button><span class="tag">${x.use} filter</span></div>
+          ${x.rxNote ? '<div class="acc-tip"><b>Note:</b> Search Console regex (RE2) does not support lookahead, so use “Doesn\'t match regex” with the branded pattern. Matches below are shown using your brand terms.</div>' : ''}
+          ${x.ok ? table('t-rx-' + x.i, colsFor(x.use), x.rows, { sort: 'clicks', file: 'regex-' + x.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'), pageSize: 25, searchKeys: x.isPage ? ['path'] : ['q'], empty: 'No rows match this pattern.' }) : '<p class="empty">This pattern only works inside Search Console.</p>'}
+        </details>`).join('')}</div>`;
+    const mount = () => {
+      // draw a pattern's table the first time it is opened
+      document.querySelectorAll('.rx-acc').forEach((d, k) => d.addEventListener('toggle', () => { if (d.open) drawTable('t-rx-' + items[k].i); }, { once: false }));
+      const inp = document.getElementById('rx-in'), on = document.getElementById('rx-on'), msg = document.getElementById('rx-msg'), out = document.getElementById('rx-out');
+      let tmr;
+      const run = () => {
+        const v = inp.value.trim(), key = on.value;
+        if (!v) { out.hidden = true; msg.textContent = 'Enter a pattern'; return; }
+        let rx; try { rx = new RegExp(v, 'i'); } catch (e) { out.hidden = true; msg.textContent = 'Not a valid pattern: ' + e.message.replace(/^Invalid regular expression: /, ''); return; }
+        const rows = (key === 'p' ? A.P : A.Q).filter(r => rx.test(r[key]));
+        const t = TABLES['t-rx-custom'];
+        t.cols = colsFor(key === 'p' ? 'Page' : 'Query'); t.rows = rows; t.page = 0; t.opt.searchKeys = key === 'p' ? ['path'] : ['q'];
+        document.querySelector('#t-rx-custom thead tr').innerHTML = t.cols.map(c => `<th${c.r ? ' class="r"' : ''} data-sort="${c.k}" scope="col">${esc(c.l)}</th>`).join('');
+        const a = window.CW.agg(rows);
+        msg.textContent = `${rows.length.toLocaleString()} match${rows.length === 1 ? '' : 'es'} · ${fmtN(a.clicks)} clicks · ${fmtN(a.impr)} impr.`;
+        out.hidden = false; drawTable('t-rx-custom');
+      };
+      inp.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(run, 200); });
+      on.addEventListener('change', run);
+    };
+    return { html, mount };
   };
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-copy]'); if (!b) return;

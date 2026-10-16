@@ -202,7 +202,8 @@
     $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
     counts();
     show('app');
-    if (!location.hash || !V[location.hash.slice(1)]) history.replaceState(null, '', '#overview');
+    const h = location.hash.slice(1);
+    if (!h || (!V[h] && !h.startsWith('section='))) history.replaceState(null, '', '#overview');
     route();
   }
   function fmtDate(s) { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -219,8 +220,11 @@
   // ── routing ──
   function route() {
     if (!A) return;
-    const name = location.hash.slice(1) || 'overview';
-    const fn = V[name] || V.overview;
+    const raw = location.hash.slice(1) || 'overview';
+    // folder deep dive: #section=/blog/guides/
+    const sec = raw.startsWith('section=') ? decodeURIComponent(raw.slice(8)) : null;
+    const name = sec ? 'sections' : raw;
+    const fn = sec ? (a, d) => V.section(a, d, sec) : (V[name] || V.overview);
     destroyCharts();
     const out = fn(A, D);
     const view = $('view');
@@ -228,7 +232,7 @@
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
     const onLink = document.querySelector('.nav a.on span');
-    document.title = (onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
+    document.title = (sec ? sec + ' — ' : onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
     $('nav').classList.remove('open'); $('menu-btn').setAttribute('aria-expanded', 'false');
     window.scrollTo(0, 0); view.focus({ preventScroll: true });
   }

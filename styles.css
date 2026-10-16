@@ -460,6 +460,28 @@ details.acc[open] .chev{transform:rotate(180deg)}
 @media (max-width:1100px){.grid-2.even{grid-template-columns:1fr}}
 @media (max-width:520px){.cards.two,.cards.three{grid-template-columns:1fr}}
 
+/* folder deep dive */
+a.card{text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+a.card:hover{border-color:var(--signal);box-shadow:0 6px 20px -8px rgb(79 70 229 / .35)}
+a.card:hover .card-n{color:var(--signal-ink)}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;margin:4px 0 10px;color:var(--muted)}
+.crumbs a{color:var(--signal-ink);text-decoration:none;font-weight:500}
+.crumbs a:hover{text-decoration:underline}
+.crumbs span:not(.sep){color:var(--ink);font-weight:600}
+.crumbs .sep{color:var(--line)}
+.sec-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sec-head h1{margin:0;word-break:break-all}
+.sec-head p{flex-basis:100%}
+.view>.tiles{margin-bottom:14px}
+
+/* regex */
+.rx-code{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 18px}
+.rx-code code{flex:1;min-width:200px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--sunk);border:1px solid var(--line-soft);padding:7px 10px;border-radius:8px;overflow-x:auto;white-space:nowrap}
+.rx-tools{padding-top:12px}
+.rx-tools input[type=text]{flex:1;min-width:220px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.rx-tools input[type=text]:focus{outline:2px solid var(--signal);outline-offset:0;border-color:transparent}
+.rx-tools select{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+
 /* indexing links */
 .idx{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 18px 16px}
 .idx a{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--ink);font-size:13px;font-weight:500}
