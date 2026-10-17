@@ -6,7 +6,8 @@
   const { table, drawTable, TABLES, C, head, stat, pctf, posTag, urlCell, serp } = ui;
   const CW = window.CW, K = window.CW_CONTENT, fmtN = CW.fmtN;
 
-  const TABS = [['topics', 'Topics'], ['gaps', 'Content gaps'], ['improve', 'Improve pages'], ['links', 'Internal links'], ['briefs', 'Briefs']];
+  const TABS = [['topics', 'Topics'], ['gaps', 'Content gaps'], ['improve', 'Improve pages'], ['titles', 'Titles & metas'], ['links', 'Internal links'], ['briefs', 'Briefs']];
+  const ISSUE = { status: 'Not a 200 page', noindex: 'Non-indexable', 'title-missing': 'No title', 'title-long': 'Title too long', 'title-short': 'Title short', 'title-dup': 'Duplicate title', 'title-query': 'Main search not in title', 'meta-missing': 'No meta description', 'meta-long': 'Meta too long', 'meta-short': 'Meta short', 'meta-dup': 'Duplicate meta', 'h1-missing': 'No H1', ctr: 'Low CTR' };
   const KIND = { unranked: 'Not on page one', homepage: 'Only the homepage ranks', scattered: 'Split across pages', diluted: 'Split with unrelated pages', nomatch: 'No matching page', questions: 'Unanswered questions' };
   const params = () => { const h = location.hash, i = h.indexOf('?'); return new URLSearchParams(i >= 0 ? h.slice(i + 1) : ''); };
   const pathCell = (url, path) => url ? urlCell(url, path) : '<span class="flat">New page</span>';
@@ -22,12 +23,18 @@
     const modeNote = search
       ? 'Built from your searches and which page ranks for each one (Search Console connection).'
       : 'This export has no search-to-page data, so topics and gaps come from searches alone, page advice from each page\'s own position, and link sources from folders. Connect Search Console for page-level evidence.';
-    const counts = { topics: K2.topics.filter(t => t.n > 1).length, gaps: K2.gaps.length, improve: K2.improvements.length, links: K2.links.length, briefs: K2.briefs.length };
+    const T = A.titles;
+    const counts = { titles: T ? T.rows.length : 0, topics: K2.topics.filter(t => t.n > 1).length, gaps: K2.gaps.length, improve: K2.improvements.length, links: K2.links.length, briefs: K2.briefs.length };
     const nav = `<nav class="ct-tabs" aria-label="Content sections">${TABS.map(([k, l]) => `<a href="#content?tab=${k}" class="${k === tab ? 'on' : ''}"${k === tab ? ' aria-current="page"' : ''}>${esc(l)} <span class="count">${counts[k].toLocaleString()}</span></a>`).join('')}</nav>`;
     const crawl = K2.inlinks
       ? `<div class="note ct-crawl"><b>Existing links loaded:</b> ${K2.inlinks.count.toLocaleString()} link${K2.inlinks.count === 1 ? '' : 's'} between your pages from ${esc(K2.inlinks.name || 'your file')}. ${K2.alreadyLinked ? `${K2.alreadyLinked.toLocaleString()} suggested link${K2.alreadyLinked === 1 ? ' already exists and was' : 's already exist and were'} removed.` : 'None of the suggestions exist yet.'} Kept in this tab only; nothing is stored. <button type="button" class="btn-link" id="ct-clear">Remove the file</button></div>`
       : `<div class="note ct-crawl"><b>Links are not checked against your site yet.</b> Search Console has no link data. To drop links that already exist, upload your crawler's link export (Screaming Frog › Bulk Export › Links › All Inlinks, or any CSV with source and destination columns). It is read in this browser and not stored.
           <label class="btn-quiet ct-up">Upload link export (CSV)<input type="file" id="ct-file" accept=".csv,.tsv,.txt" hidden></label>${uploadMsg && uploadMsg.error ? `<span class="sf-err" role="alert">${esc(uploadMsg.error)}</span>` : ''}</div>`;
+    const upMsg = uploadMsg && uploadMsg.error ? `<span class="sf-err" role="alert">${esc(uploadMsg.error)}</span>` : '';
+    const pagesNote = T
+      ? `<div class="note ct-crawl"><b>Page export loaded:</b> ${T.pages.toLocaleString()} page${T.pages === 1 ? '' : 's'} from ${esc(T.name || 'your file')}. Kept in this tab only; nothing is stored. <button type="button" class="btn-link" id="ct-clear-pages">Remove the file</button></div>`
+      : `<div class="note ct-crawl"><b>Upload your crawler's page export</b> to check every title and meta description against the searches each page really gets: Screaming Frog › Internal › HTML › Export (the free version crawls up to 500 URLs), or any CSV with URL and title columns. It is read in this browser and not stored.
+          <label class="btn-quiet ct-up">Upload page export (CSV)<input type="file" id="ct-file" accept=".csv,.tsv,.txt" hidden></label>${upMsg}</div>`;
     let body = '', mounts = [];
 
     if (tab === 'topics') {
@@ -56,6 +63,25 @@
       body = `<p class="ct-lead">${search ? 'Pages that rank with searches on positions 4–20: each can usually climb by covering those searches directly.' : 'Pages ranking on positions 4–20 with enough impressions.'} Title and CTR fixes are under <a href="#ctr">Titles to rewrite</a>.</p>
         <section class="panel">${table('t-ct-i', cols, rows, { sort: 'impr', file: 'page-improvements', searchKeys: ['path'], placeholder: 'Filter pages', pageSize: 25, empty: 'No pages with searches close to page one.' })}</section>`;
       mounts.push(() => drawTable('t-ct-i'));
+    } else if (tab === 'titles') {
+      if (!T) body = `<p class="ct-lead">For each page your crawler found, Clickwise checks the title, meta description and H1, and${search ? ' whether the title contains the search that brings the page most of its impressions' : ' (with Search Console connected) whether the title contains the page\'s main search'}. Pages are ordered by how often they are seen.</p>`;
+      else {
+        const k = T.kinds, kinds = Object.keys(ISSUE).filter(x => k[x]);
+        const cols = [{ ...C.page, cls: 'u wide', f: r => `${urlCell(r.url, r.path)}${r.inGsc ? '' : '<br><small class="flat">No impressions in this data</small>'}` },
+          C.impr,
+          { k: 'iss', l: 'Issues', sort: false, cls: 'act', f: r => r.issues.map(i => `<span class="tag ${i.sev >= 2 ? 'risk' : i.sev === 1 ? 'watch' : ''}">${esc(ISSUE[i.kind])}</span>`).join(' ') + `<br><small class="flat">${r.issues.map(i => esc(i.text)).join('<br>')}</small>`, csv: r => r.issues.map(i => i.text).join(' | ') },
+          { k: 'title', l: 'Title now', cls: 'act', f: r => r.title ? `${esc(r.title)}<br><small class="flat">${r.titleLen} characters</small>` : '<span class="flat">None</span>', csv: r => r.title },
+          { k: 'suggestion', l: 'A starting point', cls: 'act', f: r => r.suggestion ? `${esc(r.suggestion)}<br><small class="flat">from the search “${esc(r.queries[0].q)}”: edit before using</small>` : '<span class="flat">—</span>', csv: r => r.suggestion || '' }]
+          .concat(search ? [{ k: 'qs', l: 'Its main searches', sort: false, cls: 'act', f: r => r.queries.length ? `<small>${r.queries.slice(0, 3).map(q => `${esc(q.q)} <span class="flat">${fmtN(q.impr)}</span>`).join('<br>')}</small>` : '—', csv: r => r.queries.map(q => q.q).join(' | ') }] : []);
+        const groups = T.dupTitles.slice(0, 50);
+        body = `<div class="strip">${stat(T.pages.toLocaleString(), 'pages checked')}${stat(T.rows.length.toLocaleString(), 'with something to fix', 'watch')}${stat((k['title-query'] || 0).toLocaleString(), 'main search missing from the title', 'risk')}${stat(T.dupTitles.length.toLocaleString(), 'groups of pages sharing a title')}</div>
+          ${T.mode === 'export' ? '<p class="ct-lead">This export has no search-to-page data, so titles are checked for length, duplicates and gaps only. Connect Search Console to check them against each page\'s real searches.</p>' : ''}
+          ${T.gscOnly || T.crawlNoImpr ? `<p class="flat">${T.gscOnly ? `${T.gscOnly.toLocaleString()} page${T.gscOnly === 1 ? '' : 's'} with impressions ${T.gscOnly === 1 ? 'is' : 'are'} not in the crawl (the crawl may be partial). ` : ''}${T.crawlNoImpr ? `${T.crawlNoImpr.toLocaleString()} crawled page${T.crawlNoImpr === 1 ? ' has' : 's have'} no impressions in this data.` : ''}</p>` : ''}
+          <section class="panel">${table('t-ct-ti', cols, T.rows, { sort: 'impr', file: 'title-meta-audit', searchKeys: ['path'], placeholder: 'Filter pages', pageSize: 25, filters: [{ key: 'kind', label: 'Issue', options: kinds.map(x => [x, `${ISSUE[x]} (${k[x]})`]), test: (r, v) => r.issues.some(i => i.kind === v) }], empty: 'No title or meta issues on the crawled pages.' })}</section>
+          ${groups.length ? `<section class="panel"><div class="panel-h"><h2>Pages sharing a title</h2><p>Each group shows one title used on several indexable pages. Give each page its own.</p></div><div class="panel-b"><ul class="ct-dup">${groups.map(g => `<li><b>${esc(g.text)}</b> <span class="flat">(${g.keys.length} pages)</span><br><small>${g.keys.slice(0, 5).map(x => esc('/' + x.split('/').slice(1).join('/'))).join(' · ')}${g.keys.length > 5 ? ` · +${g.keys.length - 5} more` : ''}</small></li>`).join('')}</ul></div></section>` : ''}
+          <p class="note">Limits are guides: Google usually cuts titles past about ${T.LIMITS.titleMax} characters (${T.LIMITS.titlePx} px) and descriptions past about ${T.LIMITS.metaMax}. Suggestions are the page's own main search in title case: a starting point to edit, not a finished title.</p>`;
+        mounts.push(() => drawTable('t-ct-ti'));
+      }
     } else if (tab === 'links') {
       const cols = [{ k: 'path', l: 'Link to', cls: 'u wide', f: r => `${urlCell(r.p, r.path)}${r.target ? `<br><small class="flat">#${r.target.pos.toFixed(1)} for “${esc(r.anchor)}”</small>` : ''}`, csv: r => r.p },
         { k: 'anchor', l: 'Anchor text', f: r => r.anchor ? `“${esc(r.anchor)}”` : '<span class="flat">The page\'s main topic</span>', csv: r => r.anchor || '' },
@@ -82,7 +108,7 @@
     const html = head('Content & links', 'Topics, content gaps, pages to improve and internal links, from the searches you already appear for. Nothing here is invented: every page, search and number comes from your data.') +
       `<p class="flat ct-mode">${esc(modeNote)}</p>` +
       `<div class="strip">${stat(counts.topics.toLocaleString(), 'topics with 2+ searches')}${stat(counts.gaps.toLocaleString(), 'content gaps', 'watch')}${stat(counts.improve.toLocaleString(), 'pages to improve', 'gain')}${stat(counts.links.toLocaleString(), 'pages to link to', 'gain')}</div>` +
-      nav + (tab === 'links' || tab === 'briefs' ? crawl : '') + body;
+      nav + (tab === 'links' || tab === 'briefs' ? crawl : tab === 'titles' ? pagesNote : '') + body;
     const mount = () => {
       mounts.forEach(f => f());
       const f = document.getElementById('ct-file');
@@ -94,6 +120,7 @@
         rd.onerror = () => { uploadMsg = { error: 'Could not read that file.' }; window.dispatchEvent(new HashChangeEvent('hashchange')); };
         rd.readAsText(file);
       });
+      const cp = document.getElementById('ct-clear-pages'); if (cp) cp.addEventListener('click', () => document.dispatchEvent(new CustomEvent('cw:inlinks', { detail: { clear: 'pages' } })));
       const c = document.getElementById('ct-clear'); if (c) c.addEventListener('click', () => document.dispatchEvent(new CustomEvent('cw:inlinks', { detail: { clear: true } })));
     };
     return { html, mount };

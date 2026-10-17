@@ -275,6 +275,43 @@ function writeComparisonExports(dir) {
     assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Titles & metas: a page export is recognised, audited and shown on Titles to rewrite', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await go('#content?tab=titles');
+    assert.ok(/Upload your crawler's page export/.test(await text('.ct-crawl')), 'asks for the file');
+    const h = 'https://www.trailcraft.co';
+    const csv = path.join(dir, 'internal_html.csv');
+    fs.writeFileSync(csv, ['"Address","Content Type","Status Code","Indexability","Title 1","Meta Description 1","H1-1"',
+      `"${h}/trails/himalaya/kedarkantha-trek","text/html","200","Indexable","Himalayan Winter Adventure | Trailcraft","Routes, costs and the best season.","Kedarkantha"`,
+      `"${h}/gear/hiking-boots","text/html","200","Indexable","Boots","",""`,
+      `"${h}/guides/how-to-pack-a-backpack","text/html","200","Indexable","Trekking guides | Trailcraft","A guide.","Pack"`,
+      `"${h}/guides/how-to-set-up-a-tent","text/html","200","Indexable","Trekking guides | Trailcraft","A guide.","Tent"`].join('\n'));
+    await page.setInputFiles('#ct-file', csv); await page.waitForTimeout(500);
+    assert.ok(/Page export loaded/.test(await text('.ct-crawl')), await text('.ct-crawl'));
+    const n = parseInt((await text('#t-ct-ti-meta')).replace(/,/g, ''), 10);
+    assert.ok(n >= 4, n + ' pages with issues');
+    assert.ok(/Main search not in title/.test(await text('#t-ct-ti')) && /Duplicate title/.test(await text('#t-ct-ti')), 'issues shown');
+    await page.selectOption('select[data-tf="t-ct-ti"][data-key="kind"]', 'title-dup');
+    assert.equal(parseInt((await text('#t-ct-ti-meta')), 10), 2, 'filter by issue');
+    assert.ok(/Pages sharing a title/.test(await text('#view')));
+    // the same upload box takes a link export, and keeps the page export
+    await go('#content?tab=links');
+    const lcsv = path.join(dir, 'all_inlinks.csv'); fs.writeFileSync(lcsv, `Type,Source,Destination\nHyperlink,${h}/gear/hiking-boots,${h}/trails/himalaya/kedarkantha-trek\n`);
+    await page.setInputFiles('#ct-file', lcsv); await page.waitForTimeout(400);
+    assert.ok(/Existing links loaded/.test(await text('.ct-crawl')), 'links recognised');
+    await go('#content?tab=titles'); assert.ok(/Page export loaded/.test(await text('.ct-crawl')), 'page export kept');
+    // Titles to rewrite shows the current title
+    await go('#ctr');
+    assert.ok(/Title now/.test(await text('#t-ctrp')), 'title column');
+    // remove, then a wrong file
+    await go('#content?tab=titles'); await page.click('#ct-clear-pages'); await page.waitForTimeout(300);
+    const bad = path.join(dir, 'bad-pages.csv'); fs.writeFileSync(bad, 'Keyword,Volume\nfoo,10\n');
+    await page.setInputFiles('#ct-file', bad); await page.waitForTimeout(400);
+    assert.ok(/source and destination columns|URL and title columns/.test(await text('.ct-crawl')), 'refused: ' + await text('.ct-crawl'));
+    assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('Losing ground: a brand-new page in the current export renders as new', async () => {
     const mk = (pages, start) => { const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Date', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(Array.from({ length: 30 }, (_, i) => { const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return [d.toISOString().slice(0, 10), 100, 4000, 0.025, 6]; }))), 'Chart');
@@ -293,7 +330,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=links', 'content?tab=briefs', 'queries', 'ai']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);

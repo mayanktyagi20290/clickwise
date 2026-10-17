@@ -466,10 +466,13 @@
 
   V.ctr = (A) => {
     const hasTop = A.ctrPages.some(r => r.top && r.top.length);
-    const pcols = [C.page, C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain];
+    // with a crawler page export loaded, each page shows its current title next to its numbers
+    const titleOf = new Map(A.titles ? A.titles.all.map(t => [t.key, t.title]) : []);
+    const tcol = A.titles ? [{ k: 'titleNow', l: 'Title now', sort: false, cls: 'act', f: r => { const t = titleOf.get(window.CW_CONTENT.normUrl(r.p)); return t ? `<small>${esc(t)}</small>` : '<small class="flat">Not in the crawl</small>'; }, csv: r => titleOf.get(window.CW_CONTENT.normUrl(r.p)) || '' }] : [];
+    const pcols = [C.page].concat(tcol, [C.impr, C.clicks, C.ctr, C.bench, C.pos, C.gain]);
     const html = head('Titles to rewrite', 'Pages and queries on page one that get far fewer clicks than this site normally earns at that position. Better titles and descriptions fix many of these without any ranking change.') +
       `<div class="strip">${stat(A.ctrPages.length.toLocaleString(), 'pages under 60% of expected CTR', 'risk')}${stat(range(A.ctrPages.reduce((s, r) => s + r.gainLo, 0), A.ctrPages.reduce((s, r) => s + r.gainHi, 0)), 'clicks a month (pages, estimate)', 'gain')}${stat(A.ctrQueries.length.toLocaleString(), 'queries under half of expected', 'watch')}${A.setAside.length ? stat(A.setAside.length.toLocaleString(), 'set aside: likely sitelinks or utility pages', '') : ''}</div>
-      <section class="panel"><div class="panel-h"><h2>Pages</h2><p>${hasTop ? 'Under each page: the searches it gets most impressions for. Write the title for those.' : 'Connect Search Console to see which searches each page is shown for.'}</p></div>
+      <section class="panel"><div class="panel-h"><h2>Pages</h2><p>${hasTop ? 'Under each page: the searches it gets most impressions for. Write the title for those.' : 'Connect Search Console to see which searches each page is shown for.'}${A.titles ? '' : ' To see each page\'s current title here, upload your crawler\'s page export in <a href="#content?tab=titles">Content &amp; links › Titles &amp; metas</a>.'}</p></div>
       ${table('t-ctrp', pcols, A.ctrPages, { sort: 'gain', file: 'titles-to-rewrite-pages', searchKeys: ['path'], placeholder: 'Filter pages',
         sub: r => r.top && r.top.length ? `<tr class="sub"><td colspan="7">Top searches: ${r.top.map(q => `<span class="tag">${esc(q)}</span>`).join(' ')}</td></tr>` : '',
         empty: 'Every page-one page is close to benchmark CTR.' })}</section>

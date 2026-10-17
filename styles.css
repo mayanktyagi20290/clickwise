@@ -757,3 +757,5 @@ td.act{min-width:240px}
 .fx-q{margin:0;padding-left:18px;font-size:13px;line-height:1.7}
 @media (max-width:1000px){.fx-form{grid-template-columns:1fr 1fr}.fx-form .fx-url,.fx-form .fx-note{grid-column:1/-1}}
 @media (max-width:560px){.fx-form{grid-template-columns:1fr}}
+.ct-dup{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.ct-dup li{margin-bottom:8px;overflow-wrap:anywhere}

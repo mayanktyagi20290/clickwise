@@ -461,17 +461,30 @@
     const a = window.CW.analyse(D, { ...S, utilityHints: CFG.utilityHints });
     if (a.NBQ.length > BIG) { a.content = null; a.contentPending = true; contentJob(a); }
     else { CJOB++; contentStatus(''); a.content = window.CW_CONTENT.build(a, D, { brand: S.brand, inlinks: INLINKS[D.site] || null }); }
+    a.titles = INPAGES[D.site] ? window.CW_TITLES.audit(a, D, INPAGES[D.site], { brand: S.brand }) : null;
     a.opps = window.CW_OPPS.build(a, D);
     return a;
   };
   const recalc = () => { if (!D || !A) return; const y = window.scrollY; A = analyse(); counts(); route(); window.scrollTo(0, y); };
+  // A crawler export can be a link report (source → destination) or a page report (URL, title, meta).
+  // The file says which by its columns; both are kept in memory for this site only, never stored.
+  const INPAGES = {};
   document.addEventListener('cw:inlinks', e => {
     const d = e.detail || {};
-    if (d.clear) { delete INLINKS[D.site]; recalc(); return; }
+    if (d.clear) { if (d.clear === 'pages') delete INPAGES[D.site]; else delete INLINKS[D.site]; recalc(); return; }
     const host = window.CW_CONTENT.normUrl((D.P[0] && D.P[0].p) || '').split('/')[0];
-    const r = window.CW_CONTENT.parseLinks(d.text, host);
-    if (!r.ok) { document.dispatchEvent(new CustomEvent('cw:inlinks-error', { detail: r.error })); return; }
-    INLINKS[D.site] = { links: r.links, name: String(d.name || 'links.csv').slice(0, 120), rows: r.rows, skipped: r.skipped };
+    const name = String(d.name || 'crawl.csv').slice(0, 120);
+    const head = (String(d.text || '').replace(/^\ufeff/, '').split(/\r?\n/)[0] || '').toLowerCase();
+    const looksPages = /title/.test(head) && !/destination|target|\bto\b/.test(head);
+    const r = looksPages ? window.CW_TITLES.parsePages(d.text, host) : window.CW_CONTENT.parseLinks(d.text, host);
+    if (!r.ok) {
+      // a page report without a title column, or a link report without destinations: say what each needs
+      const other = looksPages ? window.CW_CONTENT.parseLinks(d.text, host) : window.CW_TITLES.parsePages(d.text, host);
+      if (other.ok) { if (looksPages) INLINKS[D.site] = { links: other.links, name, rows: other.rows, skipped: other.skipped }; else INPAGES[D.site] = { ...other, name }; recalc(); return; }
+      document.dispatchEvent(new CustomEvent('cw:inlinks-error', { detail: looksPages ? r.error : r.error + ' For titles and meta descriptions, export Internal › HTML instead.' }));
+      return;
+    }
+    if (looksPages) INPAGES[D.site] = { ...r, name }; else INLINKS[D.site] = { links: r.links, name, rows: r.rows, skipped: r.skipped };
     recalc();
   });
   // ── daily data for the fix tracker ──

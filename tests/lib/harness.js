@@ -4,7 +4,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.resolve(__dirname, '..', '..');
 
 // engine, opportunities, demo, filters and workflows have no DOM dependencies.
-function load(files = ['engine.js', 'opportunities.js', 'content.js', 'fixes.js', 'demo.js', 'filters.js', 'workflows.js']) {
+function load(files = ['engine.js', 'opportunities.js', 'content.js', 'fixes.js', 'titles.js', 'demo.js', 'filters.js', 'workflows.js']) {
   const window = {};
   const ctx = vm.createContext({ window, console, URL, URLSearchParams, Intl, Date, Math, JSON, Set, Map, WeakMap, Array, String, Number, Object, RegExp, Error, isFinite, isNaN, parseFloat, encodeURIComponent, decodeURIComponent });
   files.forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f }));
