@@ -419,7 +419,7 @@
           <div><h4>Impact (estimate)</h4><p>${esc(it.impact.note)}.${it.impact.basis ? ' ' + esc(it.impact.basis) + '.' : ''}</p>${it.impact.overlap ? `<p class="flat">${esc(it.impact.overlap)}.</p>` : ''}
             <h4>Confidence: ${esc(it.confidence.level)} (${it.confidence.score}/100)</h4><ul class="why">${it.confidence.why.map(w => `<li><b class="${w.points >= 0 ? 'up' : 'down'}">${w.points > 0 ? '+' : ''}${w.points}</b> ${esc(w.text)}</li>`).join('')}</ul></div>
           <div><h4>What to do</h4><p>${esc(it.action)}</p><p><span class="tag">${esc(it.effort.level)} effort</span> ${esc(it.effort.why)}</p>
-            ${it.warnings.length ? `<h4>Warnings</h4>${list(it.warnings)}` : ''}<p><a href="#${esc(it.view)}">Open ${esc(TYPE_VIEW[it.view] || 'the list')}</a></p></div>
+            ${it.warnings.length ? `<h4>Warnings</h4>${list(it.warnings)}` : ''}<p><a href="#${esc(it.view)}">Open ${esc(TYPE_VIEW[it.view] || 'the list')}</a>${(() => { const u = it.subject.kind === 'page' ? it.subject.url : it.landing ? it.landing.url : null; return u ? ` · <a href="#fixes?add=${encodeURIComponent(u)}&amp;note=${encodeURIComponent(it.action.slice(0, 300))}">Track this fix</a>` : ''; })()}</p></div>
         </div></details></td></tr>`;
     const cols = [
       { k: 'label', l: 'Opportunity', cls: 'q', f: it => `<span class="tag">${esc(it.typeLabel)}</span><br>${subj(it)}`, csv: it => it.subject.url || it.subject.label },

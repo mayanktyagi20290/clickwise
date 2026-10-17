@@ -235,6 +235,46 @@ function writeComparisonExports(dir) {
     assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Fix tracker: add, measure, details, remove; Track this fix; exports measure the whole site only', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.evaluate(() => localStorage.clear());
+    await go('#fixes');
+    assert.equal(await text('#view h1'), 'Fix tracker');
+    const max = await page.$eval('#fx-date', e => e.max);
+    const shift = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+    const url = 'https://www.trailcraft.co/trails/himalaya/kedarkantha-trek';
+    await page.fill('#fx-url', url);
+    await page.$eval('#fx-date', (e, v) => { e.removeAttribute('max'); e.value = v; }, shift(max, 5));
+    await page.click('#fx-form button[type=submit]'); await page.waitForTimeout(200);
+    assert.ok(/after the last day with data/.test(await text('#fx-err')), 'future date refused: ' + await text('#fx-err'));
+    await page.fill('#fx-date', shift(max, -30)); await page.fill('#fx-note', 'Rewrote the title');
+    await page.click('#fx-form button[type=submit]'); await page.waitForTimeout(600);
+    assert.equal((await page.$$('tr[data-fx]')).length, 1, 'tracked');
+    assert.ok(/No clear change yet|Leaning|Worked|fell/.test(await text('tr[data-fx] .fx-res')), 'result: ' + await text('tr[data-fx] .fx-res'));
+    await page.fill('#fx-url', url); await page.fill('#fx-date', shift(max, -30)); await page.click('#fx-form button[type=submit]'); await page.waitForTimeout(200);
+    assert.ok(/already being tracked/.test(await text('#fx-err')), 'no duplicates');
+    await page.click('tr[data-fx] a.btn-quiet'); await page.waitForTimeout(700);
+    assert.ok(await page.$('#fx-chart') && /Clicks a day/i.test(await text('#fx-detail')), 'details with chart and table');
+    assert.ok(/28 days before vs 28 days after/.test(await text('#fx-detail')));
+    await go('#fixes'); await page.click('[data-fxrm]'); await page.waitForTimeout(300);
+    assert.equal((await page.$$('tr[data-fx]')).length, 0, 'removed');
+    // from All opportunities
+    await go('#opps');
+    const link = await page.$eval('#t-opp a[href^="#fixes?add="]', a => a.getAttribute('href'));
+    await page.evaluate(h => { location.hash = h; }, link); await page.waitForTimeout(300);
+    assert.ok((await page.$eval('#fx-url', e => e.value)).startsWith('https://www.trailcraft.co/'), 'page filled in');
+    assert.ok((await page.$eval('#fx-note', e => e.value)).length > 10, 'what to do filled in');
+    // an export: one page cannot be measured, the whole site can
+    await page.goto(base + 'app.html'); await page.setInputFiles('#file-input', cmp.cur); await toApp();
+    await go('#fixes');
+    assert.ok(await page.$eval('#fx-scope option[value="page"]', o => o.disabled) && await page.$eval('#fx-scope', s => s.value) === 'site', 'only whole site');
+    const fmax = await page.$eval('#fx-date', e => e.max);
+    await page.fill('#fx-date', shift(fmax, -20)); await page.click('#fx-form button[type=submit]'); await page.waitForTimeout(500);
+    assert.ok(/Whole site/.test(await text('tr[data-fx]')) && !/Measuring/.test(await text('tr[data-fx] .fx-res')), 'whole-site fix measured: ' + await text('tr[data-fx]'));
+    assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('Losing ground: a brand-new page in the current export renders as new', async () => {
     const mk = (pages, start) => { const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Date', 'Clicks', 'Impressions', 'CTR', 'Position']].concat(Array.from({ length: 30 }, (_, i) => { const d = new Date(start + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return [d.toISOString().slice(0, 10), 100, 4000, 0.025, 6]; }))), 'Chart');
@@ -323,10 +363,10 @@ function writeComparisonExports(dir) {
   await testAsync('Forget this site clears stored settings; reload explains the reset', async () => {
     const site = (await text('#top-site')).replace(/ \(sample\)$/, '');
     assert.ok(await page.evaluate(s => !!localStorage.getItem('cw:site:' + s), site), 'settings stored before');
-    await page.evaluate(s => { localStorage.setItem('cw:saved:' + s, '[{"id":"x","type":"goal","name":"n"}]'); localStorage.setItem('cw:runs:' + s, '[{"goalId":"x","status":"done","count":1}]'); }, site);
+    await page.evaluate(s => { localStorage.setItem('cw:saved:' + s, '[{"id":"x","type":"goal","name":"n"}]'); localStorage.setItem('cw:runs:' + s, '[{"goalId":"x","status":"done","count":1}]'); localStorage.setItem('cw:fixes:' + s, '[{"id":"f","scope":"site","date":"2026-01-01"}]'); }, site);
     await page.click('#btn-settings'); page.once('dialog', d => d.accept());
     await page.click('#set-forget'); await page.waitForTimeout(300);
-    const left = await page.evaluate(s => ['cw:site:', 'cw:saved:', 'cw:runs:'].filter(k => localStorage.getItem(k + s) != null), site);
+    const left = await page.evaluate(s => ['cw:site:', 'cw:saved:', 'cw:runs:', 'cw:fixes:'].filter(k => localStorage.getItem(k + s) != null), site);
     assert.equal(left.length, 0, 'keys left: ' + left.join(','));
     assert.ok(await page.isVisible('#start'), 'back to start');
     await page.goto('about:blank'); await page.goto(base + 'app.html#overview');
@@ -487,6 +527,14 @@ function writeComparisonExports(dir) {
     await p3.evaluate(() => { location.hash = '#overview'; location.hash = '#pages'; }); await p3.waitForTimeout(300);
     const urls2 = await p3.$$eval('#view td.u', t => t.map(x => x.textContent));
     assert.ok(urls2.length && urls2.every(u => u.startsWith('/trails/')), 'pages now from /trails/: ' + urls2.slice(0, 3).join(', '));
+    // the fix tracker asks Search Console for exactly one page
+    const b0 = bodies.length;
+    await p3.evaluate(() => { location.hash = '#fixes'; }); await p3.waitForTimeout(300);
+    const one = await p3.$eval('#fx-pages option', o => o.value);
+    const mx = await p3.$eval('#fx-date', e => e.max); const dd = new Date(mx + 'T00:00:00Z'); dd.setUTCDate(dd.getUTCDate() - 20);
+    await p3.fill('#fx-url', one); await p3.fill('#fx-date', dd.toISOString().slice(0, 10)); await p3.click('#fx-form button[type=submit]');
+    await p3.waitForFunction(() => { const c = document.querySelector('tr[data-fx] .fx-res'); return c && !/Measuring/.test(c.textContent); }, null, { timeout: 15000 });
+    assert.ok(bodies.slice(b0).some(b => b.dimensions.join() === 'date' && b.dimensionFilterGroups && b.dimensionFilterGroups[0].filters.some(f => f.dimension === 'page' && f.operator === 'equals' && f.expression === one)), 'page-level daily request sent');
     // and back to the whole site
     await p3.click('#top-scope'); await p3.click('#scope-whole'); await p3.click('#scope-go');
     await p3.waitForFunction(() => /All pages/.test(document.getElementById('top-scope').textContent), null, { timeout: 15000 });

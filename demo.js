@@ -155,5 +155,14 @@
     return { site: 'trailcraft.co', siteUrl: 'sc-domain:trailcraft.co', source: 'demo', start, end: endD, days: 90, Q, P, C, Dev, QP, prevQ, prevP };
   }
 
-  window.CW_DEMO = { build };
+  // Daily clicks for one sample page: its 90-day total spread over the site's daily shape with fixed noise.
+  // Sample data only (the site is fictional); real analyses get this from Search Console.
+  function pageDaily(D, url) {
+    const pg = (D.P || []).find(r => r.p === url); if (!pg) return [];
+    let h = 0; for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) | 0;
+    const R = rng(h), C = D.C || [], tc = C.reduce((s, r) => s + r.clicks, 0) || 1, ti = C.reduce((s, r) => s + r.impr, 0) || 1;
+    return C.map(r => { const n = 0.75 + R() * 0.5; const clicks = Math.max(0, Math.round(pg.clicks * r.clicks / tc * n)), impr = Math.max(clicks, Math.round(pg.impr * r.impr / ti * (0.9 + R() * 0.2))); return { d: r.d, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos: Math.max(1, pg.pos + (R() - 0.5)) }; });
+  }
+
+  window.CW_DEMO = { build, pageDaily };
 })();

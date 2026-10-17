@@ -474,8 +474,40 @@
     INLINKS[D.site] = { links: r.links, name: String(d.name || 'links.csv').slice(0, 120), rows: r.rows, skipped: r.skipped };
     recalc();
   });
+  // ── daily data for the fix tracker ──
+  // Search Console: fetched for exactly one page (or the analysed scope) and date range. Sample data: built
+  // from the sample pages. Uploads: only the site's daily totals exist, so pages cannot be measured.
+  const SRC_CACHE = new Map();
+  async function apiDaily(dims, start, end, pageUrl) {
+    const filters = [];
+    if (FILTER.device) filters.push({ dimension: 'device', operator: 'equals', expression: FILTER.device });
+    if (pageUrl) filters.push({ dimension: 'page', operator: 'equals', expression: pageUrl });
+    else if (FILTER.page) filters.push({ dimension: 'page', operator: 'includingRegex', expression: FILTER.page });
+    const body = { startDate: start, endDate: end, dimensions: dims, type: FILTER.type || 'web', rowLimit: dims[0] === 'query' ? 500 : 1000 };
+    if (filters.length) body.dimensionFilterGroups = [{ groupType: 'and', filters }];
+    const d = await api(`sites/${encodeURIComponent(D.siteUrl)}/searchAnalytics/query`, body);
+    return (d.rows || []).map(r => mapRow(r, dims[0] === 'query' ? ['q'] : ['d']));
+  }
+  function setSource() {
+    const kind = D.source === 'api' ? 'api' : D.source === 'demo' ? 'demo' : 'file';
+    const cached = (key, fn) => { if (!SRC_CACHE.has(key)) SRC_CACHE.set(key, fn().catch(e => { SRC_CACHE.delete(key); throw e; })); return SRC_CACHE.get(key); };
+    const today = new Date(); today.setDate(today.getDate() - 3);
+    const old = new Date(); old.setDate(old.getDate() - 480);
+    const inRange = (rows, s, e) => rows.filter(r => r.d >= s && r.d <= e);
+    window.CW_SOURCE = {
+      kind, site: D.site, scope: D.scope || null,
+      latest: kind === 'api' ? today.toISOString().slice(0, 10) : D.end || null,
+      earliest: kind === 'api' ? old.toISOString().slice(0, 10) : D.start || null,
+      pages: A.P.map(r => ({ p: r.p, path: r.path, clicks: r.clicks })),
+      canPage: kind !== 'file',
+      siteDaily: (s, e) => kind === 'api' ? cached(`${D.siteUrl}|${D.scope}|site|${s}|${e}`, () => apiDaily(['date'], s, e)) : Promise.resolve(inRange(D.C || [], s, e)),
+      pageDaily: (url, s, e) => kind === 'api' ? cached(`${D.siteUrl}|page|${url}|${s}|${e}`, () => apiDaily(['date'], s, e, url)) : kind === 'demo' ? Promise.resolve(inRange(window.CW_DEMO.pageDaily(D, url), s, e)) : Promise.reject(new Error('An export has only whole-site daily totals. Connect Search Console to measure one page.')),
+      pageQueries: kind === 'api' ? (url, s, e) => cached(`${D.siteUrl}|q|${url}|${s}|${e}`, () => apiDaily(['query'], s, e, url)) : null
+    };
+  }
   function launch() {
     A = analyse();
+    SRC_CACHE.clear(); setSource();
     $('top-site').textContent = D.site + (D.source === 'demo' ? ' (sample)' : '');
     $('top-range').textContent = D.start && D.end ? `${fmtDate(D.start)} – ${fmtDate(D.end)}` : 'Date range not in export';
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
@@ -542,7 +574,7 @@
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
     if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings and saved workflows from this browser.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); } catch (e) { }
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {
