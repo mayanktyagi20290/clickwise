@@ -586,8 +586,8 @@
   $('btn-new').addEventListener('click', reset);
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
-    if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings and saved workflows from this browser.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); } catch (e) { }
+    if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings, saved workflows, tracked fixes and client report branding from this browser. Your agency branding is kept for other clients.`)) return;
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {

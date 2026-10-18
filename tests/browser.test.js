@@ -656,6 +656,75 @@ function writeComparisonExports(dir) {
     assert.equal(await text('#top-scope'), 'Page filter: +https://example.com/employers');
   });
 
+  await testAsync('branded report: branding, logos, print, two A4 pages, forget', async () => {
+    const ctx5 = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    await ctx5.route('**/*', async r => {
+      const u = r.request().url();
+      const lib = Object.keys(LOCAL).find(k => u.includes('cdnjs') && u.endsWith(k));
+      if (lib) return r.fulfill({ path: LOCAL[lib], contentType: 'text/javascript' });
+      if (u.startsWith(base)) return r.continue();
+      return r.fulfill({ status: 204, body: '' });
+    });
+    const p5 = await ctx5.newPage();
+    const errs = []; p5.on('pageerror', e => errs.push(e.message));
+    p5.on('dialog', d => d.accept());
+    const t5 = sel => p5.$eval(sel, e => e.textContent.replace(/\s+/g, ' ').trim()).catch(() => '');
+    await p5.goto(base + 'app.html?demo');
+    await p5.waitForSelector('#setup:not([hidden]), #app:not([hidden])', { timeout: 15000 });
+    if (await p5.isVisible('#setup')) await p5.click('#setup-form button[type=submit]');
+    await p5.waitForSelector('#app:not([hidden])');
+    // one tracked fix, so the report shows a measured result
+    await p5.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 33); localStorage.setItem('cw:fixes:trailcraft.co', JSON.stringify([{ id: 'r1', scope: 'page', url: 'https://www.trailcraft.co/trails/himalaya/kedarkantha-trek', path: '/trails/himalaya/kedarkantha-trek', date: d.toISOString().slice(0, 10), note: 'Rewrote the title' }])); location.hash = '#wf=report'; });
+    await p5.waitForSelector('#rp-form');
+    assert.ok(await p5.isVisible('#rp-agency'), 'branding panel open when nothing is saved');
+    await p5.fill('#rp-agency', 'Northstar <img src=x onerror="window.__x=1">');
+    await p5.fill('#rp-contact', 'hello@northstar.example');
+    await p5.fill('#rp-color', '#0f766e');
+    await p5.fill('#rp-client', 'Trailcraft');
+    await p5.fill('#rp-notes', 'Rewrote 12 titles.\nLaunched the gear hub.');
+    await p5.uncheck('#rp-cw');
+    await p5.click('#rp-form button[type=submit]');
+    await p5.waitForFunction(() => /SEO report: Trailcraft/.test((document.querySelector('.rp-title h2') || {}).textContent || ''));
+    assert.ok(/Northstar <img/.test(await t5('.rp-aname')), 'agency name shown as text, not markup');
+    assert.equal(await p5.evaluate(() => window.__x), undefined, 'no injected script ran');
+    assert.ok(!/Made with Clickwise/.test(await t5('#report')), 'Clickwise credit can be turned off');
+    assert.ok(/Launched the gear hub/.test(await t5('.rp-notes')), 'notes shown');
+    assert.equal(await p5.$eval('.rp-page', e => getComputedStyle(e).getPropertyValue('--rp').trim().toLowerCase()), '#0f766e', 'brand colour applied');
+    const st = await p5.evaluate(() => [JSON.parse(localStorage.getItem('cw:agency')), JSON.parse(localStorage.getItem('cw:client:trailcraft.co'))]);
+    assert.ok(st[0].contact === 'hello@northstar.example' && st[0].showClickwise === false && st[1].client === 'Trailcraft', 'agency saved once, client per site');
+    // logos: a PNG is redrawn and shown; a non-image is refused with a message
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    await p5.setInputFiles('#rp-logo', { name: 'logo.png', mimeType: 'image/png', buffer: png });
+    await p5.waitForSelector('img.rp-alogo');
+    assert.ok(/^data:image\/png;base64,/.test(await p5.$eval('img.rp-alogo', e => e.getAttribute('src'))), 'logo kept as a PNG data URL');
+    await p5.setInputFiles('#rp-clogo', { name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>window.__y=1</script></svg>') });
+    await p5.waitForFunction(() => /PNG, JPG, WebP or GIF/.test(document.getElementById('rp-err').textContent));
+    assert.ok(!(await p5.$('img.rp-clogo')), 'SVG logo refused');
+    // tracked fix result and the print button
+    await p5.waitForSelector('#rp-fixes .rp-fx', { timeout: 15000 });
+    assert.ok(/kedarkantha-trek/.test(await t5('#rp-fixes')) && /clicks a day|Too little|Waiting/.test(await t5('#rp-fixes')), 'fix result shown: ' + await t5('#rp-fixes'));
+    await p5.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+    await p5.click('#rep-print');
+    assert.equal(await p5.evaluate(() => window.__printed), 1, 'print button opens the print dialog');
+    // A4: summary on one page, details on a second; one page with details off
+    const pages = async () => { await p5.emulateMedia({ media: 'print' }); const buf = await p5.pdf({ format: 'A4', printBackground: true }); await p5.emulateMedia({ media: 'screen' }); return (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length; };
+    assert.equal(await pages(), 2, 'two A4 pages with details');
+    if (!(await p5.isVisible('#rp-details'))) await p5.click('.rp-brand > summary');
+    await p5.uncheck('#rp-details'); await p5.click('#rp-form button[type=submit]');
+    await p5.waitForFunction(() => !document.querySelector('.rp-p2'));
+    assert.equal(await pages(), 1, 'one A4 page without details');
+    // phone width: nothing spills sideways
+    await p5.setViewportSize({ width: 390, height: 900 }); await p5.waitForTimeout(200);
+    assert.ok(await p5.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 0, 'no horizontal scroll on a phone');
+    await p5.setViewportSize({ width: 1360, height: 900 });
+    // Forget this site removes the client branding but keeps the agency for other clients
+    await p5.click('#btn-settings'); await p5.click('#set-forget');
+    await p5.waitForFunction(() => !localStorage.getItem('cw:client:trailcraft.co'));
+    assert.ok(await p5.evaluate(() => !!localStorage.getItem('cw:agency')), 'agency branding kept');
+    assert.equal(errs.length, 0, 'JS errors: ' + errs.join(' | '));
+    await ctx5.close();
+  });
+
   await testAsync('landing and legal pages: no broken local links', async () => {
     for (const f of ['index.html', 'privacy.html', 'terms.html']) {
       await page.goto(base + f);

@@ -759,3 +759,72 @@ td.act{min-width:240px}
 @media (max-width:560px){.fx-form{grid-template-columns:1fr}}
 .ct-dup{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
 .ct-dup li{margin-bottom:8px;overflow-wrap:anywhere}
+/* ===== White-label report ===== */
+.rp-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:0 0 12px;font-size:13px;color:var(--ink-2)}
+.rp-bar p{margin:0;max-width:75ch}
+.rp-brand>summary{cursor:pointer;padding:14px 18px;font-size:13.5px;list-style:revert}
+.rp-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:0 18px 18px}
+.rp-form fieldset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:10px;margin:0;min-width:0}
+.rp-form legend{font-size:12.5px;font-weight:650;padding:0 6px}
+.rp-form .field{margin:0}
+.rp-form input:not([type=checkbox]):not([type=color]):not([type=file]),.rp-form textarea{width:100%;box-sizing:border-box}
+.rp-c input{width:64px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.rp-logo{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.rp-logo img{max-height:40px;max-width:160px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:3px}
+.rp-act{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12.5px}
+@media (max-width:800px){.rp-form{grid-template-columns:1fr}}
+
+.rp{display:grid;gap:16px;background:transparent;border:0;box-shadow:none;padding:0}
+.rp-page{background:#fff;color:#111827;border:1px solid var(--line);border-radius:12px;padding:22px 24px;box-shadow:var(--shadow);display:grid;gap:16px;font-size:12.5px;line-height:1.5}
+.rp-head{display:grid;grid-template-columns:minmax(80px,180px) 1fr minmax(80px,180px);gap:16px;align-items:center;background:var(--rp);color:var(--rp-ink);border-radius:10px;padding:14px 18px}
+.rp-head.slim{grid-template-columns:1fr;padding:10px 16px}
+.rp-title{text-align:center;min-width:0}
+.rp-head.slim .rp-title{text-align:left}
+.rp-title h2{margin:0;font-size:19px;color:inherit;overflow-wrap:anywhere}
+.rp-title p{margin:2px 0 0;font-size:12px;opacity:.9}
+.rp-who{display:flex;align-items:center;min-width:0}
+.rp-who.r{justify-content:flex-end}
+.rp-alogo,.rp-clogo{max-height:44px;max-width:100%;background:#fff;border-radius:6px;padding:4px}
+.rp-aname{font-size:14px;overflow-wrap:anywhere}
+.rp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.rp-kpis>div{border:1px solid #E5E7EB;border-top:3px solid var(--rp);border-radius:8px;padding:10px 12px;display:grid;gap:2px}
+.rp-kpis b{font-size:20px;font-variant-numeric:tabular-nums}
+.rp-kpis span{color:#4B5563;font-size:11.5px}
+.rp-d{font-weight:600}
+.rp-d.up{color:#047857}.rp-d.down{color:#B91C1C}
+.rp-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.rp-cols>div{min-width:0}
+.rp-page h3{margin:0 0 6px;font-size:13.5px;color:#111827;border-left:3px solid var(--rp);padding-left:8px}
+.rp-page h3:not(:first-child){margin-top:14px}
+.rp-page ul,.rp-page ol{margin:0;padding-left:18px}
+.rp-page li{margin-bottom:6px;overflow-wrap:anywhere}
+.rp-page .flat{color:#4B5563}
+.rp-page p{margin:0}
+.rp-notes{white-space:pre-line}
+.rp-acts li{margin-bottom:8px}
+.rp-fx{list-style:none;padding-left:0!important}
+.rp-method{font-size:11px;color:#4B5563}
+.rp-foot{display:flex;flex-wrap:wrap;gap:4px 18px;justify-content:space-between;border-top:1px solid #E5E7EB;padding-top:8px;font-size:10.5px;color:#4B5563}
+@media (max-width:760px){.rp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-cols{grid-template-columns:1fr}.rp-head{grid-template-columns:1fr}.rp-title{text-align:left}.rp-who.r{justify-content:flex-start}}
+@media print{
+  @page{size:A4;margin:12mm}
+  .rp-page{border:0;box-shadow:none;border-radius:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rp-p2{break-before:page}
+  .rp-page h3,.rp-kpis>div,.rp-acts li,.rp-fx li{break-inside:avoid}
+  .rp{gap:0}
+  /* fit the summary on one A4 page and the details on a second */
+  html,body,.app,.main,.view{background:#fff!important;min-height:0!important;height:auto!important}
+  .view:has(.rp) .wf-head,.view:has(.rp) .crumbs{display:none!important}
+  .rp-page{font-size:10.5px;line-height:1.38;gap:10px}
+  .rp-head{padding:10px 14px}
+  .rp-title h2{font-size:16px}
+  .rp-kpis b{font-size:17px}
+  .rp-kpis>div{padding:7px 10px}
+  .rp-cols{gap:16px}
+  .rp-page h3{font-size:11.5px;margin-bottom:4px}
+  .rp-page h3:not(:first-child){margin-top:10px}
+  .rp-page li,.rp-acts li{margin-bottom:4px}
+  .rp-fx li:nth-child(n+4){display:none}
+  .rp-foot{font-size:9px;padding-top:6px}
+  .rp-method{font-size:9.5px}
+}

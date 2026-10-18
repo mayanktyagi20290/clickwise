@@ -33,6 +33,9 @@
     return Promise.all([pageP, siteP]).then(([pr, sr]) => FX.measure(f, pr, sr, S.latest, S.earliest, { siteLabel: S.scope ? 'section you analysed' : 'site' }));
   }
 
+  // the report reads tracked fixes and their results too
+  window.CW_FIXVIEW = { load, measureFix };
+
   V.fixes = (A, D) => {
     const S = window.CW_SOURCE;
     if (!S) return { html: head('Fix tracker', '') + '<p class="empty">Load data first.</p>' };

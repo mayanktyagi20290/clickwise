@@ -430,7 +430,7 @@
         <p class="no-print"><a href="#filters?spec=${encodeURIComponent(JSON.stringify(out.spec))}">Adjust these conditions in Smart filters</a></p>`;
       mount = () => { mountResult('t-wf', out.result); if (out.setAside && out.setAside.length) drawTable('t-wf-sa'); };
     } else if (id === 'report') {
-      body = reportHtml(A, D, out.report); mount = () => { const b = document.getElementById('rep-print'); if (b) b.addEventListener('click', () => window.print()); };
+      body = reportHtml(A, D, out.report); mount = () => reportMount(A, D);
     } else if (id === 'ignore') {
       const cur = (A.ignored || []).join(', ');
       body = `<section class="panel"><div class="panel-b">
@@ -463,36 +463,94 @@
     return { html: top + body, mount: () => { saveMount(); mount(); } };
   };
 
+  // ── white-label report ──
+  // Page 1: a summary a manager can read in a minute. Page 2 (optional): details. Branding from CW_REPORT.
   function reportHtml(A, D, r) {
+    const RP = window.CW_REPORT, b = RP.load(D.site);
+    const st = A.site, ps = A.prevSite, ink = RP.onColor(b.color);
+    const client = b.client || D.site;
+    const d = (c, p, inv) => { if (!p) return ''; const v = (c - p) / p * 100; const good = inv ? v < 0 : v > 0; return `<span class="rp-d ${Math.abs(v) < 0.5 ? '' : good ? 'up' : 'down'}">${v > 0 ? '▲' : v < 0 ? '▼' : ''} ${Math.abs(v).toFixed(1)}%</span>`; };
+    const acts = RP.topActions(A);
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const by = b.agency ? `Prepared by ${esc(b.agency)}${b.contact ? ` · ${esc(b.contact)}` : ''}` : '';
+    const panel = `<details class="panel rp-brand no-print" ${b.agency || b.client ? '' : 'open'}><summary><b>Branding</b> <span class="flat">${b.agency ? esc(b.agency) : 'Add your agency name, logo and colour'}${b.client ? ` · for ${esc(b.client)}` : ''}</span></summary>
+      <form class="rp-form" id="rp-form" autocomplete="off">
+        <fieldset><legend>Your agency (used for every client)</legend>
+          <label class="field"><span>Agency name</span><input id="rp-agency" maxlength="${RP.LIMIT.agency}" value="${esc(b.agency)}" placeholder="e.g. Northstar SEO"></label>
+          <label class="field"><span>Contact line</span><input id="rp-contact" maxlength="${RP.LIMIT.contact}" value="${esc(b.contact)}" placeholder="e.g. hello@northstar.in · +91 …"></label>
+          <label class="field rp-c"><span>Brand colour</span><input id="rp-color" type="color" value="${esc(b.color)}"></label>
+          <div class="field"><span>Agency logo</span><div class="rp-logo">${b.logo ? `<img src="${b.logo}" alt="Agency logo">` : '<span class="flat">None</span>'}<label class="btn-quiet">Choose image<input type="file" id="rp-logo" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>${b.logo ? '<button type="button" class="btn-link" id="rp-logo-x">Remove</button>' : ''}</div></div>
+          <label class="check"><input type="checkbox" id="rp-cw" ${b.showClickwise ? 'checked' : ''}> Show “Made with Clickwise” in the footer</label>
+        </fieldset>
+        <fieldset><legend>This client (${esc(D.site)})</legend>
+          <label class="field"><span>Client name on the report</span><input id="rp-client" maxlength="${RP.LIMIT.client}" value="${esc(b.client)}" placeholder="${esc(D.site)}"></label>
+          <div class="field"><span>Client logo</span><div class="rp-logo">${b.clientLogo ? `<img src="${b.clientLogo}" alt="Client logo">` : '<span class="flat">None</span>'}<label class="btn-quiet">Choose image<input type="file" id="rp-clogo" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>${b.clientLogo ? '<button type="button" class="btn-link" id="rp-clogo-x">Remove</button>' : ''}</div></div>
+          <label class="field"><span>Your notes for this client (shown on page one)</span><textarea id="rp-notes" rows="3" maxlength="${RP.LIMIT.notes}" placeholder="e.g. This month we rewrote 12 titles and launched the pricing page.">${esc(b.notes)}</textarea></label>
+          <label class="check"><input type="checkbox" id="rp-details" ${b.details ? 'checked' : ''}> Add a second page with details</label>
+        </fieldset>
+        <div class="rp-act"><button type="submit" class="btn-primary sm">Save branding</button><span class="sf-err" id="rp-err" role="alert"></span><span class="flat">Saved in this browser only. Logos are redrawn as small PNG images.</span></div>
+      </form></details>`;
     const li = (items, f) => items && items.length ? `<ol class="rep-list">${items.map(f).join('')}</ol>` : '<p class="flat">Nothing to report.</p>';
-    const st = r.site, cov = r.coverage, nb = A.totNB;
-    return `<section class="panel report" id="report">
-      <div class="rep-h"><div><h2>SEO opportunity report</h2><p>${esc(D.site)} · ${esc(rangeLabel(D))}${r.sample ? ' · <b>Sample data, fictional site</b>' : ''}</p></div><button type="button" class="btn-primary sm no-print" id="rep-print">Print or save as PDF</button></div>
-      ${cov ? `<section class="tiles" aria-label="Whole-site performance">
-        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks, all searches</div></div>
-        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions, all searches</div></div>
-        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div></div>
-        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Avg. position</div></div>
-      </section>` : ''}
-      <div class="rep-b">
-        <p>Non-branded searches${cov ? ` in this data (query rows cover ${cov.q.clicks.toFixed(1)}% of clicks${cov.rowLimit ? `; the export lists the top ${cov.rowsQ.toLocaleString()} queries` : ''})` : ''}: <b>${fmtN(nb.clicks)}</b> clicks, ${fmtN(nb.impr)} impressions, ${pctf(nb.ctr, 2)} CTR, position ${nb.pos.toFixed(1)}${A.prev ? `; clicks ${tileDelta(nb.clicks, A.prev.nb.clicks).replace(/<[^>]+>/g, '').trim()}` : ''}.</p>
-        <p class="rep-lead">${r.potential.hi >= 1 ? `Searches already ranking could bring roughly <b>${fmtN(r.potential.lo)}–${fmtN(r.potential.hi)} more clicks a month</b> (estimate; each search counted once; branded searches, ${r.brandShare.toFixed(0)}% of query clicks, excluded).` : 'No clear click opportunities in searches already ranking.'}</p>
-        ${r.recovery && r.recovery.n ? `<p>Pages that lost clicks since the previous period could recover roughly <b>${fmtN(r.recovery.lo)}–${fmtN(r.recovery.hi)} clicks a month</b> if the decline is reversed (assumes 30–80% come back; ${r.recovery.n} page${r.recovery.n === 1 ? '' : 's'}).</p>` : ''}
-        <h3>Top actions</h3>${ledger(r.plan)}
-        ${r.top && r.top.length ? `<h3>Ten highest-value opportunities</h3><div class="tw"><table class="rep-t"><thead><tr><th scope="col">Opportunity</th><th scope="col" class="r">Clicks / month (est.)</th><th scope="col">Confidence</th><th scope="col">Effort</th><th scope="col">What to do</th></tr></thead><tbody>${r.top.map(it => `<tr><td><small class="flat">${esc(it.typeLabel)}</small><br>${esc(it.subject.label)}</td><td class="r">${range(it.impact.lo, it.impact.hi)}<br><small class="flat">${it.impact.kind === 'recovery' ? 'recovery' : 'growth'}${it.impact.counted ? '' : ', not in total'}</small></td><td>${esc(it.confidence.level)}</td><td>${esc(it.effort.level)}</td><td><small>${esc(it.action)}</small></td></tr>`).join('')}</tbody></table></div>` : ''}
-        <div class="grid-2 even">
-          <div><h3>Biggest declines</h3>${r.declines ? li(r.declines, x => `<li>${urlCell(x.p, x.path)} — ${fmtN(x.prev.clicks)} → ${fmtN(x.cur.clicks)} clicks <span class="flat">(${esc(x.reason)})</span></li>`) : '<p class="flat">Needs a comparison period.</p>'}</div>
-          <div><h3>Closest to the top 3</h3>${li(r.quick, x => `<li>${esc(x.q)} — position ${x.pos.toFixed(1)}, ${fmtN(x.impr)} impressions, ${range(x.gainLo, x.gainHi)} clicks a month</li>`)}</div>
+    const page1 = `<section class="rp-page" style="--rp:${b.color};--rp-ink:${ink}">
+        <header class="rp-head"><div class="rp-who">${b.logo ? `<img class="rp-alogo" src="${b.logo}" alt="${esc(b.agency || 'Agency')} logo">` : b.agency ? `<b class="rp-aname">${esc(b.agency)}</b>` : ''}</div>
+          <div class="rp-title"><h2>SEO report: ${esc(client)}</h2><p>${esc(rangeLabel(D))}${ps && D.prevStart ? ` · compared with ${esc(D.prevStart)}${D.prevEnd ? ' – ' + esc(D.prevEnd) : ''}` : ''}${r.sample ? ' · Sample data, fictional site' : ''}</p></div>
+          <div class="rp-who r">${b.clientLogo ? `<img class="rp-clogo" src="${b.clientLogo}" alt="${esc(client)} logo">` : ''}</div></header>
+        <div class="rp-kpis">
+          <div><b>${fmtN(st.clicks)}</b><span>Clicks from Google</span>${d(st.clicks, ps && ps.clicks)}</div>
+          <div><b>${fmtN(st.impr)}</b><span>Times shown in Google</span>${d(st.impr, ps && ps.impr)}</div>
+          <div><b>${pctf(st.ctr, 2)}</b><span>Click-through rate</span>${ps ? `<span class="rp-d ${st.ctr >= ps.ctr ? 'up' : 'down'}">${st.ctr >= ps.ctr ? '▲' : '▼'} ${Math.abs(st.ctr - ps.ctr).toFixed(2)} pts</span>` : ''}</div>
+          <div><b>${st.pos.toFixed(1)}</b><span>Average position</span>${ps && ps.pos ? `<span class="rp-d ${st.pos <= ps.pos ? 'up' : 'down'}">${st.pos <= ps.pos ? '▲ better' : '▼ worse'} by ${Math.abs(st.pos - ps.pos).toFixed(1)}</span>` : ''}</div>
         </div>
-        ${r.content && (r.content.nGaps || r.content.nLinks) ? `<div class="grid-2 even">
-          <div><h3>Content gaps (${r.content.nGaps})</h3>${li(r.content.gaps, g => `<li>${esc(g.label)} — ${fmtN(g.impr)} impressions <span class="flat">(${esc(g.evidence[0])})</span></li>`)}</div>
-          <div><h3>Internal links to add (${r.content.nLinks})</h3>${li(r.content.links, l => `<li>${urlCell(l.p, l.path)} ← ${l.sources.map(x => esc(x.path)).join(', ')}${l.anchor ? ` <span class="flat">anchor “${esc(l.anchor)}”</span>` : ''}</li>`)}</div>
-        </div>` : ''}
-        <h3>AI search</h3>
-        <p>${r.ai.overview} top-5 searches get far fewer clicks than this site usually earns at that position (possible answer boxes or AI Overviews); ${r.ai.aiMode} top-3 searches get almost none. Directional AI-search readiness: <b>${r.ai.readiness}%</b>.</p>
-        ${methodNote(A)}
-        <p class="flat rep-foot">Generated by Clickwise from Search Console data. Estimates show priority, not guaranteed results.</p>
-      </div>
-    </section>`;
+        <div class="rp-cols">
+          <div><h3>What changed</h3><ul>${RP.changed(A).map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+            <h3>Where the growth is</h3><p>${r.potential.hi >= 1 ? `Searches the site already ranks for could bring roughly <b>${fmtN(r.potential.lo)}–${fmtN(r.potential.hi)} more clicks a month</b>.` : 'No clear click opportunities in searches the site already ranks for.'}${r.recovery && r.recovery.n ? ` Pages that lost clicks could win back about <b>${fmtN(r.recovery.lo)}–${fmtN(r.recovery.hi)} a month</b>.` : ''}</p>
+            ${b.notes ? `<h3>Notes from ${esc(b.agency || 'us')}</h3><p class="rp-notes">${esc(b.notes)}</p>` : ''}</div>
+          <div><h3>Top 5 things to do next</h3>${acts.length ? `<ol class="rp-acts">${acts.map(it => `<li><b>${esc(it.subject.label)}</b> <span class="flat">${esc(it.typeLabel)} · ${esc(it.effort.level.toLowerCase())} effort${it.impact.hi >= 1 ? ` · ${range(it.impact.lo, it.impact.hi)} clicks/month` : ''}</span><br>${esc(it.action)}</li>`).join('')}</ol>` : '<p class="flat">No actions with enough confidence in this data.</p>'}
+            <h3>Results of recent changes</h3><div id="rp-fixes"><p class="flat">Checking tracked changes…</p></div></div>
+        </div>
+        <footer class="rp-foot">${by ? `<span>${by}</span>` : ''}<span>${esc(today)}</span><span>Click figures for the future are estimates for prioritising, not guarantees.</span>${b.showClickwise ? '<span>Made with Clickwise</span>' : ''}</footer>
+      </section>`;
+    const page2 = !b.details ? '' : `<section class="rp-page rp-p2" style="--rp:${b.color};--rp-ink:${ink}">
+        <header class="rp-head slim"><div class="rp-title"><h2>Details: ${esc(client)}</h2><p>${esc(rangeLabel(D))}</p></div></header>
+        <div class="rp-cols">
+          <div><h3>Biggest declines</h3>${r.declines ? li(r.declines, x => `<li>${esc(x.path)}: ${fmtN(x.prev.clicks)} → ${fmtN(x.cur.clicks)} clicks <span class="flat">(${esc(x.reason)})</span></li>`) : '<p class="flat">Needs a comparison period.</p>'}
+            <h3>Closest to the top 3</h3>${li(r.quick, x => `<li>${esc(x.q)}: position ${x.pos.toFixed(1)}, ${fmtN(x.impr)} impressions, ${range(x.gainLo, x.gainHi)} clicks a month</li>`)}</div>
+          <div>${r.content && r.content.nGaps ? `<h3>Content gaps (${r.content.nGaps})</h3>${li(r.content.gaps, g => `<li>${esc(g.label)}: ${fmtN(g.impr)} impressions <span class="flat">(${esc(g.evidence[0])})</span></li>`)}` : ''}
+            ${r.content && r.content.nLinks ? `<h3>Internal links to add (${r.content.nLinks})</h3>${li(r.content.links, l => `<li>${esc(l.path)} ← ${l.sources.map(x => esc(x.path)).join(', ')}${l.anchor ? ` <span class="flat">anchor “${esc(l.anchor)}”</span>` : ''}</li>`)}` : ''}
+            ${A.titles && A.titles.rows.length ? `<h3>Titles and descriptions</h3><p>${A.titles.rows.length} of ${A.titles.pages} crawled pages need attention${A.titles.kinds['title-query'] ? `; on ${A.titles.kinds['title-query']} the main search is missing from the title` : ''}${A.titles.dupTitles.length ? `; ${A.titles.dupTitles.length} groups of pages share a title` : ''}.</p>` : ''}
+            <h3>AI search</h3><p>${r.ai.overview} top-5 searches get far fewer clicks than usual for their position (possible answer boxes or AI Overviews).</p></div>
+        </div>
+        <p class="rp-method">How the estimates work: expected clicks at each position come from this site's own click-through rates where there is enough data, and an industry curve elsewhere; each search is counted once; branded searches are left out. ${A.coverage && A.coverage.rowLimit ? 'This export lists only its top 1,000 searches and pages.' : ''}</p>
+        <footer class="rp-foot">${by ? `<span>${by}</span>` : ''}<span>${esc(today)}</span>${b.showClickwise ? '<span>Made with Clickwise</span>' : ''}</footer>
+      </section>`;
+    return `<div class="rp-bar no-print"><p>${b.agency ? 'Your branded report.' : 'Add your branding below, then print or save as PDF.'} In the print dialog choose <b>Save as PDF</b>, A4, and turn on <b>Background graphics</b> to keep the colours.</p><button type="button" class="btn-primary sm" id="rep-print">Print or save as PDF</button></div>${panel}<div class="report rp" id="report">${page1}${page2}</div>`;
+  }
+  function reportMount(A, D) {
+    const RP = window.CW_REPORT;
+    const b0 = RP.load(D.site), err = document.getElementById('rp-err');
+    const pending = { logo: b0.logo, clientLogo: b0.clientLogo };
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const collect = () => ({ agency: val('rp-agency'), contact: val('rp-contact'), color: val('rp-color'), client: val('rp-client'), notes: val('rp-notes'), logo: pending.logo, clientLogo: pending.clientLogo, showClickwise: document.getElementById('rp-cw').checked, details: document.getElementById('rp-details').checked });
+    const rerender = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
+    const form = document.getElementById('rp-form');
+    if (form) {
+      form.addEventListener('submit', e => { e.preventDefault(); if (!RP.save(D.site, collect())) { err.textContent = 'Could not save (browser storage is off or full).'; return; } rerender(); });
+      [['rp-logo', 'logo'], ['rp-clogo', 'clientLogo']].forEach(([id, key]) => {
+        const inp = document.getElementById(id);
+        inp.addEventListener('change', () => RP.readLogo(inp.files[0]).then(dataUrl => { pending[key] = dataUrl; if (!RP.save(D.site, collect())) { err.textContent = 'Could not save the logo (browser storage is full).'; return; } rerender(); }).catch(x => { err.textContent = x.message; }));
+        const x = document.getElementById(id + '-x'); if (x) x.addEventListener('click', () => { pending[key] = null; RP.save(D.site, collect()); rerender(); });
+      });
+    }
+    const p = document.getElementById('rep-print'); if (p) p.addEventListener('click', () => window.print());
+    // tracked fixes and their measured results (the same numbers as the Fix tracker)
+    const box = document.getElementById('rp-fixes'), S = window.CW_SOURCE, FV = window.CW_FIXVIEW;
+    if (!box) return;
+    if (!S || !FV) { box.innerHTML = '<p class="flat">No tracked changes.</p>'; return; }
+    const fixes = FV.load(D.site).list.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+    if (!fixes.length) { box.innerHTML = '<p class="flat">No changes tracked yet. Log them in the Fix tracker to show their results here.</p>'; return; }
+    Promise.all(fixes.map(f => FV.measureFix(f, S).catch(e => ({ fix: f, error: e.message })))).then(rs => {
+      if (!box.isConnected) return;
+      box.innerHTML = `<ul class="rp-fx">${rs.map(r => `<li><b>${esc(r.fix.scope === 'site' ? 'Whole site' : r.fix.path)}</b> <span class="flat">changed ${esc(r.fix.date)}${r.fix.note ? ': ' + esc(r.fix.note) : ''}</span><br>${r.error ? `<span class="flat">${esc(r.error)}</span>` : `${esc(window.CW_FIXES.label(r))}${r.before ? ` · ${r.before.perDay.toFixed(1)} → ${r.after.perDay.toFixed(1)} clicks a day${r.relative != null ? ` (${r.relative > 0 ? '+' : ''}${r.relative.toFixed(0)}% against the site)` : ''}` : ''}`}</li>`).join('')}</ul>`;
+    });
   }
 })();
