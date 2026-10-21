@@ -35,7 +35,11 @@ test('weights change ranking; relevance follows priority sections', () => {
 test('risk path: declines listed whatever their score, critical first', () => {
   assert.ok(P.risks.length > 0, 'sample has declines');
   const low = P.items.filter(g => g.priority === 'P3' && g.items.some(x => /decline/.test(x.type)));
-  low.forEach(g => assert.ok(P.risks.some(r => r.id === g.id), 'low-score decline still a risk'));
+  const listed = id => P.risks.some(r => r.id === id || (r.searches || []).some(q => q.id === id));
+  low.forEach(g => assert.ok(listed(g.id), 'low-score decline still a risk (on its own or under its page)'));
+  const folded = P.risks.filter(r => r.searches && r.searches.length);
+  folded.forEach(r => assert.equal(r.subject.kind, 'page'));
+  assert.ok(!P.risks.some(r => r.subject.kind === 'query' && r.landing && r.landing.share >= 50 && P.risks.some(x => x.subject.url === r.landing.url)), 'no search risk duplicates its page risk');
   const ext = PR.build(A, D, { extraRisks: [{ id: 'i:x', sev: 'critical', kind: 'indexing', title: 'x', detail: '', action: '', subject: { kind: 'page' }, lost: 1, source: 't' }] });
   assert.equal(ext.risks[0].sev, 'critical');
 });
