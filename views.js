@@ -354,7 +354,7 @@
 
       <div class="grid-2">
         <section class="panel">
-          <div class="panel-h"><h2>Site sections</h2><a href="#sections">All sections</a><p>Click a folder to dive into its URLs. Badges: Strong, Steady, Fix CTR (ranks but under-clicked), Needs work (mostly page two).</p></div>
+          <div class="panel-h"><h2>Site clusters</h2><a href="#sections">All clusters</a><p>Click a folder to dive into its URLs. Badges: Strong, Steady, Fix CTR (ranks but under-clicked), Needs work (mostly page two).</p></div>
           <div class="panel-b cards-wrap">${sectionCards(A.sections1.filter(x => x.key !== '/').slice(0, 6), 'two')}</div>
         </section>
         <section class="panel">
@@ -422,7 +422,7 @@
   function sectionBars(list) {
     if (!list.length) return '<p class="empty">No pages found.</p>';
     const max = Math.max(...list.map(s => s.clicks), 1);
-    return `<div class="bars" role="table" aria-label="Site sections">
+    return `<div class="bars" role="table" aria-label="Site clusters">
       <div class="bar-row bar-head" role="row"><span role="columnheader">Section</span><span class="hide-sm"></span><span class="r" role="columnheader">Clicks</span><span class="r hide-sm" role="columnheader">CTR</span><span class="r" role="columnheader">Pages</span></div>
       ${list.map(s => `<div class="bar-row" role="row"><span class="lbl" role="cell" title="${esc(s.key)}">${esc(s.key)}</span><span class="bar-track" aria-hidden="true"><span class="bar-fill" style="display:block;width:${(s.clicks / max * 100).toFixed(1)}%"></span></span><span class="r" role="cell">${fmtN(s.clicks)}</span><span class="r hide-sm" role="cell">${pctf(s.ctr)}</span><span class="r" role="cell">${s.n}</span></div>`).join('')}
     </div>`;
@@ -619,7 +619,7 @@
 
   V.sections = (A) => {
     const list2 = A.sections2;
-    const html = head('Site sections', 'Your URLs grouped by folder, built automatically from your site structure. Position is weighted by impressions.') +
+    const html = head('Site clusters', 'Your URLs grouped into clusters by folder, built automatically from your site structure. Position is weighted by impressions.') +
       `<section class="panel"><div class="panel-h"><h2>Top-level folders</h2><p>Click any folder to open its pages, sub-folders and queries. Strong: top-5 and clicked well. Steady: page one, normal CTR. Fix CTR: ranks but under-clicked. Needs work: mostly page two.</p></div><div class="panel-b cards-wrap">${sectionCards(A.sections1)}</div></section>
        <section class="panel"><div class="panel-h"><h2>Second-level folders</h2><p>Finer breakdown, useful for large sections like /blog/ or /products/.</p></div>
        ${table('t-sec', [{ k: 'key', l: 'Section', cls: 'u', f: r => `<a href="#section=${encodeURIComponent(r.key)}">${esc(r.key)}</a>` }, { k: 'n', l: 'Pages', r: 1 }, C.clicks, C.impr, C.ctr, C.pos], list2, { sort: 'clicks', file: 'sections', placeholder: 'Filter sections' })}</section>`;
@@ -628,7 +628,7 @@
 
 
   // ── Folder deep dive ──
-  // Same rule and same expected CTR (the site's own curve) as the Site sections list in engine.js.
+  // Same rule and same expected CTR (the site's own curve) as the Site clusters list in engine.js.
   function statusOf(a, A) { const b = A.curve.at(a.pos); return a.pos > 10 ? 'work' : a.ctr < b * 0.6 ? 'ctr' : a.pos <= 5 && a.ctr >= b * 0.8 ? 'strong' : 'steady'; }
   const segsOf = path => path.split('/').filter(Boolean);
   V.section = (A, D, key) => {
@@ -636,7 +636,7 @@
     const depth = segsOf(key).length;
     const inSec = r => key === '/' ? r.path === '/' : (r.path === key.replace(/\/$/, '') || r.path.startsWith(key));
     const pages = A.P.filter(inSec).sort((a, b) => b.clicks - a.clicks);
-    if (!pages.length) return { html: head('Folder not found', `No pages under ${esc(key)} in this data.`) + '<p><a href="#sections">Back to all sections</a></p>' };
+    if (!pages.length) return { html: head('Folder not found', `No pages under ${esc(key)} in this data.`) + '<p><a href="#sections">Back to all clusters</a></p>' };
     const tot = agg(pages); const status = statusOf(tot, A);
     const urlSet = new Set(pages.map(r => r.p));
 
@@ -669,7 +669,7 @@
 
     // breadcrumb
     const sg = segsOf(key);
-    const crumbs = [`<a href="#sections">All sections</a>`].concat(sg.map((s2, i) => {
+    const crumbs = [`<a href="#sections">All clusters</a>`].concat(sg.map((s2, i) => {
       const k = '/' + sg.slice(0, i + 1).join('/') + '/';
       return i === sg.length - 1 ? `<span>${esc(s2)}</span>` : `<a href="#section=${encodeURIComponent(k)}">${esc(s2)}</a>`;
     })).join('<span class="sep">/</span>');

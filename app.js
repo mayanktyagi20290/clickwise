@@ -354,10 +354,12 @@
   function markPreset() {
     const end = new Date(); end.setDate(end.getDate() - 2);
     const days = Math.round((new Date($('scope-end').value) - new Date($('scope-start').value)) / 864e5) + 1;
-    document.querySelectorAll('#scope-presets button').forEach(b => b.classList.toggle('on', $('scope-end').value === iso(end) && +b.dataset.days === days));
+    document.querySelectorAll('#scope-presets button[data-days]').forEach(b => b.classList.toggle('on', $('scope-end').value === iso(end) && +b.dataset.days === days));
   }
   $('scope-presets').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
+    // 24 hours is a separate hourly view, not an analysis range: open it and keep the current dates
+    if (b.dataset.live) { $('scope-dialog').close(); location.hash = '#live'; return; }
     const end = new Date(); end.setDate(end.getDate() - 2);
     const start = new Date(end); start.setDate(end.getDate() - +b.dataset.days + 1);
     $('scope-start').value = iso(start); $('scope-end').value = iso(end); markPreset();
@@ -370,6 +372,7 @@
   document.addEventListener('cw:change', e => openChange(e.detail && e.detail.days ? 'dates' : 'site', e.detail || {}));
   $('scope-whole').addEventListener('click', () => { $('scope-in').value = ''; $('scope-exact').checked = false; });
   $('scope-cancel').addEventListener('click', () => $('scope-dialog').close());
+  $('scope-24').addEventListener('click', () => $('scope-dialog').close());
   $('scope-new').addEventListener('click', () => { $('scope-dialog').close(); $('btn-new').click(); });
   $('scope-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -620,6 +623,7 @@
     view.innerHTML = out.html;
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
+    $('top-24').classList.toggle('on', name === 'live');
     openNavGroupOf(document.querySelector('.nav a.on'));
     const onLink = document.querySelector('.nav a.on span');
     const h1 = view.querySelector('h1');
