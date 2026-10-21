@@ -461,6 +461,38 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Generative AI report: link, sample, export upload, wrong file, start-screen guard', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await go('#genai');
+    assert.equal(await text('#view h1'), 'Generative AI report');
+    const href = await page.$eval('.ga-up a[target=_blank]', a => a.href);
+    assert.ok(href.startsWith('https://search.google.com/search-console/performance/search-analytics/ai?resource_id='), 'deep link: ' + href);
+    await page.click('#ga-sample'); await page.waitForTimeout(500);
+    assert.ok(/Sample data/.test(await text('.ga-src')) && /Same dates/.test(await text('.ga-src')), 'sample labelled, dates match');
+    assert.ok(parseInt((await text('#t-ga-pages-meta')).replace(/,/g, ''), 10) > 0, 'pages table');
+    assert.ok(await page.$('#ga-chart'), 'trend chart');
+    assert.ok(/%/.test(await text('.strip')), 'share of web impressions shown');
+    // a real-format export (impressions only) built for the demo site
+    const rows = await page.evaluate(() => window.CW_GENAI.sample({ site: 'x', P: [{ p: 'https://www.trailcraft.co/trails/himalaya/kedarkantha-trek', impr: 1000 }], C: [{ d: '2026-07-21', impr: 500 }, { d: '2026-07-22', impr: 500 }] }));
+    const wb = XLSX.utils.book_new(); rows.forEach(s => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name));
+    const gx = path.join(dir, 'genai-export.xlsx'); XLSX.writeFile(wb, gx);
+    await page.setInputFiles('#ga-file', gx); await page.waitForTimeout(600);
+    assert.ok(/genai-export\.xlsx/.test(await text('.ga-src')) && /Dates differ/.test(await text('.ga-src')), 'own export loaded, period mismatch stated');
+    assert.ok(/same dates/.test(await text('#view')), 'not-shown list explains why it is hidden');
+    // the Performance export is refused here
+    await page.setInputFiles('#ga-file', cmp.cur); await page.waitForTimeout(500);
+    assert.ok(/Performance report export/.test(await text('#ga-err')), 'wrong file refused: ' + await text('#ga-err'));
+    await page.click('#ga-clear'); await page.waitForTimeout(300);
+    assert.ok(await page.$('#ga-file') && !(await page.$('.ga-src')), 'removed');
+    // and the Generative AI export on the start screen points to this tab
+    await page.goto(base + 'app.html'); await page.waitForSelector('#file-input', { state: 'attached' });
+    await page.setInputFiles('#file-input', gx); await page.waitForTimeout(800);
+    assert.ok(/Generative AI report export/.test(await page.evaluate(() => document.body.textContent)), 'start screen explains where it goes');
+    await page.goto(base + 'app.html?demo'); await toApp(); // leave the app open for the tests that follow
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing']) {

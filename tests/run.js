@@ -3,7 +3,7 @@
 'use strict';
 const { spawnSync } = require('child_process');
 const path = require('path');
-const suites = ['unit.test.js', 'opportunities.test.js', 'goals.test.js', 'content.test.js', 'fixes.test.js', 'titles.test.js', 'report.test.js', 'surfaces.test.js', 'growth.test.js', 'forecast.test.js', 'regression.test.js'].concat(process.argv.includes('--no-browser') ? [] : ['browser.test.js']);
+const suites = ['unit.test.js', 'opportunities.test.js', 'goals.test.js', 'content.test.js', 'fixes.test.js', 'titles.test.js', 'report.test.js', 'surfaces.test.js', 'growth.test.js', 'forecast.test.js', 'genai.test.js', 'regression.test.js'].concat(process.argv.includes('--no-browser') ? [] : ['browser.test.js']);
 let failed = 0;
 for (const s of suites) {
   const r = spawnSync(process.execPath, [path.join(__dirname, s)], { stdio: 'inherit' });

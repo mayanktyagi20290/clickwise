@@ -1300,3 +1300,17 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 @media (max-width:520px){.cc-hero-top .btn-primary{width:100%;text-align:center}.top-conn{margin-right:auto}}
 @media (min-width:861px){.top-inner{flex-wrap:nowrap}.top-meta{flex:1;min-width:0;flex-wrap:nowrap;overflow:hidden}.top-actions{flex:none;margin-left:auto}.top-meta>*{flex:none}}
 @media (max-width:1440px){.top-cmp{display:none}}
+/* Generative AI report */
+.ga-up-b{display:flex;gap:20px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.ga-up-b h2{font:700 16px var(--display);margin:0 0 6px}
+.ga-steps{margin:0 0 6px;padding-left:18px;display:grid;gap:3px;font-size:13px}
+.ga-up-a{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ga-up-a label.btn-primary{cursor:pointer}
+.ga-up-a .btn-quiet{text-decoration:none;color:var(--ink)}
+.ga-err{padding:0 18px 12px;margin:0}.ga-err:empty{display:none}
+.ga-src{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:12.5px;color:var(--ink-2);margin:-4px 0 12px}
+.ga-src span{display:inline-flex;align-items:center;gap:5px}.ga-src svg{width:13px;height:13px;color:var(--muted)}
+.ga-bar{display:inline-block;width:56px;height:6px;border-radius:999px;background:var(--line-soft);margin-right:8px;vertical-align:middle;overflow:hidden}.ga-bar i{display:block;height:100%;background:var(--sky)}
+.ga-list{margin:0;padding-left:18px;display:grid;gap:6px;font-size:13px}
+.ga-notes p{margin:0 0 4px}.ga-more{padding:0 18px 12px;margin:0}
+.stat.indigo b{color:var(--sky)}
