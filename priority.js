@@ -150,11 +150,17 @@
       if (d) {
         const gone = d.measured.clicks === 0 || /no longer shows|gone/.test(d.reason);
         const sev = gone && (d.previous && d.previous.clicks >= 20) ? 'critical' : d.confidence.level === 'High' ? 'high' : d.confidence.level === 'Medium' ? 'medium' : 'watch';
-        risks.push({ id: g.id, sev, kind: 'decline', title: d.subject.kind === 'page' ? `${d.subject.label} is losing clicks` : `“${d.subject.label}” is losing clicks`, detail: d.reason, action: d.action, subject: d.subject, lost: d.impact.hi, source: 'Search Console, current vs previous period' });
+        risks.push({ id: g.id, sev, kind: 'decline', landing: d.landing || null, prev: d.previous ? d.previous.clicks : null, cur: d.measured ? d.measured.clicks : null, title: d.subject.kind === 'page' ? `${d.subject.label} is losing clicks` : `“${d.subject.label}” is losing clicks`, detail: d.reason, action: d.action, subject: d.subject, lost: d.impact.hi, source: 'Search Console, current vs previous period' });
       }
       const s = g.items.find(x => x.type === 'slipping-page');
       if (s && !d) risks.push({ id: g.id, sev: 'watch', kind: 'slipping', title: `${s.subject.label} is slipping`, detail: s.reason, action: s.action, subject: s.subject, lost: 0, source: 'Search Console, current vs previous period' });
     });
+    // a search's decline is shown under its ranking page's decline, not as a second risk
+    const pageRisk = new Map(risks.filter(r => r.subject.kind === 'page').map(r => [r.subject.url, r]));
+    for (let i = risks.length - 1; i >= 0; i--) {
+      const r = risks[i], host = r.subject.kind === 'query' && r.landing && r.landing.share >= 50 && pageRisk.get(r.landing.url);
+      if (host) { (host.searches = host.searches || []).unshift({ q: r.subject.label, prev: r.prev, cur: r.cur, id: r.id }); risks.splice(i, 1); }
+    }
     (opts.extraRisks || []).forEach(r => risks.push(r));
     const SEV = { critical: 0, high: 1, medium: 2, watch: 3 };
     risks.sort((a, b) => SEV[a.sev] - SEV[b.sev] || (b.lost || 0) - (a.lost || 0));

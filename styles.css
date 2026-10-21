@@ -938,3 +938,22 @@ table.mini .r{text-align:right;font-variant-numeric:tabular-nums}
 .cp-rows li{font-size:13px}.cp-rows p{margin:2px 0 0;font-size:12.5px;color:var(--ink-2)}
 .cp-r1{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.cp-r1 a{overflow-wrap:anywhere}
 .cp-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.risk-l .tag.sev{align-self:start;margin-top:1px;min-width:58px;text-align:center}
+.risk-l .risk-t{font-weight:600;color:var(--ink);text-decoration:none;overflow-wrap:anywhere;font-size:13.5px}
+.risk-l a.risk-t:hover{text-decoration:underline;color:var(--signal-ink)}
+.risk-l .risk-q{font-size:12px}.risk-l .risk-q a{color:var(--ink-2)}
+.risk-l .risk-a{color:var(--ink)}.risk-l .risk-a b{font-weight:600}
+.risk-l .risk-s{font-size:11px;color:var(--muted);margin-top:3px}
+#t-prio td.prio-o{min-width:240px}
+#t-prio .opp-link{overflow-wrap:anywhere}
+.prio-sub{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-top:3px;font-size:11.5px}
+.prio-sub .flat{overflow-wrap:anywhere}
+#t-prio td{vertical-align:top}
+.prio-ce{display:flex;flex-wrap:wrap;gap:4px}
+#t-prio th,#t-prio td{padding-left:8px;padding-right:8px}
+.grid-2>*,.cc-grid>*{min-width:0}
+.v-head h1,.crumbs span{overflow-wrap:anywhere}
+.crumbs{flex-wrap:wrap}
+table.mini td{overflow-wrap:anywhere}
+.tk-edit .field,.tk-edit input,.tk-edit select,.tk-edit textarea{min-width:0;max-width:100%}
+table.mini th,table.mini td{white-space:normal}

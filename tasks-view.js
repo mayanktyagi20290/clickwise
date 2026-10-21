@@ -115,12 +115,10 @@
     const cols = [
       { k: 'rank', l: '#', r: 1, f: g => g.rank },
       { k: 'score', l: 'Priority', f: g => priTag(g), csv: g => `${g.priority} (${g.score})` },
-      { k: 'label', l: 'Opportunity', cls: 'q', f: g => `<span class="tag">${esc(g.category)}</span> <a class="opp-link" href="#opp?id=${encodeURIComponent(g.id)}">${esc(g.subject.label)}</a>${g.related.length ? ` <small class="flat">+${g.related.length} related signal${g.related.length === 1 ? '' : 's'}</small>` : ''}<br><small class="flat">${esc(g.why)}</small>`, csv: g => g.subject.url || g.subject.label },
-      { k: 'lo', l: 'Clicks / month (est.)', r: 1, f: g => g.impact.kind === 'none' ? '<span class="flat">Check</span>' : `<span class="${g.impact.kind === 'growth' ? 'gainv' : 'lossv'}">${range(g.impact.lo, g.impact.hi)}</span>`, csv: g => impactTxt(g) },
-      { k: 'conf', l: 'Confidence', f: g => `<span class="tag ${g.confidence.level === 'High' ? 'gain' : g.confidence.level === 'Medium' ? 'watch' : ''}">${esc(g.confidence.level)}</span>`, csv: g => g.confidence.level },
-      { k: 'effortN', l: 'Effort', f: g => `<span class="tag">${esc(g.effort.level)}</span>`, csv: g => g.effort.level },
+      { k: 'label', l: 'Opportunity', cls: 'q prio-o', f: g => `<a class="opp-link" href="#opp?id=${encodeURIComponent(g.id)}" title="${esc(g.why)}">${esc(g.subject.label)}</a><div class="prio-sub"><span class="tag">${esc(g.category)}</span>${g.subject.kind === 'query' && g.page ? `<span class="flat">${esc(g.page.path)}</span>` : ''}${g.related.length ? `<span class="flat">+${g.related.length} merged</span>` : ''}</div>`, csv: g => g.subject.url || g.subject.label },
+      { k: 'lo', l: 'Est. clicks / mo', r: 1, f: g => g.impact.kind === 'none' ? '<span class="flat">Check</span>' : `<span class="${g.impact.kind === 'growth' ? 'gainv' : 'lossv'}">${range(g.impact.lo, g.impact.hi)}</span>`, csv: g => impactTxt(g) },
+      { k: 'conf', l: 'Confidence · effort', f: g => `<div class="prio-ce"><span class="tag ${g.confidence.level === 'High' ? 'gain' : g.confidence.level === 'Medium' ? 'watch' : ''}">${esc(g.confidence.level)}</span><span class="tag">${esc(g.effort.level)} effort</span></div>`, csv: g => `${g.confidence.level} confidence, ${g.effort.level} effort | ${g.why}` },
       { k: 'status', l: 'Status', f: g => g.task ? `<a href="#tasks?id=${encodeURIComponent(g.task.id)}">${statusTag(g.status)}</a>` : statusTag('open'), csv: g => g.status },
-      { k: 'go', l: '', sort: false, csv: false, f: g => `<a class="btn-quiet" href="#opp?id=${encodeURIComponent(g.id)}">Details</a>` }
     ];
     const f = (key, label, options, test) => ({ key, label, options, test });
     const pct = n => P.items.length ? Math.round(n / P.items.length * 100) : 0;
@@ -164,7 +162,11 @@
     return { html, mount };
   };
   function riskList(risks, n) {
-    return `<ul class="risk-l">${risks.slice(0, n).map(r => `<li><span class="tag ${SEV[r.sev][0]}">${SEV[r.sev][1]}</span><div><b>${r.id.startsWith('o:') ? `<a href="#opp?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>` : esc(r.title)}</b><p>${esc(r.detail)}</p><p class="flat">${esc(r.action)} <small>· ${esc(r.source)}</small></p></div></li>`).join('')}</ul>${risks.length > n ? `<p class="flat risk-more"><a href="#priorities">All ${risks.length} risks</a></p>` : ''}`;
+    const title = r => r.id.startsWith('o:') ? `<a class="risk-t" href="#opp?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>` : `<span class="risk-t">${esc(r.title)}</span>`;
+    return `<ul class="risk-l">${risks.slice(0, n).map(r => `<li><span class="tag sev ${SEV[r.sev][0]}">${SEV[r.sev][1]}</span><div>${title(r)}
+      <p>${esc(r.detail)}</p>
+      ${r.searches && r.searches.length ? `<p class="risk-q">Searches on this page also losing clicks: ${r.searches.slice(0, 3).map(q => `<a href="#opp?id=${encodeURIComponent(q.id)}">“${esc(q.q)}”</a>${q.prev != null && q.cur != null ? ` <span class="flat">${fmtN(q.prev)} → ${fmtN(q.cur)}</span>` : ''}`).join(', ')}${r.searches.length > 3 ? ` and ${r.searches.length - 3} more` : ''}</p>` : ''}
+      <p class="risk-a"><b>What to do:</b> ${esc(r.action)}</p><p class="risk-s">${esc(r.source)}</p></div></li>`).join('')}</ul>${risks.length > n ? `<p class="flat risk-more"><a href="#priorities">All ${risks.length} risks</a></p>` : ''}`;
   }
   window.CW_GROWTH.riskList = riskList;
 

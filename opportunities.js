@@ -200,7 +200,7 @@
       (dc.slipping ? dc.slipping.pages : []).forEach(r => add({
         type: 'slipping-page', subject: { kind: 'page', label: r.path, url: r.p },
         measured: metrics(r.cur), previous: metrics(r.prev), change: r.deltas,
-        reason: `Clicks are holding (${r.ch == null ? '—' : r.ch.toFixed(0) + '%'}), but ${r.why.join(', ')}.`,
+        reason: r.ch != null && r.ch <= -25 ? `Clicks fell ${Math.abs(r.ch).toFixed(0)}% (${fmtN(r.prev.clicks)} → ${fmtN(r.cur.clicks)}), too few to count as a decline yet, and ${r.why.join(', ')}.` : `Clicks are holding (${r.ch == null ? '—' : (r.ch > 0 ? '+' : '') + r.ch.toFixed(0) + '%'}), but ${r.why.join(', ')}.`,
         evidence: changeEvidence(r),
         impact: { kind: 'none', lo: 0, hi: 0 },
         confidence: conf([periodWhy, vol(r.prev.impr, r.prev.pos, 'page')]),
