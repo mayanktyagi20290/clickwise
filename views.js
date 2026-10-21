@@ -355,7 +355,7 @@
       <div class="stack">
         <details class="acc">
           ${accHead('alert', 'orange', 'Indexing issues to check', 'Pages Google is not indexing. Review each reason in Search Console › Indexing › Pages.', 'Open checklist', 'orange')}
-          <div class="acc-tip"><b>Tip:</b> open the Pages report, then click a reason to see the affected URLs.</div>
+          <div class="acc-tip"><b>Tip:</b> open <a href="#indexing">Indexing</a> to inspect your top pages live and add the Pages report export, or open the report in Search Console and click a reason to see the affected URLs.</div>
           <div class="idx">${INDEX_CHECKS.map(([t, d]) => `<a href="${esc(gscIndexUrl(D))}" target="_blank" rel="noopener"><span>${esc(t)}<br><small>${esc(d)}</small></span>${svg('chev').replace('viewBox', 'style="transform:rotate(-90deg);width:16px;height:16px;flex:none" viewBox')}</a>`).join('')}</div>
         </details>
       </div>`;

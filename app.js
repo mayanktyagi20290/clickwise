@@ -170,7 +170,8 @@
     if (tokenExpires && Date.now() > tokenExpires - 30000) throw new Error('Your Google session has expired (sessions last about an hour). Go back and connect again.');
     let res;
     try {
-      res = await fetch('https://searchconsole.googleapis.com/webmasters/v3/' + path, {
+      // URL Inspection lives on the v1 API; everything else on webmasters/v3
+      res = await fetch('https://searchconsole.googleapis.com/' + (path.startsWith('v1/') ? path : 'webmasters/v3/' + path), {
         method: body ? 'POST' : 'GET',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined
@@ -515,7 +516,22 @@
       canPage: kind !== 'file',
       siteDaily: (s, e) => kind === 'api' ? cached(`${D.siteUrl}|${D.scope}|site|${s}|${e}`, () => apiDaily(['date'], s, e)) : Promise.resolve(inRange(D.C || [], s, e)),
       pageDaily: (url, s, e) => kind === 'api' ? cached(`${D.siteUrl}|page|${url}|${s}|${e}`, () => apiDaily(['date'], s, e, url)) : kind === 'demo' ? Promise.resolve(inRange(window.CW_DEMO.pageDaily(D, url), s, e)) : Promise.reject(new Error('An export has only whole-site daily totals. Connect Search Console to measure one page.')),
-      pageQueries: kind === 'api' ? (url, s, e) => cached(`${D.siteUrl}|q|${url}|${s}|${e}`, () => apiDaily(['query'], s, e, url)) : null
+      pageQueries: kind === 'api' ? (url, s, e) => cached(`${D.siteUrl}|q|${url}|${s}|${e}`, () => apiDaily(['query'], s, e, url)) : null,
+      // Discover, Google News, last 24 hours and indexing (surfaces-view.js). Queries keep the analysed
+      // folder or page; the device filter applies only where Search Console supports it.
+      start: D.start || null, end: D.end || null,
+      gsc: kind === 'api' ? {
+        siteUrl: D.siteUrl, type: FILTER.type || 'web',
+        query(body) {
+          const b = { ...body }, filters = [];
+          if (FILTER.page) filters.push({ dimension: 'page', operator: 'includingRegex', expression: FILTER.page });
+          if (FILTER.device && !['discover', 'googleNews'].includes(b.type) && !(b.dimensions || []).includes('device')) filters.push({ dimension: 'device', operator: 'equals', expression: FILTER.device });
+          if (filters.length) b.dimensionFilterGroups = [{ groupType: 'and', filters }];
+          return api(`sites/${encodeURIComponent(D.siteUrl)}/searchAnalytics/query`, b);
+        },
+        sitemaps: () => api(`sites/${encodeURIComponent(D.siteUrl)}/sitemaps`),
+        inspect: url => api('v1/urlInspection/index:inspect', { inspectionUrl: url, siteUrl: D.siteUrl, languageCode: 'en-US' })
+      } : null
     };
   }
   function launch() {

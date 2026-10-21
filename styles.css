@@ -828,3 +828,31 @@ td.act{min-width:240px}
   .rp-foot{font-size:9px;padding-top:6px}
   .rp-method{font-size:9.5px}
 }
+
+/* Discover, Google News, Last 24 hours, Indexing (surfaces-view.js) */
+.sv-loading{display:flex;align-items:center;gap:10px}
+.sv-loading::before{content:"";width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--signal);animation:sv-spin .8s linear infinite}
+@keyframes sv-spin{to{transform:rotate(360deg)}}
+.sv-drop{display:grid;gap:4px;place-items:center;text-align:center;padding:26px 16px;border:2px dashed var(--line);border-radius:var(--r);cursor:pointer;background:var(--sunk)}
+.sv-drop:hover{border-color:var(--signal)}
+.sv-drop b{font-size:14px}.sv-drop span{font-size:12.5px;color:var(--muted);max-width:60ch}
+.sv-ins{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sv-ins li{display:flex;gap:8px;font-size:13px;line-height:1.45;align-items:flex-start}
+.sv-ins svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--signal)}
+.sv-ins li.gain svg{color:var(--good)}.sv-ins li.risk svg{color:var(--risk)}.sv-ins li.watch svg{color:var(--watch)}
+.sv-ck{list-style:none;margin:0;padding:6px 16px 14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px}
+.sv-ck li{display:grid;gap:2px;font-size:12.5px}.sv-ck li span{color:var(--ink-2)}
+.sv-check{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px}
+.sv-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px}
+.sv-insp{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:12px;align-items:end}
+.sv-insp .sv-paste{grid-column:1/-1}.sv-insp .sf-err{grid-column:1/-1;margin:0}
+.sv-prog{height:6px;border-radius:999px;background:var(--sunk);overflow:hidden;margin-bottom:6px}
+.sv-prog span{display:block;height:100%;background:var(--signal);transition:width .2s}
+.sv-urls{padding:6px 16px 12px;display:grid;gap:4px;font-size:12.5px}
+.sv-urls div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line-soft);padding:3px 0}
+.sv-urls a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sv-urls .flat{white-space:nowrap;font-size:12px}
+.sv-h3{font-size:13.5px;margin:4px 0}
+.sv-add{display:inline-block}
+.sv-idx-tiles .aitile small{display:block}
+@media (max-width:720px){.sv-insp{grid-template-columns:1fr}.sv-ck{grid-template-columns:1fr}}
