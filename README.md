@@ -136,7 +136,7 @@ P1 ≥ 60, P2 ≥ 42, P3 below. Weights, priority sections and terms are set per
 
 ## What is stored, and what would need a backend
 
-Everything runs in the browser. Search data is never stored; the access token stays in memory and the scope is read-only (`webmasters.readonly`). Stored per site in localStorage: settings, a Generative AI report export only when you tick “Remember”, which sidebar groups are open, saved goals and workflows, tracked fixes, tasks (with baselines and final verdicts), priority weights/sections/terms and the growth target. "Forget this site" deletes them all.
+Everything runs in the browser. Search data is never stored; the access token stays in memory and the scope is read-only (`webmasters.readonly`). Stored per site in localStorage: settings, a Generative AI report export only when you tick “Remember”, saved goals and workflows, tracked fixes, tasks (with baselines and final verdicts), priority weights/sections/terms and the growth target. "Forget this site" deletes them all.
 
 Needs a server (not built): tasks shared between people or devices, scheduled monitoring and alerts, history beyond Search Console's 16 months, measuring results without reconnecting, GA4 or other conversion data for business relevance, and monitoring of AI answers (AI visibility here is inferred from CTR and labelled as such).
 

@@ -581,24 +581,20 @@
     });
   }
 
-  // ── collapsible sidebar groups: open/closed remembered in this browser; the current screen's group opens ──
-  const NAV_KEY = 'cw:nav-open';
-  const navState = () => { try { const v = JSON.parse(localStorage.getItem(NAV_KEY)); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
-  function setNavGroup(g, open, save) {
+  // ── collapsible sidebar groups: every group starts closed and opens only when clicked; a closed group
+  // holding the current screen is highlighted instead of opening by itself ──
+  function setNavGroup(g, open) {
     g.classList.toggle('closed', !open);
     const b = g.querySelector('.nav-group'); if (b) b.setAttribute('aria-expanded', String(open));
     const sec = g.querySelector('.nav-sec'); if (sec) sec.hidden = !open;
-    if (save) { const st = navState() || {}; st[g.dataset.grp] = open; try { localStorage.setItem(NAV_KEY, JSON.stringify(st)); } catch (e) { } }
   }
-  function openNavGroupOf(link) { const g = link && link.closest('.nav-grp'); if (g && g.classList.contains('closed')) setNavGroup(g, true, false); }
+  function openNavGroupOf(link) { document.querySelectorAll('.nav-grp').forEach(g => g.classList.toggle('has-on', !!link && g.contains(link))); }
   (function initNavGroups() {
-    const st = navState();
+    try { localStorage.removeItem('cw:nav-open'); } catch (e) { } // state is no longer remembered
     document.querySelectorAll('.nav-grp').forEach(g => {
-      const n = g.querySelectorAll('.nav-sec a').length, badge = g.querySelector('.nav-badge');
-      if (badge) badge.textContent = n;
-      // first visit: SEO opportunities open, the rest closed
-      setNavGroup(g, st && g.dataset.grp in st ? !!st[g.dataset.grp] : g.dataset.grp === 'seo-opportunities', false);
-      g.querySelector('.nav-group').addEventListener('click', () => setNavGroup(g, g.classList.contains('closed'), true));
+      const badge = g.querySelector('.nav-badge'); if (badge) badge.textContent = g.querySelectorAll('.nav-sec a').length;
+      setNavGroup(g, false);
+      g.querySelector('.nav-group').addEventListener('click', () => setNavGroup(g, g.classList.contains('closed')));
     });
   })();
 

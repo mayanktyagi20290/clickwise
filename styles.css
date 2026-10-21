@@ -1338,3 +1338,5 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .ga-how{margin-top:10px;font-size:13px}.ga-how summary{cursor:pointer;font-weight:600;color:var(--signal-ink)}.ga-how .ga-steps{margin-top:6px}
 .ga-up .ga-err{padding:8px 0 0}
 @media (max-width:640px){.ga-drop{flex-wrap:wrap}.ga-drop .btn-primary{width:100%;text-align:center}}
+.nav-grp.closed.has-on .nav-group{color:var(--signal-ink)!important;background:var(--signal-soft)}
+.nav-grp.closed.has-on .nav-badge{background:var(--surface);color:var(--signal-ink)}

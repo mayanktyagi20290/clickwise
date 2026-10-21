@@ -499,19 +499,20 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
-  await testAsync('sidebar groups collapse, remember their state and open for the current screen', async () => {
+  await testAsync('sidebar groups start closed, open only on click, and highlight the current screen’s group', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
-    await page.evaluate(() => localStorage.removeItem('cw:nav-open')); await page.reload(); await toApp();
     const open = g => page.$eval(`.nav-grp[data-grp="${g}"] .nav-group`, b => b.getAttribute('aria-expanded'));
-    assert.equal(await open('seo-opportunities'), 'true', 'SEO opportunities open by default');
-    assert.equal(await open('explore'), 'false', 'others closed by default');
-    assert.ok(!(await page.isVisible('.nav a[data-view="queries"]')), 'closed group hides its links');
+    for (const g of ['seo-opportunities', 'automation', 'ai-search', 'search-console', 'explore']) assert.equal(await open(g), 'false', g + ' closed on load');
+    assert.ok(await page.isVisible('#btn-settings'), 'whole sidebar reachable without scrolling past open groups');
+    await go('#news');
+    assert.equal(await open('search-console'), 'false', 'does not open by itself');
+    assert.ok(await page.$('.nav-grp[data-grp="search-console"].has-on'), 'current screen’s group highlighted');
     await page.click('.nav-grp[data-grp="explore"] .nav-group');
     assert.ok(await page.isVisible('.nav a[data-view="queries"]'), 'opens on click');
-    await page.reload(); await toApp();
-    assert.equal(await open('explore'), 'true', 'state remembered');
-    await page.click('.nav-grp[data-grp="explore"] .nav-group'); await go('#news');
-    assert.equal(await open('search-console'), 'true', 'group of the current screen opens');
+    await page.click('.nav-grp[data-grp="explore"] .nav-group');
+    assert.ok(!(await page.isVisible('.nav a[data-view="queries"]')), 'closes on click');
+    await page.click('.nav-grp[data-grp="explore"] .nav-group'); await page.reload(); await toApp();
+    assert.equal(await open('explore'), 'false', 'closed again after reload');
     assert.ok(/\d/.test(await text('.nav-grp[data-grp="automation"] .nav-badge')), 'closed group shows how many screens it holds');
   });
 
