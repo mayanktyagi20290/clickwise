@@ -378,14 +378,31 @@ function writeComparisonExports(dir) {
     await page.evaluate(() => localStorage.clear());
     await page.goto(base + 'app.html?demo'); await toApp();
     // the main priority action is visible without scrolling at 1360 × 900
-    const box = await page.$eval('.cc-today .cc-list > li.cc-top', e => { const r = e.getBoundingClientRect(); return { top: r.top, h: r.height }; });
-    assert.ok(box.top > 0 && box.top < 900 - 80, 'top action above the fold at y=' + Math.round(box.top));
-    assert.ok(/Top priority action/.test(await text('.cc-top')), 'labelled');
+    const box = await page.$eval('.cc-hero-top', e => { const r = e.getBoundingClientRect(); return { top: r.top, h: r.height }; });
+    assert.ok(box.top > 0 && box.top + box.h < 900, 'top priority banner above the fold at y=' + Math.round(box.top));
+    assert.ok(/Top priority for today/.test(await text('.cc-hero-top')), 'banner labelled');
+    const bannerId = await page.$eval('.cc-hero-top', a => a.getAttribute('href'));
+    assert.equal(bannerId, '#opp?id=' + encodeURIComponent(await page.$eval('.cc-today .cc-list > li.cc-top', li => li.dataset.oid)), 'banner and first row are the same action');
+    assert.ok(/Top priority action/.test(await text('.cc-top')), 'first row labelled');
+    // filter chips redraw the table in place; Create task still works after a redraw
+    await page.click('[data-cc-chip="ctr"]'); await page.waitForTimeout(150);
+    const ctrRows = await page.$$eval('.cc-today .cc-list > li .cc-tags .tag.cat', t => t.map(x => x.textContent));
+    assert.ok(ctrRows.length > 0 && ctrRows.every(c => /CTR|AI/.test(c)), 'CTR chip filters: ' + ctrRows.join(','));
+    await page.click('[data-cc-chip="today"]'); await page.waitForTimeout(150);
+    assert.equal(await page.$$eval('.cc-today .cc-list > li', l => l.length), 5, 'back to the five for today');
+    // shell: connection status, comparison and Ask Clickwise in the top bar; KPI cards with sparklines
+    assert.ok(/Sample data/.test(await text('#top-conn')), 'connection status');
+    assert.ok(await page.$('.top-ask[href="#ask"]'), 'Ask Clickwise button');
+    assert.equal(await page.$$eval('.tiles .tile .spark', s => s.length), 4, 'sparklines on the KPI cards');
+    // trend chart: metric tabs switch the series
+    await page.click('.cc-trend [data-metric="pos"]'); await page.waitForTimeout(200);
+    assert.ok(await page.evaluate(() => { const c = window.Chart && window.Chart.getChart('ch-trend'); return c && c.options.scales.y.reverse === true && /position/i.test(c.options.scales.y.title.text); }), 'position tab: inverted axis');
+    await page.click('.cc-trend [data-metric="clicks"]');
     // first-session guide and source labelling
     assert.ok(/Start here/.test(await text('.cc-guide')) && /fictional sample site/.test(await text('.cc-guide')), 'guide explains the data');
     assert.ok(await page.$$eval('.cc-target .tip[aria-label]', t => t.length) >= 4, 'metric definitions as accessible tooltips');
     // four separate numbers: now, target, opportunity, forecast
-    assert.ok(/Now/.test(await text('.cc-kpi.now')) && /observed/.test(await text('.cc-kpi.now')), 'observed');
+    assert.ok(/Current/.test(await text('.cc-kpi.now')) && /observed/.test(await text('.cc-kpi.now')), 'observed');
     assert.ok(/Target/.test(await text('.cc-kpi.tgt')) && /Set a target/.test(await text('.cc-kpi.tgt')), 'no target yet');
     assert.ok(!(await page.$('.cc-target [role=progressbar]')), 'no progress before a target');
     assert.ok(/Forecast/.test(await text('.cc-kpi.fc')) && /confidence/.test(await text('.cc-kpi.fc')), 'forecast with confidence');

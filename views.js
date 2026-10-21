@@ -165,25 +165,33 @@
     if (prev == null || !isFinite(prev) || prev === 0) return '';
     const d = unit === 'pt' ? cur - prev : (cur - prev) / prev * 100;
     const good = invert ? d < 0 : d > 0;
-    return `<span class="tile-d" title="${good ? 'Improved' : 'Worse'} vs previous period">${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
+    return `<span class="tile-d ${d === 0 ? '' : good ? 'up' : 'down'}" title="${good ? 'Improved' : 'Worse'} vs previous period">${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${Math.abs(d).toFixed(1)}${unit === 'pt' ? ' pts' : '%'} vs previous</span>`;
   }
-  function tiles(A) {
-    const nb = A.totNB, p = A.prev, cov = A.coverage;
+  const KPI_ICON = {
+    clicks: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+    impr: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    ctr: '<path d="M9 9l11 4-5 2-2 5z"/><path d="M5 3v3M3 5h3M4.5 9.5l-1.4 1.4M10 4.5l1.4-1.4"/>',
+    pos: '<path d="M4 20V14M10 20V9M16 20V4M22 20H2"/>'
+  };
+  const tile = (cls, ico, label, value, sub, delta, sp) => `<div class="tile ${cls}"><div class="tile-top"><span class="tile-i" aria-hidden="true"><svg viewBox="0 0 24 24">${KPI_ICON[ico]}</svg></span><div class="tile-l">${label}</div></div>
+      <div class="tile-row"><div><div class="tile-v">${value}</div>${delta || `<span class="tile-s">${sub}</span>`}</div>${sp || ''}</div>${delta ? `<div class="tile-s">${sub}</div>` : ''}</div>`;
+  function tiles(A, D) {
+    const nb = A.totNB, p = A.prev, cov = A.coverage, C = D && D.C;
     if (cov) {
       const st = A.site, ps = A.prevSite;
       return `<section class="tiles" aria-label="Whole-site performance">
-        <div class="tile t-blue"><div class="tile-v">${fmtN(st.clicks)}</div><div class="tile-l">Clicks</div><div class="tile-s">All searches, from daily totals</div>${tileDelta(st.clicks, ps && ps.clicks)}</div>
-        <div class="tile t-green"><div class="tile-v">${fmtN(st.impr)}</div><div class="tile-l">Impressions</div><div class="tile-s">All searches, from daily totals</div>${tileDelta(st.impr, ps && ps.impr)}</div>
-        <div class="tile t-amber"><div class="tile-v">${pctf(st.ctr, 2)}</div><div class="tile-l">CTR</div><div class="tile-s">Whole site, branded included</div>${tileDelta(st.ctr, ps && ps.ctr, false, 'pt')}</div>
-        <div class="tile t-red"><div class="tile-v">${st.pos.toFixed(1)}</div><div class="tile-l">Average position</div><div class="tile-s">Weighted by impressions</div>${tileDelta(st.pos, ps && ps.pos, true)}</div>
+        ${tile('t-blue', 'clicks', 'Organic clicks', fmtN(st.clicks), 'All searches, from daily totals', tileDelta(st.clicks, ps && ps.clicks), spark(C, 'clicks'))}
+        ${tile('t-green', 'impr', 'Impressions', fmtN(st.impr), 'All searches, from daily totals', tileDelta(st.impr, ps && ps.impr), spark(C, 'impr'))}
+        ${tile('t-amber', 'ctr', 'CTR', pctf(st.ctr, 2), 'Whole site, branded included', tileDelta(st.ctr, ps && ps.ctr, false, 'pt'), spark(C, 'ctr'))}
+        ${tile('t-red', 'pos', 'Average position', st.pos.toFixed(1), 'Weighted by impressions', tileDelta(st.pos, ps && ps.pos, true), spark(C, 'pos', true))}
       </section>`;
     }
     const bench = expCtr(nb.pos);
     return `<section class="tiles" aria-label="Non-branded performance">
-      <div class="tile t-blue"><div class="tile-v">${fmtN(nb.clicks)}</div><div class="tile-l">Non-brand clicks</div><div class="tile-s">${A.NBQ.length.toLocaleString()} queries in this data</div>${tileDelta(nb.clicks, p && p.nb.clicks)}</div>
-      <div class="tile t-green"><div class="tile-v">${fmtN(nb.impr)}</div><div class="tile-l">Non-brand impressions</div><div class="tile-s">Queries in this data only</div>${tileDelta(nb.impr, p && p.nb.impr)}</div>
-      <div class="tile t-amber"><div class="tile-v">${pctf(nb.ctr, 2)}</div><div class="tile-l">Non-brand CTR</div><div class="tile-s">Benchmark at this position ~${bench.toFixed(1)}%</div>${tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt')}</div>
-      <div class="tile t-red"><div class="tile-v">${nb.pos.toFixed(1)}</div><div class="tile-l">Non-brand position</div><div class="tile-s">Weighted by impressions</div>${tileDelta(nb.pos, p && p.nb.pos, true)}</div>
+      ${tile('t-blue', 'clicks', 'Non-brand clicks', fmtN(nb.clicks), `${A.NBQ.length.toLocaleString()} queries in this data`, tileDelta(nb.clicks, p && p.nb.clicks), spark(C, 'clicks'))}
+      ${tile('t-green', 'impr', 'Non-brand impressions', fmtN(nb.impr), 'Queries in this data only', tileDelta(nb.impr, p && p.nb.impr), spark(C, 'impr'))}
+      ${tile('t-amber', 'ctr', 'Non-brand CTR', pctf(nb.ctr, 2), `Benchmark at this position ~${bench.toFixed(1)}%`, tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt'), spark(C, 'ctr'))}
+      ${tile('t-red', 'pos', 'Non-brand position', nb.pos.toFixed(1), 'Weighted by impressions', tileDelta(nb.pos, p && p.nb.pos, true), spark(C, 'pos', true))}
     </section>`;
   }
   // Non-brand subset and how much of the site the query and page rows cover.
@@ -252,17 +260,28 @@
 
   // Aggregate the daily series by day / week / month
   function rollup(C, unit) {
-    const c = C.slice().sort((a, b) => a.d.localeCompare(b.d));
-    if (unit === 'day') return c.map(r => ({ l: r.d.slice(5), clicks: r.clicks, impr: r.impr }));
+    const c = (C || []).slice().sort((a, b) => a.d.localeCompare(b.d));
+    if (unit === 'day') return c.map(r => ({ l: r.d.slice(5), d: r.d, clicks: r.clicks, impr: r.impr, ctr: r.impr ? r.clicks / r.impr * 100 : 0, pos: r.pos || null }));
     const m = new Map();
     c.forEach(r => {
       const d = new Date(r.d + 'T00:00:00');
       let k;
       if (unit === 'week') { const w = new Date(d); w.setDate(d.getDate() - ((d.getDay() + 6) % 7)); k = w.toISOString().slice(5, 10); }
       else k = d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-      const o = m.get(k) || { l: k, clicks: 0, impr: 0 }; o.clicks += r.clicks; o.impr += r.impr; m.set(k, o);
+      const o = m.get(k) || { l: k, d: r.d, clicks: 0, impr: 0, pw: 0 }; o.clicks += r.clicks; o.impr += r.impr; o.pw += (r.pos || 0) * r.impr; m.set(k, o);
     });
-    return [...m.values()];
+    return [...m.values()].map(o => ({ l: o.l, d: o.d, clicks: o.clicks, impr: o.impr, ctr: o.impr ? o.clicks / o.impr * 100 : 0, pos: o.impr ? o.pw / o.impr : null }));
+  }
+  // A small trend line for a KPI card: daily values, thinned to about 48 points. Inline SVG, no chart library.
+  function spark(C, key, invert) {
+    const r = rollup(C, 'day').map(x => x[key]).filter(v => v != null && isFinite(v));
+    if (r.length < 4) return '';
+    const step = Math.max(1, Math.ceil(r.length / 48)), v = [];
+    for (let i = 0; i < r.length; i += step) { const seg = r.slice(i, i + step); v.push(seg.reduce((a, b) => a + b, 0) / seg.length); }
+    const lo = Math.min(...v), hi = Math.max(...v), W = 120, H = 34, sp = hi - lo || 1;
+    const pts = v.map((x, i) => [i / (v.length - 1) * W, invert ? 2 + (x - lo) / sp * (H - 4) : H - 2 - (x - lo) / sp * (H - 4)]);
+    const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${H} ${line} ${W},${H}"/><polyline points="${line}"/></svg>`;
   }
   function gscIndexUrl(D) {
     const res = D.siteUrl || ('sc-domain:' + D.site);
@@ -285,31 +304,35 @@
     const topQ = A.NBQ.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const topP = A.P.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const CC = window.CW_COMMAND;
-    const html = `${CC ? CC.html(A, D) : ''}${CC && CC.top ? CC.top(A, D) : ''}
-      <section class="banner">
+    const hasPrevC = !!(D.prevC && D.prevC.length);
+    const trend = D.C && D.C.length ? `<section class="panel cc-trend">
+        <div class="panel-h"><h2>Organic traffic trend</h2>
+          <div class="cc-trend-ctl">
+            <div class="seg seg-m" role="group" aria-label="Metric"><button type="button" data-metric="clicks" class="on">Clicks</button><button type="button" data-metric="impr">Impressions</button><button type="button" data-metric="ctr">CTR</button><button type="button" data-metric="pos">Position</button></div>
+            <div class="seg" role="group" aria-label="Group by"><button type="button" data-unit="day" class="on">Daily</button><button type="button" data-unit="week">Weekly</button><button type="button" data-unit="month">Monthly</button></div>
+          </div></div>
+        <div class="panel-b">
+          <div class="legend"><span><i style="background:var(--signal)"></i>This period</span>${hasPrevC ? '<span><i class="dash"></i>Previous period</span>' : '<span class="flat">No previous period loaded</span>'}${CC && CC.hasMarkers(D) ? '<span><i style="background:var(--orange)"></i>Changes you implemented</span>' : ''}</div>
+          <div class="chart-box"><canvas id="ch-trend" aria-label="Organic traffic over time, this period${hasPrevC ? ' and the previous period' : ''}"></canvas></div>
+        </div></section>` : '<section class="panel cc-trend"><div class="panel-h"><h2>Organic traffic trend</h2></div><p class="empty" style="padding:16px 20px">This export has no date data. Connect Search Console or include the Dates sheet to see the trend.</p></section>';
+    const banner = `<section class="banner">
         <div><h1>${A.potential.hi >= 1 ? `${esc(D.site)} could gain roughly <b class="num">${fmtN(A.potential.lo)}–${fmtN(A.potential.hi)}</b> more clicks a month from searches it already ranks for.` : `No clear click opportunities in searches ${esc(D.site)} already ranks for.`}</h1>
         <p>${A.potential.hi >= 1 ? `An estimate from ${A.potential.n.toLocaleString()} non-branded searches${A.coverage ? ` (${(A.potential.hi / Math.max(1, A.potential.monthlySiteClicks) * 100).toFixed(1)}% of monthly clicks at the high end)` : ''}, counted once each.` : `Checked ${A.NBQ.length.toLocaleString()} non-branded searches: none rank where a better title or a few positions would add clicks.`} Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded. <a href="#plan">How it's estimated</a></p></div>
         <a class="btn-primary" href="#plan">See the action plan</a>
-      </section>
+      </section>`;
+    const html = `${CC ? CC.html(A, D) : ''}
+      ${tiles(A, D)}
+      ${CC && CC.target ? `<div class="cc-grid wide stretch">${trend}${CC.target(A, D)}</div>` : trend}
+      ${banner}
+      ${CC && CC.opps ? `<div class="cc-grid wide">${CC.opps(A, D)}<div class="cc-col">${CC.tasksPanel(A, D)}${CC.insights(A, D)}</div></div>
+      <div class="cc-grid wide">${CC.changes(A, D)}${CC.winners(A, D)}</div>
+      ${CC.body(A, D)}` : `<section class="panel"><div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a></div>${ledger(A.plan, 3)}</section>`}
 
       <form class="sf-box ov-ask" id="ov-ask" autocomplete="off" role="search" aria-label="Describe an SEO goal">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>
         <input id="ov-ask-in" type="text" maxlength="300" placeholder="Ask in plain English, e.g. which pages should I fix first?" aria-label="Describe an SEO goal">
         <button class="btn-primary" type="submit">Ask</button>
       </form>
-
-      <section class="panel">
-        ${tiles(A)}
-        ${D.C && D.C.length ? `<div class="panel-b">
-          <div class="chart-bar">
-            <div class="legend"><span><i style="background:var(--signal)"></i>Clicks</span><span><i style="background:var(--sky)"></i>Impressions</span>${CC && CC.hasMarkers(D) ? '<span><i style="background:var(--orange)"></i>Changes you implemented</span>' : ''}</div>
-            <div class="seg" role="group" aria-label="Group by"><button type="button" data-unit="day" class="on">Day</button><button type="button" data-unit="week">Week</button><button type="button" data-unit="month">Month</button></div>
-          </div>
-          <div class="chart-box"><canvas id="ch-trend" aria-label="Clicks and impressions over time"></canvas></div>
-        </div>` : '<p class="empty" style="padding:16px 20px">This export has no date data. Connect Search Console or include the Dates sheet to see the trend.</p>'}
-      </section>
-
-      ${CC ? CC.body(A, D) : `<section class="panel"><div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a></div>${ledger(A.plan, 3)}</section>`}
 
       ${subsetStrip(A, D)}
 
@@ -354,22 +377,33 @@
     const mount = () => {
       if (CC) CC.mount(A, D);
       if (D.C && D.C.length) {
-        const draw = unit => {
-          const r = rollup(D.C, unit);
-          return { labels: r.map(x => x.l), clicks: r.map(x => x.clicks), impr: r.map(x => x.impr) };
+        const LBL = { clicks: 'Clicks', impr: 'Impressions', ctr: 'CTR (%)', pos: 'Average position' };
+        const st = { unit: 'day', metric: 'clicks' }, unitRef = { unit: 'day' };
+        const series = () => {
+          const cur = rollup(D.C, st.unit), prev = hasPrevC ? rollup(D.prevC, st.unit) : [];
+          const v = r => r == null ? null : st.metric === 'ctr' || st.metric === 'pos' ? (r[st.metric] == null ? null : +r[st.metric].toFixed(2)) : r[st.metric];
+          return { labels: cur.map(x => x.l), cur: cur.map(v), prev: cur.map((x, i) => v(prev[i])), prevLabels: cur.map((x, i) => prev[i] ? prev[i].l : '') };
         };
-        const d0 = draw('day'), unitRef = { unit: 'day' };
+        let d0 = series();
         const ch = chart('ch-trend', { type: 'line', plugins: CC ? [CC.markerPlugin(D, unitRef)] : [], data: { labels: d0.labels, datasets: [
-          { label: 'Clicks', data: d0.clicks, borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5, yAxisID: 'y' },
-          { label: 'Impressions', data: d0.impr, borderColor: cssVar('--sky'), backgroundColor: 'transparent', tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2, yAxisID: 'y1' }
-        ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { position: 'left', title: { display: true, text: 'Clicks', color: cssVar('--signal') }, ticks: { color: cssVar('--signal'), callback: v => fmtN(v) } }, y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Impressions', color: cssVar('--sky') }, ticks: { color: cssVar('--sky'), callback: v => fmtN(v) } } } } });
-        document.querySelectorAll('.seg [data-unit]').forEach(b => b.addEventListener('click', () => {
-          document.querySelectorAll('.seg [data-unit]').forEach(x => x.classList.toggle('on', x === b));
+          { label: 'This period', data: d0.cur, borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5 },
+          { label: 'Previous period', data: d0.prev, hidden: !hasPrevC, borderColor: cssVar('--muted'), borderDash: [5, 4], backgroundColor: 'transparent', tension: .35, pointRadius: 0, pointHoverRadius: 3, borderWidth: 1.5 }
+        ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false },
+          tooltip: { callbacks: { title: x => x[0] ? x[0].label : '', label: x => ` ${x.dataset.label}${x.datasetIndex === 1 && d0.prevLabels[x.dataIndex] ? ' (' + d0.prevLabels[x.dataIndex] + ')' : ''}: ${x.raw == null ? '—' : st.metric === 'ctr' ? x.raw.toFixed(2) + '%' : st.metric === 'pos' ? x.raw.toFixed(1) : fmtN(x.raw)}` } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { reverse: false, grid: { color: cssVar('--line-soft') }, title: { display: true, text: LBL.clicks }, ticks: { callback: v => st.metric === 'ctr' ? v + '%' : st.metric === 'pos' ? v : fmtN(v) } } } } });
+        const redraw = () => {
           if (!ch) return;
-          const d = draw(b.dataset.unit); unitRef.unit = b.dataset.unit;
-          ch.data.labels = d.labels; ch.data.datasets[0].data = d.clicks; ch.data.datasets[1].data = d.impr;
-          ch.data.datasets.forEach(ds => ds.pointRadius = b.dataset.unit === 'day' ? 0 : 3);
+          d0 = series(); unitRef.unit = st.unit;
+          ch.data.labels = d0.labels; ch.data.datasets[0].data = d0.cur; ch.data.datasets[1].data = d0.prev;
+          ch.options.scales.y.reverse = st.metric === 'pos'; ch.options.scales.y.title.text = LBL[st.metric];
+          ch.data.datasets.forEach(ds => ds.pointRadius = st.unit === 'day' ? 0 : 3);
           ch.update();
+        };
+        document.querySelectorAll('.cc-trend .seg [data-unit]').forEach(b => b.addEventListener('click', () => {
+          document.querySelectorAll('.cc-trend .seg [data-unit]').forEach(x => x.classList.toggle('on', x === b)); st.unit = b.dataset.unit; redraw();
+        }));
+        document.querySelectorAll('.cc-trend [data-metric]').forEach(b => b.addEventListener('click', () => {
+          document.querySelectorAll('.cc-trend [data-metric]').forEach(x => x.classList.toggle('on', x === b)); st.metric = b.dataset.metric; redraw();
         }));
       }
       chart('ch-dist', { type: 'bar', data: { labels: A.posDist.map(b => b.label), datasets: [

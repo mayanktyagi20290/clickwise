@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=34">
+<link rel="stylesheet" href="styles.css?v=35">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -101,7 +101,7 @@
 <!-- ============ APP ============ -->
 <div id="app" class="app" hidden>
   <aside class="nav" id="nav">
-    <div class="brandmark sm"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
+    <div class="brandmark sm"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 4 7-8"/><path d="M15 7h5v5"/></svg></span><span class="brand-t">Clickwise<small>SEO Growth OS</small></span></div>
     <nav aria-label="Sections">
       <a href="#overview" data-view="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Command Center</span></a>
       <a href="#priorities" data-view="priorities"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Priorities</span></a>
@@ -133,8 +133,8 @@
       <a href="#intent" data-view="intent"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span>Search intent</span></a>
     </nav>
     <div class="nav-foot">
-      <button type="button" class="btn-quiet" id="btn-settings">Settings</button>
-      <button type="button" class="btn-quiet" id="btn-new">New analysis</button>
+      <button type="button" class="btn-quiet nav-btn" id="btn-new"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>New analysis</button>
+      <button type="button" class="btn-quiet nav-btn" id="btn-settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
     </div>
   </aside>
 
@@ -152,9 +152,12 @@
           <span class="tag watch" id="top-sample" hidden title="Numbers are generated for a fictional site">Sample data</span>
           <span class="tag loading" id="top-loading" role="status" aria-live="polite" hidden></span>
           <span class="tag loading" id="top-content" role="status" aria-live="polite" hidden></span>
+          <span class="top-cmp" id="top-cmp" hidden></span>
         </div>
         <div class="top-actions">
-          <button type="button" class="btn-dark" id="btn-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>Print report</button>
+          <span class="top-conn" id="top-conn" hidden><i aria-hidden="true"></i><span><b id="top-conn-t"></b><small id="top-conn-s"></small></span></span>
+          <button type="button" class="icon-btn" id="btn-print" title="Print report" aria-label="Print report"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg><span class="lbl">Print report</span></button>
+          <a class="btn-primary top-ask" href="#ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>Ask Clickwise</a>
         </div>
       </div>
     </header>
@@ -215,29 +218,29 @@
   </form>
 </dialog>
 
-<script src="config.js?v=34"></script>
-<script src="engine.js?v=34"></script>
-<script src="demo.js?v=34"></script>
-<script src="opportunities.js?v=34"></script>
-<script src="content.js?v=34"></script>
-<script src="fixes.js?v=34"></script>
-<script src="titles.js?v=34"></script>
-<script src="report.js?v=34"></script>
-<script src="filters.js?v=34"></script>
-<script src="workflows.js?v=34"></script>
-<script src="views.js?v=34"></script>
-<script src="automation.js?v=34"></script>
-<script src="surfaces.js?v=34"></script>
-<script src="surfaces-view.js?v=34"></script>
-<script src="content-view.js?v=34"></script>
-<script src="fixes-view.js?v=34"></script>
-<script src="priority.js?v=34"></script>
-<script src="tasks.js?v=34"></script>
-<script src="forecast.js?v=34"></script>
-<script src="explain.js?v=34"></script>
-<script src="tasks-view.js?v=34"></script>
-<script src="command.js?v=34"></script>
-<script src="copilot.js?v=34"></script>
-<script src="app.js?v=34"></script>
+<script src="config.js?v=35"></script>
+<script src="engine.js?v=35"></script>
+<script src="demo.js?v=35"></script>
+<script src="opportunities.js?v=35"></script>
+<script src="content.js?v=35"></script>
+<script src="fixes.js?v=35"></script>
+<script src="titles.js?v=35"></script>
+<script src="report.js?v=35"></script>
+<script src="filters.js?v=35"></script>
+<script src="workflows.js?v=35"></script>
+<script src="views.js?v=35"></script>
+<script src="automation.js?v=35"></script>
+<script src="surfaces.js?v=35"></script>
+<script src="surfaces-view.js?v=35"></script>
+<script src="content-view.js?v=35"></script>
+<script src="fixes-view.js?v=35"></script>
+<script src="priority.js?v=35"></script>
+<script src="tasks.js?v=35"></script>
+<script src="forecast.js?v=35"></script>
+<script src="explain.js?v=35"></script>
+<script src="tasks-view.js?v=35"></script>
+<script src="command.js?v=35"></script>
+<script src="copilot.js?v=35"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
