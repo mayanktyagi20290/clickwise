@@ -54,7 +54,7 @@
       baseline: t.baseline && typeof t.baseline === 'object' ? t.baseline : null,
       created: clean(t.created, 40), updated: clean(t.updated, 40),
       history: Array.isArray(t.history) ? t.history.filter(h => h && STATUS[h.status]).slice(-30).map(h => ({ at: clean(h.at, 40), status: h.status })) : [],
-      outcome: t.outcome && typeof t.outcome === 'object' && t.outcome.verdict ? { verdict: clean(t.outcome.verdict, 30), relative: t.outcome.relative == null ? null : +t.outcome.relative, change: t.outcome.change == null ? null : +t.outcome.change, at: clean(t.outcome.at, 40), window: +t.outcome.window || null } : null
+      outcome: t.outcome && typeof t.outcome === 'object' && t.outcome.verdict ? { verdict: clean(t.outcome.verdict, 30), relative: t.outcome.relative == null ? null : +t.outcome.relative, change: t.outcome.change == null ? null : +t.outcome.change, monthly: t.outcome.monthly == null || !isFinite(+t.outcome.monthly) ? null : +t.outcome.monthly, at: clean(t.outcome.at, 40), window: +t.outcome.window || null } : null
     };
   }
   function load(raw) { const list = Array.isArray(raw) ? raw : []; const ok = list.map(normalise).filter(Boolean); return { list: ok, damaged: list.length - ok.length }; }
@@ -99,8 +99,26 @@
     return { total: list.length, open: open.length, overdue: list.filter(t => overdue(t, now)).length, implemented: list.filter(t => t.status === 'implemented').length, validated: list.filter(t => t.status === 'validated').length,
       byStatus: ORDER.reduce((o, s) => (o[s] = list.filter(t => t.status === s).length, o), {}) };
   }
+  // One list of every change that went live, from the Action board and the Fix tracker, so both screens show
+  // the same record and nothing is measured twice. A fix logged for the same page (or the whole site) on the
+  // same day as a task is the same change: the task wins and the fix is noted as linked.
+  // Each entry keeps what is needed to compare later: date, scope, what changed, baseline and estimate.
+  function changeLog(list, fixes) {
+    const out = [];
+    (list || []).filter(t => t.implDate && ['implemented', 'validated'].includes(t.status)).forEach(t => out.push({
+      key: 'task:' + t.id, from: 'task', taskId: t.id, date: t.implDate, scope: t.url ? 'page' : 'site', url: t.url, path: t.url ? pathOf(t.url) : null,
+      note: t.change || t.title, title: t.title, owner: t.owner, window: t.window, baseline: t.baseline, estimate: t.estimate, outcome: t.outcome, status: t.status, fixIds: [] }));
+    (fixes || []).filter(f => f && FX.isDate(f.date)).forEach(f => {
+      const same = out.find(c => c.from === 'task' && c.date === f.date && (c.scope === 'site' ? f.scope === 'site' : f.url === c.url));
+      if (same) { same.fixIds.push(f.id); return; }
+      out.push({ key: 'fix:' + f.id, from: 'fix', fixId: f.id, date: f.date, scope: f.scope === 'site' ? 'site' : 'page', url: f.scope === 'site' ? null : f.url, path: f.scope === 'site' ? null : (f.path || pathOf(f.url)), note: f.note || '', title: f.note || 'Tracked fix', window: 28, baseline: null, estimate: null, outcome: null, fixIds: [f.id] });
+    });
+    return out.sort((a, b) => b.date.localeCompare(a.date) || a.key.localeCompare(b.key));
+  }
+  // The measured change as clicks a month, for comparing with the estimate made when the task was created.
+  const measuredMonthly = r => r && r.status === 'measured' && r.before && r.after ? (r.after.perDay - r.before.perDay) * 30 : null;
   // Chart markers for the trend: implemented changes by date.
   const markers = (list, fixes) => list.filter(t => t.implDate).map(t => ({ d: t.implDate, label: t.title })).concat((fixes || []).map(f => ({ d: f.date, label: f.note || 'Tracked fix' })));
 
-  window.CW_TASKS = { STATUS, ORDER, WINDOWS, fromOpportunity, manual, normalise, load, validate, setStatus, overdue, measurable, confounders, outcomes, summary, markers, baselineOf, pathOf };
+  window.CW_TASKS = { STATUS, ORDER, WINDOWS, fromOpportunity, manual, normalise, load, validate, setStatus, overdue, measurable, confounders, outcomes, summary, markers, baselineOf, pathOf, changeLog, measuredMonthly };
 })();

@@ -285,7 +285,7 @@
     const topQ = A.NBQ.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const topP = A.P.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const CC = window.CW_COMMAND;
-    const html = `${CC ? CC.html(A, D) : ''}
+    const html = `${CC ? CC.html(A, D) : ''}${CC && CC.top ? CC.top(A, D) : ''}
       <section class="banner">
         <div><h1>${A.potential.hi >= 1 ? `${esc(D.site)} could gain roughly <b class="num">${fmtN(A.potential.lo)}–${fmtN(A.potential.hi)}</b> more clicks a month from searches it already ranks for.` : `No clear click opportunities in searches ${esc(D.site)} already ranks for.`}</h1>
         <p>${A.potential.hi >= 1 ? `An estimate from ${A.potential.n.toLocaleString()} non-branded searches${A.coverage ? ` (${(A.potential.hi / Math.max(1, A.potential.monthlySiteClicks) * 100).toFixed(1)}% of monthly clicks at the high end)` : ''}, counted once each.` : `Checked ${A.NBQ.length.toLocaleString()} non-branded searches: none rank where a better title or a few positions would add clicks.`} Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded. <a href="#plan">How it's estimated</a></p></div>

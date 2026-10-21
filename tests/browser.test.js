@@ -372,6 +372,78 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Command Center: top action above the fold, explanations, inline tasks, target workflow, sync, persistence', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(base + 'app.html?demo'); await toApp();
+    // the main priority action is visible without scrolling at 1360 × 900
+    const box = await page.$eval('.cc-today .cc-list > li.cc-top', e => { const r = e.getBoundingClientRect(); return { top: r.top, h: r.height }; });
+    assert.ok(box.top > 0 && box.top < 900 - 80, 'top action above the fold at y=' + Math.round(box.top));
+    assert.ok(/Top priority action/.test(await text('.cc-top')), 'labelled');
+    // first-session guide and source labelling
+    assert.ok(/Start here/.test(await text('.cc-guide')) && /fictional sample site/.test(await text('.cc-guide')), 'guide explains the data');
+    assert.ok(await page.$$eval('.cc-target .tip[aria-label]', t => t.length) >= 4, 'metric definitions as accessible tooltips');
+    // four separate numbers: now, target, opportunity, forecast
+    assert.ok(/Now/.test(await text('.cc-kpi.now')) && /observed/.test(await text('.cc-kpi.now')), 'observed');
+    assert.ok(/Target/.test(await text('.cc-kpi.tgt')) && /Set a target/.test(await text('.cc-kpi.tgt')), 'no target yet');
+    assert.ok(!(await page.$('.cc-target [role=progressbar]')), 'no progress before a target');
+    assert.ok(/Forecast/.test(await text('.cc-kpi.fc')) && /confidence/.test(await text('.cc-kpi.fc')), 'forecast with confidence');
+    await page.click('.cc-method summary');
+    const method = await text('.cc-method');
+    assert.ok(/Baseline/.test(method) && /Assumptions/.test(method) && /Conservative/.test(method) && /Confidence:/.test(method), 'methodology shown');
+    // why and how
+    await page.click('.cc-today .cc-list > li.cc-top > .cc-why > summary');
+    const why = await text('.cc-today .cc-list > li.cc-top > .cc-why');
+    assert.ok(/Evidence/.test(why) && /GSC/.test(why) && /How to implement/.test(why) && /Affected searches and pages/.test(why) && /Full detail and score/.test(why), 'explanation complete');
+    assert.ok(/Upload a crawler export/.test(why), 'says crawl data is missing');
+    // Create task: stays on the dashboard, announces, persists, shows on the board
+    const hash0 = await page.evaluate(() => location.hash);
+    const first = await page.$eval('[data-cc-task]', b => b.dataset.ccTask);
+    await page.click('[data-cc-task]'); await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => location.hash), hash0, 'no navigation away');
+    assert.ok(/Task created/.test(await text('#cc-live')), 'announced');
+    await page.reload(); await toApp();
+    const saved = await page.evaluate(id => JSON.parse(localStorage.getItem('cw:tasks:' + window.CW_SOURCE.site)).some(t => t.oppId === id), first);
+    assert.ok(saved, 'task persisted after reload');
+    assert.ok(!(await page.$(`[data-cc-task="${first.replace(/"/g, '\\"')}"]`)), 'Do today shows the task, not a create button');
+    // target: refused below the baseline, saved with a period, kept after reload, progress waits for new data
+    await page.click('.cc-kpi.tgt [data-cc-tgt-open], .cc-sug [data-cc-tgt-open]');
+    await page.fill('#cc-tgt-form input[name=monthly]', '10'); await page.click('#cc-tgt-form button[type=submit]');
+    assert.ok(/not above/.test(await text('#cc-tgt-err')), 'below baseline refused');
+    await page.fill('#cc-tgt-form input[name=monthly]', '6000'); await page.selectOption('#cc-tgt-form select[name=period]', '180');
+    await page.click('#cc-tgt-form button[type=submit]'); await page.waitForTimeout(500);
+    await page.reload(); await toApp();
+    assert.ok(/6K/.test(await text('.cc-kpi.tgt')) && /by /.test(await text('.cc-kpi.tgt')), 'target and deadline shown after reload');
+    assert.ok(/Progress appears once data after/.test(await text('.cc-target')), 'no fake progress on the baseline data');
+    assert.ok(await page.$('.cc-feas'), 'feasibility against the forecast');
+    // guide can be hidden for good
+    await page.click('#cc-guide-x'); await page.reload(); await toApp();
+    assert.ok(!(await page.$('.cc-guide')), 'guide stays hidden');
+    // sync: an implemented task appears in the Fix tracker once
+    const end = await page.evaluate(() => window.CW_SOURCE.latest);
+    const d = new Date(end + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 35); const impl = d.toISOString().slice(0, 10);
+    await go('#tasks');
+    const tid = await page.evaluate(id => JSON.parse(localStorage.getItem('cw:tasks:' + window.CW_SOURCE.site)).find(t => t.oppId === id).id, first);
+    await go('#tasks?id=' + encodeURIComponent(tid));
+    await page.selectOption('#tk-edit select[name=status]', 'implemented'); await page.fill('#tk-edit input[name=implDate]', impl);
+    await page.click('#tk-edit button[type=submit]'); await page.waitForTimeout(500);
+    await go('#fixes'); await page.waitForTimeout(800);
+    const rows = await page.$$eval('tr[data-fx]', r => r.map(x => x.dataset.fx));
+    assert.ok(rows.includes('task:' + tid), 'task listed in the Fix tracker');
+    assert.equal(rows.filter(k => k === 'task:' + tid).length, 1, 'once');
+    assert.ok(/Action board task/.test(await text(`tr[data-fx="task:${tid}"]`)), 'labelled with its source');
+    // priorities: impact × effort matrix from the real items
+    await go('#priorities');
+    const quads = await page.$$eval('.imx-q h3 .pill', p => p.map(x => +x.textContent));
+    const n = parseInt((await text('#t-prio-meta')).replace(/,/g, ''), 10);
+    assert.equal(quads.length, 4); assert.equal(quads.reduce((a, b) => a + b, 0), n, 'every priority in exactly one box');
+    // detail page explanation
+    const href = await page.$eval('#t-prio a.opp-link', a => a.getAttribute('href')); await go(href);
+    assert.ok(/Why this matters/.test(await text('#view')) && /How to implement/.test(await text('#view')) && /Affected searches/.test(await text('#view')), 'detail explains');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing']) {

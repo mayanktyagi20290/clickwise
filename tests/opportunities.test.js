@@ -39,13 +39,17 @@ test('each search is counted once; page and stake estimates are never counted', 
   assert.ok(dup.every(it => /which has the larger estimate/.test(it.impact.overlap)), 'duplicates explained');
   dup.forEach(it => { const w = counted.find(c => c.subject.label === it.subject.label); assert.ok(w && w.impact.hi >= it.impact.hi, 'winner is the larger estimate'); });
 });
-test('recovery total is 30–80% of the clicks lost by declining pages, per month', () => {
+test('recovery total is 30–80% of the clicks lost by recoverable declining pages, per month', () => {
   const { A, O } = demo;
-  const lost = A.decay.pages.reduce((s, r) => s + r.lost, 0);
   assert.ok(A.decay.pages.length > 0, 'sample has declines');
+  const pages = O.items.filter(it => it.type === 'decline-page');
+  pages.forEach(it => { assert.equal(typeof it.impact.recoverable, 'boolean'); assert.ok(it.impact.recoverWhy.length > 10, 'reason given'); });
+  const ok = new Set(pages.filter(it => it.impact.recoverable).map(it => it.subject.url));
+  const lost = A.decay.pages.filter(r => ok.has(r.p)).reduce((s, r) => s + r.lost, 0);
   assert.near(O.totals.recovery.lo, A.perMonth(lost) * 0.3, 1e-6, 'low');
   assert.near(O.totals.recovery.hi, A.perMonth(lost) * 0.8, 1e-6, 'high');
-  assert.equal(O.totals.recovery.n, A.decay.pages.length);
+  assert.equal(O.totals.recovery.n, ok.size);
+  assert.equal(O.totals.recovery.n + O.totals.notRecoverable.n, A.decay.pages.length, 'every declining page is either counted or explained');
   assert.ok(O.items.filter(it => it.type === 'decline-query').every(it => !it.impact.counted), 'search declines overlap page declines');
 });
 test('every item carries the required fields', () => {

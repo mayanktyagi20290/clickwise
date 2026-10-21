@@ -35,7 +35,9 @@
     }
   }
   const EFFORT = { Low: 1, Medium: 0.6, High: 0.25 };
-  const mid = it => it.impact.kind === 'growth' || it.impact.kind === 'recovery' ? ((it.impact.lo || 0) + (it.impact.hi || 0)) / 2 : 0;
+  // A decline that is probably not recoverable (lower demand, normal variation, unknown size) has no click
+  // potential to rank on; it stays on the risk path instead.
+  const mid = it => it.impact.kind === 'growth' || (it.impact.kind === 'recovery' && it.impact.recoverable !== false) ? ((it.impact.lo || 0) + (it.impact.hi || 0)) / 2 : 0;
   const PRIMARY_ORDER = { 'decline-page': 0, striking: 1, 'ctr-query': 2, 'answer-box': 3, 'ctr-page': 4, cannibal: 5, 'decline-query': 6, 'slipping-page': 7, 'content-gap': 8, 'internal-link': 9 };
 
   // focus: { sections: ['/blog/'], terms: ['price'] } — the user's priority areas
@@ -123,7 +125,7 @@
     list.forEach(g => {
       const imp = mid(g.primary);
       const c = {
-        impact: [imp > 0 ? Math.log1p(imp) / Math.log1p(maxMid) : 0, imp > 0 ? `About ${CW.fmtN(imp)} clicks a month (mid-point of ${CW.fmtN(g.impact.lo)}–${CW.fmtN(g.impact.hi)}, ${g.impact.kind})` : 'No click estimate: a check or long-term improvement'],
+        impact: [imp > 0 ? Math.log1p(imp) / Math.log1p(maxMid) : 0, imp > 0 ? `About ${CW.fmtN(imp)} clicks a month (mid-point of ${CW.fmtN(g.impact.lo)}–${CW.fmtN(g.impact.hi)}, ${g.impact.kind})` : g.impact.recoverable === false ? `No recoverable clicks counted: ${g.impact.recoverWhy}` : 'No click estimate: a check or long-term improvement'],
         confidence: [g.confidence.score / 100, `${g.confidence.level} confidence (${g.confidence.score}/100)`],
         relevance: relevanceOf(g, opts.focus),
         speed: speedOf(g.primary),
