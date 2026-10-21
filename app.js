@@ -542,6 +542,11 @@
     const f = D.filters || {}; const ft = [f.type && f.type !== 'web' ? f.type.charAt(0).toUpperCase() + f.type.slice(1) + ' search' : '', f.device ? f.device.charAt(0) + f.device.slice(1).toLowerCase() + ' only' : ''].filter(Boolean).join(' · ');
     $('top-filters').textContent = ft; $('top-filters').hidden = !ft;
     $('top-sample').hidden = D.source !== 'demo';
+    // comparison period and data connection, shown in the top bar (presentation only)
+    $('top-cmp').textContent = D.prevStart && D.prevEnd ? `vs previous period (${fmtDate(D.prevStart)} – ${fmtDate(D.prevEnd)})` : '';
+    $('top-cmp').hidden = !(D.prevStart && D.prevEnd);
+    const conn = D.source === 'api' ? ['live', 'GSC connected', `Loaded ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · read-only`] : D.source === 'demo' ? ['sample', 'Sample data', 'Fictional site'] : ['file', 'Uploaded export', 'Not live: connect Search Console for fresh data'];
+    $('top-conn').className = 'top-conn ' + conn[0]; $('top-conn-t').textContent = conn[1]; $('top-conn-s').textContent = conn[2]; $('top-conn').hidden = false;
     // API analyses can switch folder from the top bar; uploads only show the scope they came with
     const canSwitch = D.source === 'api';
     $('top-scope').innerHTML = esc(D.scope || (canSwitch ? 'All pages' : '')) + (canSwitch ? ' <span class="scope-edit">Change</span>' : '');

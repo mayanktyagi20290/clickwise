@@ -174,13 +174,22 @@
         : /CTR fell/.test(r.reason) ? 'Search its main queries: a new results-page feature or a stale title may be taking the click. Rewrite the title.'
         : 'Refresh the content and check what now ranks above it.';
       const declineEffort = r => r.cur.gone ? { level: 'Low', why: 'Technical check' } : r.cur.bound ? { level: 'Low', why: 'Check with fuller data first' } : { level: 'Medium', why: 'Content refresh' };
+      // Not every decline can be won back with SEO work. Only drops with a cause a page change can address
+      // (lost rank, lost CTR, a page that vanished) are counted as recoverable; a fall in demand, a drop
+      // within normal variation, or a figure cut off by the export's row limit is shown but never counted.
+      const recoverable = r => {
+        if (r.cur.bound) return { ok: false, why: 'Current clicks are unknown (the export stops at its row limit), so the size of the drop is not measured' };
+        if (/impressions down/.test(r.reason)) return { ok: false, why: 'Impressions fell while rank held: most likely lower demand (season or trend), which SEO changes cannot bring back' };
+        if (r.lost / Math.sqrt(Math.max(1, r.prev.clicks)) < 2) return { ok: false, why: 'The drop is within normal variation between periods, so there may be nothing to recover' };
+        return { ok: true, why: /no longer shows/.test(r.reason) ? 'The page stopped showing: a technical fix usually restores it' : /position fell/.test(r.reason) ? 'Rank fell: a refresh and internal links can win part of it back' : /CTR fell/.test(r.reason) ? 'CTR fell at a similar rank: a better title or snippet can win part of it back' : 'Rank and CTR both slipped: a refresh can win part of it back' };
+      };
       dc.pages.forEach(r => add({
         type: 'decline-page', subject: { kind: 'page', label: r.path, url: r.p },
         measured: r.cur.bound ? { clicks: null, impr: null, ctr: null, pos: null, upTo: r.cur.clicks } : metrics(r.cur), previous: metrics(r.prev),
         change: r.deltas,
         reason: `Clicks ${fmtN(r.prev.clicks)} → ${r.cur.bound ? 'at most ' : ''}${fmtN(r.cur.clicks)} (${r.ch.toFixed(0)}%) against the previous period: ${r.reason}.`,
         evidence: changeEvidence(r),
-        impact: { kind: 'recovery', lo: perMonth(r.lost) * 0.3, hi: perMonth(r.lost) * 0.8, counted: true, basis: 'Assumes 30–80% of the lost clicks come back after a fix' },
+        impact: (rc => ({ kind: 'recovery', lo: perMonth(r.lost) * 0.3, hi: perMonth(r.lost) * 0.8, counted: rc.ok, recoverable: rc.ok, recoverWhy: rc.why, basis: 'Assumes 30–80% of the lost clicks come back after a fix', ...(rc.ok ? {} : { overlap: 'Not counted in the recovery total: ' + rc.why.charAt(0).toLowerCase() + rc.why.slice(1) }) }))(recoverable(r)),
         confidence: conf([periodWhy, noiseWhy(r), r.uncertain ? [-30, 'Current clicks are only an upper bound (export row limit)'] : null]),
         action: declineAction(r), effort: declineEffort(r),
         warnings: (r.uncertain ? ['The current export does not list this page: it may have dropped below the export\'s top rows rather than lost all clicks.'] : []).concat(scaled ? ['Compared per day because the two periods have different lengths.'] : [])
@@ -191,7 +200,7 @@
         change: r.deltas,
         reason: `Clicks ${fmtN(r.prev.clicks)} → ${r.cur.bound ? 'at most ' : ''}${fmtN(r.cur.clicks)} (${r.ch.toFixed(0)}%): ${r.reason}.`,
         evidence: changeEvidence(r).concat(landEv(r.q)),
-        impact: { kind: 'recovery', lo: perMonth(r.lost) * 0.3, hi: perMonth(r.lost) * 0.8, basis: 'Assumes 30–80% of the lost clicks come back after a fix', overlap: 'Overlaps the pages that lost clicks, so it is not added to the recovery total' },
+        impact: (rc => ({ kind: 'recovery', lo: perMonth(r.lost) * 0.3, hi: perMonth(r.lost) * 0.8, recoverable: rc.ok, recoverWhy: rc.why, basis: 'Assumes 30–80% of the lost clicks come back after a fix', overlap: 'Overlaps the pages that lost clicks, so it is not added to the recovery total' }))(recoverable(r)),
         confidence: conf([periodWhy, noiseWhy(r), r.uncertain ? [-30, 'Current clicks are only an upper bound (export row limit)'] : null]),
         action: landing.has(r.q) ? `Check ${landing.get(r.q).path}, the page that ranks for it now, and what changed above it on the results page.` : 'Find the page that ranked for this search (Queries › open the search) and check what changed on it or above it on the results page.',
         effort: { level: 'Medium', why: 'Investigate, then refresh' },
@@ -260,7 +269,9 @@
     const counted = items.filter(it => it.impact.counted);
     return {
       items,
-      totals: { growth: tot(counted.filter(it => it.impact.kind === 'growth')), recovery: tot(counted.filter(it => it.impact.kind === 'recovery')) },
+      totals: { growth: tot(counted.filter(it => it.impact.kind === 'growth')), recovery: tot(counted.filter(it => it.impact.kind === 'recovery')),
+        // page declines shown but left out of the recovery total, with the reason for each
+        notRecoverable: tot(items.filter(it => it.type === 'decline-page' && it.impact.recoverable === false)) },
       byLevel: { High: items.filter(it => it.confidence.level === 'High').length, Medium: items.filter(it => it.confidence.level === 'Medium').length, Low: items.filter(it => it.confidence.level === 'Low').length },
       period: { start: A.method.start, end: A.method.end, days: A.days, assumed: A.method.assumedDays, prevStart: D.prevStart || null, prevEnd: D.prevEnd || null, prevDays: dc ? dc.prevDays : null, scaled: dc ? dc.scale !== 1 : false },
       warnings, TYPES, IMPACT

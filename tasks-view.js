@@ -84,7 +84,7 @@
       // keep the verdict once the full window is in: it calibrates the priority score
       if (r.status === 'measured' && r.window.L >= t.window) {
         const cur = tasks(S.site).list.find(x => x.id === t.id);
-        if (cur && (!cur.outcome || cur.outcome.verdict !== r.verdict || cur.outcome.window !== t.window)) upsert(S.site, { ...cur, outcome: { verdict: r.verdict, relative: r.relative == null ? null : +r.relative.toFixed(1), change: r.change.clicks == null ? null : +r.change.clicks.toFixed(1), at: new Date().toISOString(), window: t.window } });
+        if (cur && (!cur.outcome || cur.outcome.verdict !== r.verdict || cur.outcome.window !== t.window)) upsert(S.site, { ...cur, outcome: { verdict: r.verdict, relative: r.relative == null ? null : +r.relative.toFixed(1), change: r.change.clicks == null ? null : +r.change.clicks.toFixed(1), monthly: TK.measuredMonthly(r) == null ? null : Math.round(TK.measuredMonthly(r)), at: new Date().toISOString(), window: t.window } });
       }
       return r;
     }, err => ({ status: 'error', notes: [err.message || String(err)] }));
@@ -125,6 +125,7 @@
     const wTxt = Object.entries(P.weights).map(([k, v]) => `${k} ${Math.round(v / P.wSum * 100)}%`).join(', ');
     const html = head('Priorities', `Every opportunity once, ranked by a Growth Priority Score (0–100) that weighs click potential, evidence, business relevance, time to impact and effort. Open any row for its evidence and score breakdown. ${P.merged ? `${P.merged} overlapping signal${P.merged === 1 ? ' was' : 's were'} merged into the opportunity they describe.` : ''}`) +
       `<div class="strip">${stat(P.counts.P1, 'P1: do first', 'gain')}${stat(P.counts.P2, 'P2: plan next', 'watch')}${stat(P.counts.P3, 'P3: later', '')}${stat(P.risks.length, 'risks on the separate risk path', P.risks.some(r => r.sev === 'critical') ? 'risk' : '')}</div>
+      ${matrix(P)}
       ${P.risks.length ? `<section class="panel"><div class="panel-h"><h2>Risks (${P.risks.length})</h2><a href="#overview">Dashboard</a><p>Declines and indexing problems backed by data. They are listed here whatever their growth score, so a fix-first problem is never buried.</p></div>${riskList(P.risks, 8)}</section>` : ''}
       <section class="panel">${table('t-prio', cols, rows, { sort: 'score', file: 'priorities', searchKeys: ['label', 'pathS'], placeholder: 'Filter by search or page', pageSize: 25,
         filters: [
@@ -161,6 +162,29 @@
     };
     return { html, mount };
   };
+  // Impact × effort matrix: the same items as the table, placed by their own impact component (log-scaled
+  // click estimate, 0–1) and effort level. Items with no click estimate count as low impact.
+  const QUAD = [
+    ['quick', 'Quick wins', 'High impact, low effort: do these first'],
+    ['major', 'Major projects', 'High impact, more effort: plan and resource'],
+    ['fill', 'Fill-ins', 'Low impact, low effort: when there is spare time'],
+    ['thankless', 'Thankless tasks', 'Low impact, more effort: usually skip']
+  ];
+  function quadOf(g) {
+    const imp = (g.parts.find(p => p.key === 'impact') || {}).value || 0;
+    const hiImp = imp >= 0.5, lowEff = g.effort.level === 'Low';
+    return hiImp ? (lowEff ? 'quick' : 'major') : (lowEff ? 'fill' : 'thankless');
+  }
+  function matrix(P) {
+    if (!P.items.length) return '';
+    const by = {}; QUAD.forEach(([k]) => { by[k] = []; });
+    P.items.forEach(g => by[quadOf(g)].push(g));
+    return `<section class="panel imx-wrap"><div class="panel-h"><h2>Impact × effort</h2><p>Every priority placed by its estimated clicks (impact component of the score) and its effort. The top items of each box are listed; the table below has them all.</p></div>
+      <div class="imx" role="list">${QUAD.map(([k, l, d]) => `<div class="imx-q ${k}" role="listitem"><h3>${esc(l)} <span class="pill">${by[k].length}</span></h3><p>${esc(d)}</p>
+        <ul>${by[k].slice(0, 4).map(g => `<li><a href="#opp?id=${encodeURIComponent(g.id)}">${esc(g.subject.label)}</a><small>${g.priority} · ${g.score}</small></li>`).join('') || '<li class="flat">None</li>'}</ul></div>`).join('')}
+        <span class="imx-y" aria-hidden="true">Impact →</span><span class="imx-x" aria-hidden="true">Effort →</span></div></section>`;
+  }
+  window.CW_GROWTH && (window.CW_GROWTH.quadOf = quadOf);
   function riskList(risks, n) {
     const title = r => r.id.startsWith('o:') ? `<a class="risk-t" href="#opp?id=${encodeURIComponent(r.id)}">${esc(r.title)}</a>` : `<span class="risk-t">${esc(r.title)}</span>`;
     return `<ul class="risk-l">${risks.slice(0, n).map(r => `<li><span class="tag sev ${SEV[r.sev][0]}">${SEV[r.sev][1]}</span><div>${title(r)}
@@ -180,8 +204,16 @@
     const per = P.period;
     const list = a => a.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="flat">None.</p>';
     const target = g.page ? g.page.url : null;
+    const xp = window.CW_EXPLAIN ? window.CW_EXPLAIN.build(g, A, D, window.CW_FORECAST ? window.CW_FORECAST.build(A, D) : null) : null;
     const html = `<nav class="crumbs" aria-label="Breadcrumb"><a href="#priorities">Priorities</a><span class="sep">/</span><span>${esc(g.category)}</span></nav>
       <header class="v-head"><h1>${esc(g.subject.label)}</h1><p>${priTag(g)} <span class="tag">${esc(g.typeLabel)}</span> ${g.intent ? `<span class="tag">${esc(INTENT[g.intent])}</span>` : ''} Rank #${g.rank} of ${P.items.length}. ${esc(g.why)}</p></header>
+      ${xp ? `<section class="panel opp-why"><div class="panel-h"><h2>Why this matters</h2></div><div class="panel-b"><p class="lead">${esc(xp.why)}</p>
+        <div class="grid-2 even flushgrid"><div><h4>Affected searches</h4>${xp.queries.length ? `<ul class="aff">${xp.queries.map(q => `<li>${serp(q.q)}${q.impr != null ? ` <small class="flat">${fmtN(q.impr)} impr.${q.clicks != null ? ` · ${fmtN(q.clicks)} clicks` : ''}${q.pos ? ` · pos ${(+q.pos).toFixed(1)}` : ''}</small>` : ''}</li>`).join('')}</ul>` : '<p class="flat">None listed in the loaded data.</p>'}</div>
+          <div><h4>Affected pages</h4>${xp.urls.length ? `<ul class="aff">${xp.urls.map(u => `<li>${urlCell(u.url, u.path)} <small class="flat">${esc(u.why)}</small></li>`).join('')}</ul>` : '<p class="flat">No page linked to this search in the loaded data.</p>'}</div></div>
+        <h4>How to implement</h4><ol class="steps">${xp.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+        ${xp.impact.contribution ? `<p class="flat">Adds ${xp.impact.contribution.hi > 0 ? esc(range(xp.impact.contribution.lo, xp.impact.contribution.hi)) + ' clicks a month' : 'nothing'} to the dashboard forecast: ${esc(xp.impact.contribution.note)}.</p>` : ''}
+        ${!xp.crawlLoaded ? '<p class="flat">Crawler evidence: none loaded. <a href="#content?tab=titles">Upload a crawler page export</a> to check this page’s title, description, H1 and status.</p>' : xp.crawl ? '<p class="flat">Crawler checks for this page are included in the evidence below.</p>' : ''}
+      </div></section>` : ''}
       <div class="grid-2 even">
         <section class="panel"><div class="panel-h"><h2>The issue</h2></div><div class="panel-b"><p>${esc(g.reason)}</p>
           <table class="mini"><thead><tr><th></th><th class="r">${esc(per.start || 'This period')}${per.end ? ' – ' + esc(per.end) : ''}</th>${pv ? `<th class="r">${esc(per.prevStart || 'Previous')}${per.prevEnd ? ' – ' + esc(per.prevEnd) : ''}</th>` : ''}</tr></thead><tbody>
@@ -195,7 +227,7 @@
           ${g.warnings.length ? `<h4>Warnings</h4>${list(g.warnings)}` : ''}</div></section>
       </div>
       <div class="grid-2 even">
-        <section class="panel"><div class="panel-h"><h2>Evidence</h2></div><div class="panel-b">${list(g.evidence)}${g.related.length ? `<p class="flat">${g.related.length} other signal${g.related.length === 1 ? '' : 's'} about the same issue ${g.related.length === 1 ? 'was' : 'were'} merged here (${g.related.map(r => esc(r.typeLabel)).join(', ')}), so it is counted once.</p>` : ''}</div></section>
+        <section class="panel"><div class="panel-h"><h2>Evidence</h2></div><div class="panel-b">${xp ? `<ul class="ev">${xp.evidence.map(v => `<li><span class="src ${v.source === 'Crawler' ? 'crawl' : 'gsc'}">${v.source === 'Crawler' ? 'Crawl' : 'GSC'}</span>${esc(v.text)}</li>`).join('')}</ul>` : list(g.evidence)}${g.related.length ? `<p class="flat">${g.related.length} other signal${g.related.length === 1 ? '' : 's'} about the same issue ${g.related.length === 1 ? 'was' : 'were'} merged here (${g.related.map(r => esc(r.typeLabel)).join(', ')}), so it is counted once.</p>` : ''}</div></section>
         <section class="panel"><div class="panel-h"><h2>Estimated impact</h2></div><div class="panel-b">
           <p class="big-n ${g.impact.kind === 'growth' ? 'gainv' : g.impact.kind === 'none' ? 'flat' : 'lossv'}">${g.impact.kind === 'none' ? 'No click estimate' : esc(range(g.impact.lo, g.impact.hi)) + ' clicks / month'}</p>
           <p>${esc(g.impact.note)}.${g.impact.basis ? ' ' + esc(g.impact.basis) + '.' : ''}</p>${g.impact.overlap ? `<p class="flat">${esc(g.impact.overlap)}.</p>` : ''}
@@ -222,8 +254,11 @@
     const id = params().get('id');
     if (id) return taskDetail(A, D, list.find(t => t.id === id));
     const sum = TK.summary(list);
+    const fixOnly = TK.changeLog(list, fixesOf(D.site)).filter(c => c.from === 'fix');
     const lanes = ['planned', 'progress', 'implemented', 'validated'];
-    const card = t => `<li class="tk-card${TK.overdue(t) ? ' late' : ''}" data-tk="${esc(t.id)}"><a href="#tasks?id=${encodeURIComponent(t.id)}"><b>${esc(t.title)}</b></a>
+    const STAGE = { planned: 0, progress: 34, implemented: 67, validated: 100, dropped: 0 };
+    const card = t => `<li class="tk-card${TK.overdue(t) ? ' late' : ''}" data-tk="${esc(t.id)}"><div class="tk-tags"><span class="tag cat">${esc(t.category)}</span>${t.type === 'manual' ? '<span class="tag">Manual</span>' : ''}</div><a href="#tasks?id=${encodeURIComponent(t.id)}"><b>${esc(t.title)}</b></a>
+        ${t.status !== 'dropped' ? `<div class="tk-prog"><div><span>Progress</span><span>${STAGE[t.status]}%</span></div><i><span style="width:${STAGE[t.status]}%"></span></i></div>` : ''}
         <div class="tk-meta">${t.priority ? `<span class="tag ${PRI_TONE[t.priority]}">${t.priority}</span>` : ''}${t.owner ? `<span>${esc(t.owner)}</span>` : '<span class="flat">No owner</span>'}${t.due ? `<span class="${TK.overdue(t) ? 'lossv' : ''}">due ${esc(t.due)}</span>` : ''}${t.implDate ? `<span>live ${esc(t.implDate)}</span>` : ''}</div>
         ${t.estimate && t.estimate.hi ? `<small class="flat">Estimate ${esc(range(t.estimate.lo, t.estimate.hi))} clicks / month</small>` : ''}
         ${TK.measurable(t) ? `<div class="tk-res" data-tkres="${esc(t.id)}"><span class="flat">Measuring…</span></div>` : ''}
@@ -233,6 +268,7 @@
       ${damaged ? `<div class="note warn">${damaged} saved task${damaged === 1 ? ' was' : 's were'} damaged and left out.</div>` : ''}
       ${S.kind === 'demo' ? '<p class="flat">Sample site: the first three tasks are examples you can edit or delete.</p>' : S.kind === 'file' ? '<p class="flat">Uploaded export: results can be measured for whole-site changes only. Connect Search Console to measure single pages.</p>' : ''}
       <div class="tk-board">${lanes.map(l => { const ts = list.filter(t => t.status === l); return `<section class="tk-lane"><h2>${esc(TK.STATUS[l])} <span class="pill indigo">${ts.length}</span></h2><ul>${ts.map(card).join('') || '<li class="flat tk-empty">None</li>'}</ul></section>`; }).join('')}</div>
+      ${fixOnly.length ? `<section class="panel"><div class="panel-h"><h2>Also logged in the Fix tracker (${fixOnly.length})</h2><a href="#fixes">Fix tracker</a><p>Changes logged there without a task. Implemented tasks show in the Fix tracker automatically, so each change is measured once.</p></div><ul class="tk-fx">${fixOnly.slice(0, 8).map(c => `<li><a href="#fixes?fix=${encodeURIComponent(c.fixId)}">${c.scope === 'site' ? 'Whole site' : esc(c.path)}</a><span class="flat">live ${esc(c.date)}${c.note ? ' · ' + esc(c.note) : ''}</span></li>`).join('')}</ul></section>` : ''}
       ${sum.byStatus.dropped ? `<p class="flat">${sum.byStatus.dropped} dropped task${sum.byStatus.dropped === 1 ? '' : 's'}: <a href="#tasks?status=dropped">show</a></p>` : ''}
       ${params().get('status') === 'dropped' ? `<section class="panel"><div class="panel-h"><h2>Dropped</h2></div><ul class="tk-drop">${list.filter(t => t.status === 'dropped').map(card).join('')}</ul></section>` : ''}
       <section class="panel"><div class="panel-h"><h2>Add a task by hand</h2><p>For work that did not come from an opportunity. To start from one, open <a href="#priorities">Priorities</a> and choose “Create task”.</p></div>
@@ -333,6 +369,7 @@
             <tr><td>CTR</td><td class="r">${pctf(r.before.ctr)}</td><td class="r">${pctf(r.after.ctr)}</td><td class="r">${r.change.ctr == null ? '—' : (r.change.ctr > 0 ? '+' : '') + r.change.ctr.toFixed(2) + ' pts'}</td></tr>
             ${r.site ? `<tr><td>Whole ${esc(r.site.label)}, clicks a day</td><td class="r">${pd(r.site.before.perDay)}</td><td class="r">${pd(r.site.after.perDay)}</td><td class="r">${sg(r.site.change)}</td></tr><tr><td><b>Change relative to the ${esc(r.site.label)}</b></td><td></td><td></td><td class="r"><b>${sg(r.relative)}</b></td></tr>` : ''}
           </tbody></table>` : ''}
+          ${TK.measuredMonthly(r) != null ? `<p><b>Measured:</b> ${TK.measuredMonthly(r) >= 0 ? '+' : '−'}${fmtN(Math.abs(TK.measuredMonthly(r)))} clicks a month${t.estimate && t.estimate.hi ? ` · <b>estimated when created:</b> ${esc(range(t.estimate.lo, t.estimate.hi))}` : ''}. Kept with the task for later comparison.</p>` : ''}
           ${r.z != null ? `<p class="flat">Difference of ${Math.abs(r.z).toFixed(1)} standard errors in daily clicks. A clear result needs 2 or more and a move bigger than the site's own.</p>` : ''}
           ${(r.notes || []).length ? `<ul class="flat">${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
           ${r.confounders && r.confounders.length ? `<h4>Other possible causes in these windows</h4><ul>${r.confounders.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
@@ -341,7 +378,7 @@
         const v = document.getElementById('tk-validate');
         if (v) v.addEventListener('click', () => {
           const cur = tasks(D.site).list.find(x => x.id === t.id) || t;
-          const next = TK.setStatus({ ...cur, outcome: { verdict: r.verdict, relative: r.relative == null ? null : +r.relative.toFixed(1), change: r.change.clicks == null ? null : +r.change.clicks.toFixed(1), at: new Date().toISOString(), window: r.window.L } }, 'validated');
+          const next = TK.setStatus({ ...cur, outcome: { verdict: r.verdict, relative: r.relative == null ? null : +r.relative.toFixed(1), change: r.change.clicks == null ? null : +r.change.clicks.toFixed(1), monthly: TK.measuredMonthly(r) == null ? null : Math.round(TK.measuredMonthly(r)), at: new Date().toISOString(), window: r.window.L } }, 'validated');
           upsert(D.site, next); location.hash = '#tasks?id=' + encodeURIComponent(t.id); rerender();
         });
       });

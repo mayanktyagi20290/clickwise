@@ -40,6 +40,8 @@
     const S = window.CW_SOURCE;
     if (!S) return { html: head('Fix tracker', '') + '<p class="empty">Load data first.</p>' };
     const { list, damaged } = load(D.site);
+    const G = window.CW_GROWTH, TK = window.CW_TASKS;
+    const log = TK && G ? TK.changeLog(G.tasks(D.site).list, list) : list.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).map(f => ({ key: 'fix:' + f.id, from: 'fix', fixId: f.id, date: f.date, scope: f.scope === 'site' ? 'site' : 'page', url: f.url, path: f.path, note: f.note, fixIds: [f.id] }));
     const prm = params(), detailId = prm.get('fix');
     const detail = detailId ? list.find(f => f.id === detailId) : null;
     const pageOpts = S.pages.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 2000);
@@ -67,11 +69,11 @@
       body = head('Fix tracker', 'Did the change work? Log when you edited a page and Clickwise compares equal periods before and after, against the rest of the site, so a site-wide rise or fall is not credited to your fix.') +
         `<p class="flat ct-mode">${srcNote}</p>` + addForm +
         (damaged ? `<div class="note warn">${damaged} saved fix${damaged === 1 ? ' was' : 'es were'} damaged and left out.</div>` : '') +
-        `<section class="panel"><div class="panel-h"><h2>Tracked changes (${list.length})</h2><p>Kept in this browser for ${esc(D.site)}. Results are worked out each time from the data you load; nothing about your traffic is stored.</p></div>
-          ${list.length ? `<div class="tw"><table class="fx-t"><thead><tr><th scope="col">Page</th><th scope="col">Changed</th><th scope="col">Clicks a day, before → after</th><th scope="col">Result</th><th scope="col"></th></tr></thead><tbody>
-            ${list.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).map(f => `<tr data-fx="${esc(f.id)}"><td class="u">${f.scope === 'site' ? `<b>Whole ${S.scope ? 'section' : 'site'}</b>` : urlCell(f.url, f.path)}${f.note ? `<br><small class="flat">${esc(f.note)}</small>` : ''}</td><td>${esc(f.date)}</td><td class="fx-num">…</td><td class="fx-res"><span class="flat">Measuring…</span></td>
-              <td class="r"><a class="btn-quiet" href="#fixes?fix=${encodeURIComponent(f.id)}">Details</a> <button type="button" class="btn-link" data-fxrm="${esc(f.id)}">Remove</button></td></tr>`).join('')}
-          </tbody></table></div>` : '<p class="empty">No changes tracked yet. Add one above, or use “Track this fix” on any item in <a href="#opps">All opportunities</a>.</p>'}</section>`;
+        `<section class="panel"><div class="panel-h"><h2>Tracked changes (${log.length})</h2><p>Changes logged here and tasks marked Implemented on the Action board, in one list; a change logged in both places is measured once. Kept in this browser for ${esc(D.site)}. Results are worked out each time from the data you load.</p></div>
+          ${log.length ? `<div class="tw"><table class="fx-t"><thead><tr><th scope="col">Page</th><th scope="col">Changed</th><th scope="col">Clicks a day, before → after</th><th scope="col">Result</th><th scope="col"></th></tr></thead><tbody>
+            ${log.map(c => `<tr data-fx="${esc(c.key)}"><td class="u">${c.scope === 'site' ? `<b>Whole ${S.scope ? 'section' : 'site'}</b>` : urlCell(c.url, c.path)}${c.note ? `<br><small class="flat">${esc(c.note)}</small>` : ''}<br><span class="tag ${c.from === 'task' ? 'indigo-t' : ''}">${c.from === 'task' ? 'Action board task' + (c.fixIds.length ? ' · also logged here' : '') : 'Logged here'}</span></td><td>${esc(c.date)}</td><td class="fx-num">…</td><td class="fx-res"><span class="flat">Measuring…</span></td>
+              <td class="r">${c.from === 'task' ? `<a class="btn-quiet" href="#tasks?id=${encodeURIComponent(c.taskId)}">Open task</a>` : `<a class="btn-quiet" href="#fixes?fix=${encodeURIComponent(c.fixId)}">Details</a> <button type="button" class="btn-link" data-fxrm="${esc(c.fixId)}">Remove</button>`}</td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="empty">No changes tracked yet. Add one above, mark a task Implemented on the <a href="#tasks">Action board</a>, or use “Track this fix” on any item in <a href="#opps">All opportunities</a>.</p>'}</section>`;
     }
 
     const mount = () => {
@@ -99,7 +101,9 @@
         const rows = [...document.querySelectorAll('tr[data-fx]')];
         (async () => {
           for (const tr of rows) {
-            const f = list.find(x => x.id === tr.dataset.fx); if (!f || !tr.isConnected) continue;
+            const c = log.find(x => x.key === tr.dataset.fx); if (!c || !tr.isConnected) continue;
+            const f = { id: c.key, scope: c.scope, url: c.url, date: c.date };
+            if (f.scope === 'page' && !S.canPage) { tr.querySelector('.fx-num').textContent = '—'; tr.querySelector('.fx-res').innerHTML = '<span class="tag">Needs Search Console</span>'; continue; }
             try {
               const r = await measureFix(f, S);
               if (!tr.isConnected) return;
