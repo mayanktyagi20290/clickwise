@@ -483,14 +483,36 @@ function writeComparisonExports(dir) {
     // the Performance export is refused here
     await page.setInputFiles('#ga-file', cmp.cur); await page.waitForTimeout(500);
     assert.ok(/Performance report export/.test(await text('#ga-err')), 'wrong file refused: ' + await text('#ga-err'));
+    // remember in this browser: the report opens again after a reload, inside Clickwise
+    await page.check('#ga-keep'); await page.setInputFiles('#ga-file', gx); await page.waitForTimeout(600);
+    await page.reload(); await toApp(); await go('#genai');
+    assert.ok(/genai-export\.xlsx/.test(await text('.ga-src')), 'remembered report reopens after reload');
     await page.click('#ga-clear'); await page.waitForTimeout(300);
-    assert.ok(await page.$('#ga-file') && !(await page.$('.ga-src')), 'removed');
+    assert.ok(await page.$('#ga-drop') && !(await page.$('.ga-src')), 'removed');
+    await page.reload(); await toApp(); await go('#genai');
+    assert.ok(!(await page.$('.ga-src')), 'removed from storage too');
     // and the Generative AI export on the start screen points to this tab
     await page.goto(base + 'app.html'); await page.waitForSelector('#file-input', { state: 'attached' });
     await page.setInputFiles('#file-input', gx); await page.waitForTimeout(800);
     assert.ok(/Generative AI report export/.test(await page.evaluate(() => document.body.textContent)), 'start screen explains where it goes');
     await page.goto(base + 'app.html?demo'); await toApp(); // leave the app open for the tests that follow
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
+  await testAsync('sidebar groups collapse, remember their state and open for the current screen', async () => {
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.evaluate(() => localStorage.removeItem('cw:nav-open')); await page.reload(); await toApp();
+    const open = g => page.$eval(`.nav-grp[data-grp="${g}"] .nav-group`, b => b.getAttribute('aria-expanded'));
+    assert.equal(await open('seo-opportunities'), 'true', 'SEO opportunities open by default');
+    assert.equal(await open('explore'), 'false', 'others closed by default');
+    assert.ok(!(await page.isVisible('.nav a[data-view="queries"]')), 'closed group hides its links');
+    await page.click('.nav-grp[data-grp="explore"] .nav-group');
+    assert.ok(await page.isVisible('.nav a[data-view="queries"]'), 'opens on click');
+    await page.reload(); await toApp();
+    assert.equal(await open('explore'), 'true', 'state remembered');
+    await page.click('.nav-grp[data-grp="explore"] .nav-group'); await go('#news');
+    assert.equal(await open('search-console'), 'true', 'group of the current screen opens');
+    assert.ok(/\d/.test(await text('.nav-grp[data-grp="automation"] .nav-badge')), 'closed group shows how many screens it holds');
   });
 
   await testAsync('every screen fits a 390 px phone', async () => {

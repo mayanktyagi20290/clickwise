@@ -581,6 +581,27 @@
     });
   }
 
+  // ── collapsible sidebar groups: open/closed remembered in this browser; the current screen's group opens ──
+  const NAV_KEY = 'cw:nav-open';
+  const navState = () => { try { const v = JSON.parse(localStorage.getItem(NAV_KEY)); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
+  function setNavGroup(g, open, save) {
+    g.classList.toggle('closed', !open);
+    const b = g.querySelector('.nav-group'); if (b) b.setAttribute('aria-expanded', String(open));
+    const sec = g.querySelector('.nav-sec'); if (sec) sec.hidden = !open;
+    if (save) { const st = navState() || {}; st[g.dataset.grp] = open; try { localStorage.setItem(NAV_KEY, JSON.stringify(st)); } catch (e) { } }
+  }
+  function openNavGroupOf(link) { const g = link && link.closest('.nav-grp'); if (g && g.classList.contains('closed')) setNavGroup(g, true, false); }
+  (function initNavGroups() {
+    const st = navState();
+    document.querySelectorAll('.nav-grp').forEach(g => {
+      const n = g.querySelectorAll('.nav-sec a').length, badge = g.querySelector('.nav-badge');
+      if (badge) badge.textContent = n;
+      // first visit: SEO opportunities open, the rest closed
+      setNavGroup(g, st && g.dataset.grp in st ? !!st[g.dataset.grp] : g.dataset.grp === 'seo-opportunities', false);
+      g.querySelector('.nav-group').addEventListener('click', () => setNavGroup(g, g.classList.contains('closed'), true));
+    });
+  })();
+
   // ── routing ──
   // routes: #view, #view?params, #section=/folder/, #wf=<workflow id>
   function knownRoute(raw) {
@@ -603,6 +624,7 @@
     view.innerHTML = out.html;
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
+    openNavGroupOf(document.querySelector('.nav a.on'));
     const onLink = document.querySelector('.nav a.on span');
     const h1 = view.querySelector('h1');
     document.title = (sec ? sec + ' — ' : wf && h1 ? h1.textContent + ' — ' : onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
@@ -621,7 +643,7 @@
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
     if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings, saved workflows, tracked fixes, tasks, priority settings, growth target and client report branding from this browser. Your agency branding is kept for other clients.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); ['tasks', 'growth', 'tasks-seeded'].forEach(k => localStorage.removeItem('cw:' + k + ':' + D.site)); } catch (e) { }
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); ['tasks', 'growth', 'tasks-seeded', 'genai', 'cc-guide-off'].forEach(k => localStorage.removeItem('cw:' + k + ':' + D.site)); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {
