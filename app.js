@@ -61,6 +61,12 @@
     return { cur, prev: Object.values(prev).every(i => i > 0) ? prev : null };
   }
   const metricsOf = (r, c) => ({ clicks: num(r[c.clicks]), impr: num(r[c.impr]), ctr: ctrVal(r[c.ctr]), pos: num(r[c.pos]) });
+  async function isGenAi(files) {
+    const G = window.CW_GENAI; if (!G) return false;
+    const sheets = [];
+    for (const f of files) { try { const wb = XLSX.read(await readBuffer(f), { type: 'array', raw: true }); wb.SheetNames.forEach(n => sheets.push({ name: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' }) })); } catch (e) { } }
+    return G.parse(sheets).ok;
+  }
   const readBuffer = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(new Uint8Array(e.target.result)); r.onerror = () => rej(new Error('read failed')); r.readAsArrayBuffer(file); });
   const emptySet = name => ({ name, Q: [], P: [], C: [], Dev: [], Countries: [], Appearance: [], prevQ: [], prevP: [], prevC: [], found: new Set() });
 
@@ -116,6 +122,10 @@
     }
     if (csv.found.size) sets.push(csv);
     const usable = sets.map(finish).filter(x => x.Q.length || x.P.length);
+    // the Generative AI report export has impressions only: it belongs on its own screen, not here
+    if (!usable.length || usable.every(x => !x.Q.length)) {
+      if (await isGenAi(files)) { startError('This is the Generative AI report export. Load your Performance export (or connect Search Console) here first, then add this file under AI search › Generative AI report.'); return; }
+    }
     if (!usable.length) {
       const found = new Set(sets.flatMap(x => [...x.found]));
       startError(unread.length && !found.size ? `Couldn't read ${unread.map(n => '“' + n + '”').join(', ')} as a spreadsheet. Upload the file from Search Console › Performance › Export › Download Excel.`
