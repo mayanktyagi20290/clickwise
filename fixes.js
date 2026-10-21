@@ -34,10 +34,12 @@
   }
 
   // ── windows: equal length before and after, up to 28 days, never including the change day ──
-  function windows(date, latest, earliest) {
+  // max: the observation window (default 28 days); the task board lets users choose 14, 28, 56 or 90
+  function windows(date, latest, earliest, max) {
+    const M = max > 0 ? Math.min(90, Math.round(max)) : MAX_WINDOW;
     const daysAfter = Math.max(0, diff(date, latest));            // complete days after the change
-    const daysBefore = earliest ? Math.max(0, diff(earliest, date)) : MAX_WINDOW;
-    const L = Math.min(MAX_WINDOW, daysAfter, daysBefore);
+    const daysBefore = earliest ? Math.max(0, diff(earliest, date)) : M;
+    const L = Math.min(M, daysAfter, daysBefore);
     return { L, daysAfter, before: L ? { start: add(date, -L), end: add(date, -1) } : null, after: L ? { start: add(date, 1), end: add(date, L) } : null };
   }
 
@@ -61,7 +63,7 @@
   // pageRows / siteRows: daily rows { d, clicks, impr, pos } covering both windows (site rows may be null)
   function measure(f, pageRows, siteRows, latest, earliest, opts) {
     opts = opts || {};
-    const w = windows(f.date, latest, earliest);
+    const w = windows(f.date, latest, earliest, opts.window);
     const res = { fix: f, window: w, status: null, verdict: null, notes: [] };
     if (w.daysAfter < MIN_AFTER) { res.status = 'too-early'; res.notes.push(`Only ${w.daysAfter} full day${w.daysAfter === 1 ? '' : 's'} of data after the change so far; a result needs at least ${MIN_AFTER}. Search Console data arrives about 2–3 days late.`); return res; }
     if (w.L < MIN_AFTER) { res.status = 'no-before'; res.notes.push(`Only ${w.L} days of data before the change are available, so there is too little to compare with.`); return res; }
@@ -90,7 +92,7 @@
     else if (Math.abs(z) >= 1.5 && Math.abs(rel) >= 10 && Math.sign(z) === Math.sign(rel)) res.verdict = dir === 'up' ? 'maybe-improved' : 'maybe-declined';
     else res.verdict = 'no-change';
     if (res.site && res.site.change != null && Math.abs(res.site.change) >= 10) res.notes.push(`The whole ${res.site.label || 'site'} changed ${res.site.change > 0 ? '+' : ''}${res.site.change.toFixed(0)}% over the same days, so the page's own effect is about ${res.relative > 0 ? '+' : ''}${res.relative.toFixed(0)}%.`);
-    if (w.L < MAX_WINDOW) res.notes.push(`Measured on ${w.L} days each side; the result firms up as more days arrive (up to ${MAX_WINDOW}).`);
+    if (w.L < (opts.window || MAX_WINDOW)) res.notes.push(`Measured on ${w.L} days each side; the result firms up as more days arrive (up to ${opts.window || MAX_WINDOW}).`);
     res.notes.push('Before and after cannot rule out other causes (seasons, a Google update, other edits). Treat this as evidence, not proof.');
     return res;
   }

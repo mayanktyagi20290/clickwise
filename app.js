@@ -555,6 +555,9 @@
   function fmtDate(s) { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
   function counts() {
     const n = { content: A.content ? A.content.gaps.length + A.content.links.length : null, opps: A.opps ? A.opps.items.length : null, quickwins: A.quickWins.length, ctr: A.ctrPages.length, cannibal: A.cannibal.filter(c => c.sev !== 'low').length, decay: A.decay ? A.decay.pages.length : null, ai: A.ai.overview.length };
+    // growth layer: P1 priorities and open tasks
+    const G = window.CW_GROWTH;
+    if (G && D) { try { const P = G.prio(A, D); n.priorities = P ? P.counts.P1 : null; n.tasks = G.tasks(D.site).list.filter(t => ['planned', 'progress'].includes(t.status)).length || null; } catch (e) { } }
     document.querySelectorAll('.nav a').forEach(a => {
       const v = a.dataset.view; let c = a.querySelector('.count');
       if (n[v] == null) { if (c) c.remove(); return; }
@@ -602,8 +605,8 @@
   $('btn-new').addEventListener('click', reset);
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
-    if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings, saved workflows, tracked fixes and client report branding from this browser. Your agency branding is kept for other clients.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); } catch (e) { }
+    if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings, saved workflows, tracked fixes, tasks, priority settings, growth target and client report branding from this browser. Your agency branding is kept for other clients.`)) return;
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); ['tasks', 'growth', 'tasks-seeded'].forEach(k => localStorage.removeItem('cw:' + k + ':' + D.site)); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {

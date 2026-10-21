@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=31">
+<link rel="stylesheet" href="styles.css?v=32">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -103,7 +103,10 @@
   <aside class="nav" id="nav">
     <div class="brandmark sm"><span class="logo-dot" aria-hidden="true"></span>Clickwise</div>
     <nav aria-label="Sections">
-      <a href="#overview" data-view="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span></a>
+      <a href="#overview" data-view="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Command Center</span></a>
+      <a href="#priorities" data-view="priorities"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Priorities</span></a>
+      <a href="#tasks" data-view="tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/></svg><span>Action board</span></a>
+      <a href="#ask" data-view="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Ask Clickwise</span></a>
       <p class="nav-group">SEO opportunities</p>
       <a href="#opps" data-view="opps"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span>All opportunities</span></a>
       <a href="#plan" data-view="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Action plan</span></a>
@@ -203,7 +206,7 @@
     <label class="field"><span>Searches to ignore everywhere (containing any of these words)</span><textarea id="set-ignore" rows="2" placeholder="e.g. jobs, salary, competitor name"></textarea></label>
     <label class="field"><span>Pages to leave out (URL contains)</span><input id="set-exclude" type="text"></label>
     <label class="field"><span>Pages always analysed, even if they look like sitelinks or utility pages (URL contains)</span><input id="set-keep" type="text" placeholder="e.g. /pricing"></label>
-    <p class="hint">Stored in this browser: brand names, ignored searches, page settings and saved workflows for this site. Search data itself is never stored.</p>
+    <p class="hint">Stored in this browser: brand names, ignored searches, page settings, saved workflows, tasks, priority weights and the growth target for this site. Search data itself is never stored.</p>
     <div class="dialog-actions">
       <button type="button" class="btn-quiet danger" id="set-forget">Forget this site</button>
       <button value="cancel" class="btn-quiet">Cancel</button>
@@ -212,22 +215,27 @@
   </form>
 </dialog>
 
-<script src="config.js?v=31"></script>
-<script src="engine.js?v=31"></script>
-<script src="demo.js?v=31"></script>
-<script src="opportunities.js?v=31"></script>
-<script src="content.js?v=31"></script>
-<script src="fixes.js?v=31"></script>
-<script src="titles.js?v=31"></script>
-<script src="report.js?v=31"></script>
-<script src="filters.js?v=31"></script>
-<script src="workflows.js?v=31"></script>
-<script src="views.js?v=31"></script>
-<script src="automation.js?v=31"></script>
-<script src="surfaces.js?v=31"></script>
-<script src="surfaces-view.js?v=31"></script>
-<script src="content-view.js?v=31"></script>
-<script src="fixes-view.js?v=31"></script>
-<script src="app.js?v=31"></script>
+<script src="config.js?v=32"></script>
+<script src="engine.js?v=32"></script>
+<script src="demo.js?v=32"></script>
+<script src="opportunities.js?v=32"></script>
+<script src="content.js?v=32"></script>
+<script src="fixes.js?v=32"></script>
+<script src="titles.js?v=32"></script>
+<script src="report.js?v=32"></script>
+<script src="filters.js?v=32"></script>
+<script src="workflows.js?v=32"></script>
+<script src="views.js?v=32"></script>
+<script src="automation.js?v=32"></script>
+<script src="surfaces.js?v=32"></script>
+<script src="surfaces-view.js?v=32"></script>
+<script src="content-view.js?v=32"></script>
+<script src="fixes-view.js?v=32"></script>
+<script src="priority.js?v=32"></script>
+<script src="tasks.js?v=32"></script>
+<script src="tasks-view.js?v=32"></script>
+<script src="command.js?v=32"></script>
+<script src="copilot.js?v=32"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

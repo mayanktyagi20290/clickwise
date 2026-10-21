@@ -328,9 +328,53 @@ function writeComparisonExports(dir) {
     assert.equal(errors.length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('growth loop: priorities → detail → task → implemented → measured → copilot', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(base + 'app.html?demo'); await toApp();
+    await go('#overview');
+    assert.ok(/SEO Growth Command Center/.test(await text('.cc-title')), 'command center title');
+    assert.ok(/Sample data/.test(await text('.cc-status')), 'data source shown');
+    assert.equal(await page.$$eval('.cc-today .cc-list > li', l => l.length), 5, 'five actions today');
+    assert.ok(await page.$('.cc-risk .risk-l li'), 'risks listed');
+    await go('#priorities');
+    const n0 = parseInt((await text('#t-prio-meta')).replace(/,/g, ''), 10);
+    await page.selectOption('select[data-tf="t-prio"][data-key="pri"]', 'P1');
+    const n1 = parseInt((await text('#t-prio-meta')).replace(/,/g, ''), 10);
+    assert.ok(n1 > 0 && n1 < n0, `P1 filter ${n1} of ${n0}`);
+    // a P1 without a task: open it, create the task
+    const href = await page.$$eval('#t-prio tbody tr', rows => { const r = rows.find(x => /Open/.test(x.textContent)); return r && r.querySelector('a.opp-link').getAttribute('href'); });
+    await go(href);
+    assert.ok(/Priority score: \d+\/100/.test(await text('#view')), 'score breakdown');
+    assert.ok(/Evidence/.test(await text('#view')), 'evidence');
+    await page.click('#opp-task'); await page.waitForTimeout(300);
+    assert.ok(/^#tasks\?id=/.test(await page.evaluate(() => location.hash)), 'task opened');
+    // implement it 40 days before the end of the sample data and measure
+    const end = await page.evaluate(() => window.CW_SOURCE.latest);
+    const d = new Date(end + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 40); const impl = d.toISOString().slice(0, 10);
+    await page.selectOption('#tk-edit select[name=status]', 'implemented');
+    await page.fill('#tk-edit input[name=implDate]', impl);
+    await page.fill('#tk-edit input[name=owner]', 'Asha');
+    await page.fill('#tk-edit textarea[name=change]', 'New title');
+    await page.click('#tk-edit button[type=submit]'); await page.waitForTimeout(600);
+    assert.ok(/Implemented/.test(await text('.v-head')), 'status saved');
+    await page.waitForFunction(() => !/Measuring/.test(document.getElementById('tk-result').textContent), null, { timeout: 5000 });
+    assert.ok(/Before \(/.test(await text('#tk-result')) && /Correlation, not proof/.test(await text('#tk-result')), 'measured with caveat');
+    // validating needs a result: the button marks it validated
+    const v = await page.$('#tk-validate'); if (v) { await v.click(); await page.waitForTimeout(400); assert.ok(/Validated/.test(await text('.v-head')), 'validated'); }
+    await go('#ask?q=' + encodeURIComponent('What changed after our last content update?'));
+    assert.ok(/New title/.test(await text('.cp-rows')), 'copilot lists the change');
+    await go('#ask?q=' + encodeURIComponent('how is the weather'));
+    assert.ok(await page.$('a[href^="#filters?q="]'), 'unknown question offers the Goal builder');
+    await go('#overview'); await page.fill('#ov-ask-in', 'Where am I losing organic clicks?'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
+    assert.ok(/^#ask\?q=/.test(await page.evaluate(() => location.hash)), 'dashboard question opens the copilot');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);

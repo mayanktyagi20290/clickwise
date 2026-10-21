@@ -85,7 +85,10 @@
     if (!e.target || e.target.id !== 'ov-ask') return;
     e.preventDefault();
     const v = (document.getElementById('ov-ask-in').value || '').trim().slice(0, 300);
-    location.hash = v ? '#filters?q=' + encodeURIComponent(v) : '#filters';
+    // questions go to the copilot when it can answer them; filter-style requests go to the Goal builder
+    const question = /\?\s*$/.test(v) || /^(what|where|which|why|how|when|did|does|do|is|are|should|can|find|show|list|give|tell|kya|kaun|kahan|kitn)/i.test(v);
+    const cp = window.CW_COPILOT && question && window.CW_COPILOT.INTENTS.some(i => i.test(v.toLowerCase()));
+    location.hash = !v ? '#filters' : cp ? '#ask?q=' + encodeURIComponent(v) : '#filters?q=' + encodeURIComponent(v);
   });
 
   // ════════ Goal builder (Smart filters) ════════

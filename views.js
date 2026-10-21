@@ -284,7 +284,8 @@
     const brandShare = A.totAll.clicks ? A.totB.clicks / A.totAll.clicks * 100 : 0;
     const topQ = A.NBQ.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
     const topP = A.P.slice().sort((a, b) => b.clicks - a.clicks).slice(0, 10);
-    const html = `
+    const CC = window.CW_COMMAND;
+    const html = `${CC ? CC.html(A, D) : ''}
       <section class="banner">
         <div><h1>${A.potential.hi >= 1 ? `${esc(D.site)} could gain roughly <b class="num">${fmtN(A.potential.lo)}–${fmtN(A.potential.hi)}</b> more clicks a month from searches it already ranks for.` : `No clear click opportunities in searches ${esc(D.site)} already ranks for.`}</h1>
         <p>${A.potential.hi >= 1 ? `An estimate from ${A.potential.n.toLocaleString()} non-branded searches${A.coverage ? ` (${(A.potential.hi / Math.max(1, A.potential.monthlySiteClicks) * 100).toFixed(1)}% of monthly clicks at the high end)` : ''}, counted once each.` : `Checked ${A.NBQ.length.toLocaleString()} non-branded searches: none rank where a better title or a few positions would add clicks.`} Branded searches (${brandShare.toFixed(0)}% of query clicks) are excluded. <a href="#plan">How it's estimated</a></p></div>
@@ -301,25 +302,16 @@
         ${tiles(A)}
         ${D.C && D.C.length ? `<div class="panel-b">
           <div class="chart-bar">
-            <div class="legend"><span><i style="background:var(--signal)"></i>Clicks</span><span><i style="background:var(--sky)"></i>Impressions</span></div>
+            <div class="legend"><span><i style="background:var(--signal)"></i>Clicks</span><span><i style="background:var(--sky)"></i>Impressions</span>${CC && CC.hasMarkers(D) ? '<span><i style="background:var(--orange)"></i>Changes you implemented</span>' : ''}</div>
             <div class="seg" role="group" aria-label="Group by"><button type="button" data-unit="day" class="on">Day</button><button type="button" data-unit="week">Week</button><button type="button" data-unit="month">Month</button></div>
           </div>
           <div class="chart-box"><canvas id="ch-trend" aria-label="Clicks and impressions over time"></canvas></div>
         </div>` : '<p class="empty" style="padding:16px 20px">This export has no date data. Connect Search Console or include the Dates sheet to see the trend.</p>'}
       </section>
 
+      ${CC ? CC.body(A, D) : `<section class="panel"><div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a></div>${ledger(A.plan, 3)}</section>`}
+
       ${subsetStrip(A, D)}
-
-      <div class="signals">
-        ${signalBox('sig-good', 'check', "What's going well", A.signals.good, 'Not enough data yet.')}
-        ${signalBox('sig-bad', 'warn', 'Needs attention', A.signals.bad, 'Nothing urgent found.')}
-        ${signalBox('sig-opp', 'bolt', 'Opportunities', A.signals.opp, 'No clear opportunities in this range.')}
-      </div>
-
-      <section class="panel">
-        <div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a><p>Ranked by estimated clicks per month. Each links to the exact queries or pages.</p></div>
-        ${ledger(A.plan, 3)}
-      </section>
 
       <div class="grid-2 even">
         <section class="panel">
@@ -360,20 +352,21 @@
         </details>
       </div>`;
     const mount = () => {
+      if (CC) CC.mount(A, D);
       if (D.C && D.C.length) {
         const draw = unit => {
           const r = rollup(D.C, unit);
           return { labels: r.map(x => x.l), clicks: r.map(x => x.clicks), impr: r.map(x => x.impr) };
         };
-        const d0 = draw('day');
-        const ch = chart('ch-trend', { type: 'line', data: { labels: d0.labels, datasets: [
+        const d0 = draw('day'), unitRef = { unit: 'day' };
+        const ch = chart('ch-trend', { type: 'line', plugins: CC ? [CC.markerPlugin(D, unitRef)] : [], data: { labels: d0.labels, datasets: [
           { label: 'Clicks', data: d0.clicks, borderColor: cssVar('--signal'), backgroundColor: cssVar('--signal-soft'), fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5, yAxisID: 'y' },
           { label: 'Impressions', data: d0.impr, borderColor: cssVar('--sky'), backgroundColor: 'transparent', tension: .35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2, yAxisID: 'y1' }
         ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { position: 'left', title: { display: true, text: 'Clicks', color: cssVar('--signal') }, ticks: { color: cssVar('--signal'), callback: v => fmtN(v) } }, y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'Impressions', color: cssVar('--sky') }, ticks: { color: cssVar('--sky'), callback: v => fmtN(v) } } } } });
         document.querySelectorAll('.seg [data-unit]').forEach(b => b.addEventListener('click', () => {
           document.querySelectorAll('.seg [data-unit]').forEach(x => x.classList.toggle('on', x === b));
           if (!ch) return;
-          const d = draw(b.dataset.unit);
+          const d = draw(b.dataset.unit); unitRef.unit = b.dataset.unit;
           ch.data.labels = d.labels; ch.data.datasets[0].data = d.clicks; ch.data.datasets[1].data = d.impr;
           ch.data.datasets.forEach(ds => ds.pointRadius = b.dataset.unit === 'day' ? 0 : 3);
           ch.update();

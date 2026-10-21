@@ -21,6 +21,12 @@ Generic for any website — no site-specific logic.
 | `filters.js` | Goal builder engine: validated filter specs, plain-English parser with clarifying questions and data checks, safe text matching (pure functions) |
 | `workflows.js` | One-click workflow templates and their runners (pure functions) |
 | `views.js` | Report screens and shared table/chart helpers |
+| `priority.js` | Growth Priority Score: merges signals about the same issue, scores them on five weighted components, risk path, calibration from measured results (pure functions) |
+| `tasks.js` | Task model for the action and measurement loop: statuses, validation, baselines, confounders (pure functions) |
+| `tasks-view.js` | Priorities, opportunity detail and Action board screens |
+| `command.js` | SEO Growth Command Center at the top of the dashboard |
+| `copilot.js` | Ask Clickwise: maps plain-language questions to existing analyses and answers with evidence (deterministic, no AI model) |
+| `surfaces.js` / `surfaces-view.js` | Discover, Google News, Last 24 hours and Indexing |
 | `automation.js` | Goal builder, Workflows and workflow-result screens |
 | `app.js` | Onboarding, file import, Google sign-in, API pulls, routing |
 | `demo.js` | Sample data for a fictional site |
@@ -51,6 +57,10 @@ With Search Console connected, type a folder (`/blog/`) or a full URL in **Only 
 
 ## Reports
 
+- **Command Center** (dashboard top) — data source (live / uploaded / sample), period and comparison, freshness and coverage; **Do today** (five highest-priority open opportunities); **Growth target** with progress and the realistic range from what was found; **Risks**; **What's working**; **Did our changes work?** (measured tasks). Implemented changes are marked on the trend chart
+- **Priorities** — every opportunity once, ranked by the Growth Priority Score, with a separate risk list. Filter by priority, category, effort, intent, section and task status. Each row opens a detail page: the issue with current vs previous metrics, evidence (including merged signals), action, estimate and its method, score breakdown and confidence reasons, and **Create task**
+- **Action board** — tasks from opportunities or by hand: owner, due date, planned → in progress → implemented → validated (or dropped), what was actually changed and when, baseline captured at creation, observation window of 14/28/56/90 days. Implemented tasks are measured with the fix tracker method and list other changes in the same windows as possible causes; a task can only be validated once it has a measured result. Download / restore a JSON backup
+- **Ask Clickwise** (`#ask`) — answers questions such as “Where am I losing organic clicks?”, “Which five pages should I improve first?”, “Find keywords close to page one”, “Which pages have CTR improvement potential?”, “Which SEO actions remain incomplete?” and “What changed after our last content update?” with the evidence, affected URLs, actions and report links, and states what the data cannot answer. Other requests go to the Goal builder. The dashboard box sends questions here and filter-style requests to the Goal builder
 - **Overview** — headline monthly click potential, non-brand KPIs vs previous period, top 3 actions, trend, brand split, sections
 - **All opportunities** — every recommendation in one ranked list: the search or page, what was measured (and against which period), why it was picked, an estimated impact range, a confidence level with every reason behind it, the suggested action and its effort, and data warnings. Filter by type, confidence, effort and impact; export to CSV
 - **Content & links** — topics (searches grouped by shared words and, with Search Console connected, by the page they rank with), content gaps (topics with enough impressions where nothing reaches page one, only the homepage ranks, impressions are split across pages about the topic or between the matching page and unrelated ones, or question searches go unanswered), pages to improve (searches each page ranks 4–20 for), internal links (sources already rank on page one for the same topic; anchor text is the target's own search) and briefs drafted by fixed rules from real searches. Upload a crawler's link export (Screaming Frog All Inlinks, or any CSV with source and destination columns) to drop links that already exist; it stays in memory. Nothing is invented: every URL, search and number comes from the data, and impressions are the site's own, not market demand. Without query-page data (an export) it falls back to searches alone and folder-based link sources, and says so
@@ -97,6 +107,35 @@ All opportunity figures are clicks per month, shown as a low–high range. Expec
 **Comparing periods.** When the previous period has a different length, its clicks and impressions are scaled to this period's length before comparing (CTR and position are rates and are not scaled). When a list reached its row limit (1,000 rows in an export), a page or search missing from it is not assumed to have zero clicks: it is counted at the smallest row in that list and marked "upper bound". Pages that lost a quarter of their clicks count as declining; smaller moves in position, impressions or CTR show as early warnings. Recovery estimates assume 30–80% of lost clicks return.
 
 **Confidence.** Every opportunity starts at 50 and gains or loses points for fixed reasons, all shown next to it: days of data; how many clicks were expected at its position (≥100: +20, ≥30: +10, ≥10: 0, fewer: −15, because a CTR gap measured on a few clicks is mostly noise); whether expected CTR comes from the site's own clicks or a benchmark; a likely results-page feature; a capped estimate; for declines, whether the drop is larger than normal variation (about √n clicks), whether periods differ in length, and whether the current figure is only an upper bound. 70+ is High, 45–69 Medium, below 45 Low. Causes that are inferred rather than measured (an answer box or AI Overview guessed from CTR; competing pages guessed from wording) are capped at Medium and Low. The Quick wins workflow and the printed report use the same scores.
+
+## Growth Priority Score
+
+Built on the opportunity engine. **Merging:** items about the same search (e.g. almost page one, low CTR and a decline for one query) become one opportunity led by the item with the largest estimate; a page's title estimate joins the low-CTR search it mostly ranks for (≥50% of impressions); a search's decline joins its ranking page's decline. Content gaps and internal links stay separate (different fixes). Nothing is dropped: merged items appear as evidence.
+
+**Score (0–100)** = Σ (weight ÷ total weight × component) × 100, then × a calibration factor. Components, each 0–1:
+
+| Component | Default weight | How it is measured |
+|---|---|---|
+| Impact | 40 | Mid-point of the monthly click estimate, log scale against the largest in the list; 0 for checks without an estimate |
+| Confidence | 25 | The opportunity's confidence score ÷ 100 |
+| Relevance | 15 | 1 inside a priority section or term you set, 0.3 outside; 0.5 for all when none are set. No conversion data is assumed |
+| Time to impact | 10 | By type: title/snippet 0.9, technical fix of a vanished page 0.9, internal links 0.7, page-one ranking 0.6, answer box 0.6, refresh 0.5, merge 0.45, page two 0.35, new content 0.2 |
+| Effort | 10 | Low 1, Medium 0.6, High 0.25 |
+
+P1 ≥ 60, P2 ≥ 42, P3 below. Weights, priority sections and terms are set per site on the Priorities screen; each row says what lifted or held it back. **Calibration:** once a category has 3+ tasks measured over their full window, its scores are multiplied by 0.7 + 0.6 × the smoothed share of changes that improved clicks ((improved + 1) ÷ (measured + 2)), so ×0.7 to ×1.3. **Risk path:** declines (critical when a page with 20+ clicks vanished, otherwise by confidence), early warnings and failed URL inspections on pages with clicks are listed separately, whatever their growth score.
+
+## What is stored, and what would need a backend
+
+Everything runs in the browser. Search data is never stored; the access token stays in memory and the scope is read-only (`webmasters.readonly`). Stored per site in localStorage: settings, saved goals and workflows, tracked fixes, tasks (with baselines and final verdicts), priority weights/sections/terms and the growth target. "Forget this site" deletes them all.
+
+Needs a server (not built): tasks shared between people or devices, scheduled monitoring and alerts, history beyond Search Console's 16 months, measuring results without reconnecting, GA4 or other conversion data for business relevance, and monitoring of AI answers (AI visibility here is inferred from CTR and labelled as such).
+
+## Deployment steps
+
+1. `npm install && npx playwright install chromium && npm test` — all suites must pass.
+2. Bump the `?v=` number on every script and stylesheet in `app.html` when files change (cache busting).
+3. Commit and push to `main`; GitHub Pages serves the repository root. No build step.
+4. Open `app.html?demo` on the live site and check Command Center, Priorities, a detail page, the Action board and Ask Clickwise.
 
 ## Roadmap (paid tier)
 
