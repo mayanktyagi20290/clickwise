@@ -1314,3 +1314,27 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .ga-list{margin:0;padding-left:18px;display:grid;gap:6px;font-size:13px}
 .ga-notes p{margin:0 0 4px}.ga-more{padding:0 18px 12px;margin:0}
 .stat.indigo b{color:var(--sky)}
+/* collapsible sidebar groups */
+.nav-grp{display:flex;flex-direction:column;gap:1px}
+.nav button.nav-group{display:flex;align-items:center;gap:6px;width:calc(100% - 4px);border:0;background:none;cursor:pointer;padding:6px 10px!important;margin:10px 2px 2px!important;border-radius:8px;font-family:inherit;text-align:left}
+.nav button.nav-group:hover{background:var(--sunk);color:var(--ink-2)!important}
+.nav button.nav-group:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
+.nav-group>span:first-child{flex:1}
+.nav-badge{display:none;font-size:10px;font-weight:600;letter-spacing:0;padding:0 6px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.nav-grp.closed .nav-badge{display:inline-block}
+.nav-chev{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.nav-grp.closed .nav-chev{transform:rotate(-90deg)}
+.nav-sec{display:flex;flex-direction:column;gap:1px}
+.nav-sec[hidden]{display:none}
+.ga-up{padding:16px 18px}
+.ga-drop{display:flex;align-items:center;gap:16px;padding:22px 20px;border:2px dashed color-mix(in srgb,var(--signal) 35%,var(--line));border-radius:12px;background:var(--signal-soft);cursor:pointer;transition:background .15s,border-color .15s}
+.ga-drop:hover,.ga-drop.over{border-color:var(--signal);background:color-mix(in srgb,var(--signal-soft) 70%,var(--surface))}
+.ga-drop:focus-within{outline:2px solid var(--signal);outline-offset:2px}
+.ga-drop-i{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--surface);flex:none}.ga-drop-i svg{width:22px;height:22px;color:var(--signal)}
+.ga-drop-t{display:grid;gap:3px;flex:1;min-width:0}.ga-drop-t b{font:700 15px var(--display)}.ga-drop-t small{font-size:12.5px;color:var(--ink-2)}
+.ga-up.compact .ga-drop{padding:12px 16px}.ga-up.compact .ga-drop-t b{font-size:13.5px}
+.ga-up-row{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:10px;font-size:13px}
+.ga-keep{display:inline-flex;gap:8px;align-items:center;margin-right:auto}
+.ga-how{margin-top:10px;font-size:13px}.ga-how summary{cursor:pointer;font-weight:600;color:var(--signal-ink)}.ga-how .ga-steps{margin-top:6px}
+.ga-up .ga-err{padding:8px 0 0}
+@media (max-width:640px){.ga-drop{flex-wrap:wrap}.ga-drop .btn-primary{width:100%;text-align:center}}

@@ -23,22 +23,35 @@
     }
     return sheets;
   }
-  window.CW_GENAIVIEW = { DATA, readExport };
+  // Opt-in only: the export's own rows, kept for this site in this browser. "Forget this site" removes it.
+  const KEY = site => 'cw:genai:' + site;
+  function stored(site) { try { const v = JSON.parse(localStorage.getItem(KEY(site))); return v && Array.isArray(v.sheets) ? v : null; } catch (e) { return null; } }
+  function keep(site, entry) { try { localStorage.setItem(KEY(site), JSON.stringify({ sheets: entry.sheets, name: entry.name, sample: entry.sample, at: new Date().toISOString() })); return true; } catch (e) { return false; } }
+  function unkeep(site) { try { localStorage.removeItem(KEY(site)); } catch (e) { } }
+  window.CW_GENAIVIEW = { DATA, readExport, stored };
 
   V.genai = (A, D) => {
     Object.keys(TABLES).filter(k => k.startsWith('t-ga')).forEach(k => delete TABLES[k]);
+    if (!DATA.has(D.site)) { const k = stored(D.site); if (k) { const G = GA.parse(k.sheets); if (G.ok) DATA.set(D.site, { G, name: k.name, sample: !!k.sample }); } }
     const cur = DATA.get(D.site);
     const link = GA.reportUrl(D);
     const intro = head('Generative AI report', 'How often your pages appear in AI Overviews and AI Mode in Search, and in generative AI features in Discover, from Search Console’s Generative AI report, joined with your Performance data.');
-    const upload = `<section class="panel ga-up"><div class="panel-b ga-up-b">
-        <div><h2>${cur ? 'Load another export' : 'Load the Generative AI report'}</h2>
-          <ol class="ga-steps"><li><a href="${esc(link)}" target="_blank" rel="noopener">Open the report in Search Console</a>${D.scope ? ` (filtered to ${esc(D.scope)})` : ''}.</li><li>Set the same dates as this analysis${D.start ? ` (${esc(fmtD(D.start))} – ${esc(fmtD(D.end))})` : ''}, then Export › Download Excel.</li><li>Choose the file here. It is read in this browser and not stored.</li></ol>
-          <p class="flat">Search Console does not offer this report through its API yet, so it can’t be pulled automatically.</p></div>
-        <div class="ga-up-a"><label class="btn-primary" for="ga-file">Choose export file</label><input id="ga-file" type="file" accept=".xlsx,.xls,.csv" multiple hidden>
+    const kept = !!stored(D.site);
+    const upload = `<section class="panel ga-up${cur ? ' compact' : ''}">
+        <label class="ga-drop" id="ga-drop" for="ga-file">
+          <span class="ga-drop-i" aria-hidden="true">${svg('file')}</span>
+          <span class="ga-drop-t"><b>${cur ? 'Drop a newer export here' : 'Drop the Generative AI report export here'}</b><small>or click to choose the Excel or CSV file · opens right here in Clickwise</small></span>
+          <span class="btn-primary sm">Choose file</span>
+          <input id="ga-file" type="file" accept=".xlsx,.xls,.csv" multiple hidden>
+        </label>
+        <div class="ga-up-row">
+          <label class="check ga-keep"><input type="checkbox" id="ga-keep"${kept ? ' checked' : ''}> Remember this report in this browser, so it opens here next time</label>
           ${D.source === 'demo' ? '<button type="button" class="btn-quiet" id="ga-sample">Use sample data</button>' : ''}
-          <a class="btn-quiet" href="${esc(link)}" target="_blank" rel="noopener">Open in Search Console ↗</a>
-          ${cur ? '<button type="button" class="btn-link" id="ga-clear">Remove the file</button>' : ''}</div>
-      </div><p class="sf-err ga-err" id="ga-err" role="alert">${MSG ? esc(MSG) : ''}</p></section>`;
+          ${cur ? '<button type="button" class="btn-link" id="ga-clear">Remove the report</button>' : ''}
+        </div>
+        <details class="ga-how"${cur ? '' : ' open'}><summary>Where do I get the export?</summary>
+          <ol class="ga-steps"><li>In Search Console go to Performance › Generative AI (<a href="${esc(link)}" target="_blank" rel="noopener">direct link for ${esc(D.site)}${D.scope ? ' · ' + esc(D.scope) : ''} ↗</a>).</li><li>Set the same dates as this analysis${D.start ? ` (${esc(fmtD(D.start))} – ${esc(fmtD(D.end))})` : ''}, then Export › Download Excel.</li><li>Drop the file above. Google has no API and does not allow its pages inside other sites, so this one download is the only step outside Clickwise.</li></ol></details>
+        <p class="sf-err ga-err" id="ga-err" role="alert">${MSG ? esc(MSG) : ''}</p></section>`;
     MSG = null;
     if (!cur) {
       const html = intro + upload + `<div class="grid-2 even">
@@ -92,18 +105,28 @@
   };
 
   function mountUpload(A, D) {
-    const err = document.getElementById('ga-err'), inp = document.getElementById('ga-file');
-    if (inp) inp.addEventListener('change', async () => {
-      const files = [...inp.files]; if (!files.length) return;
+    const err = document.getElementById('ga-err'), inp = document.getElementById('ga-file'), drop = document.getElementById('ga-drop'), kp = document.getElementById('ga-keep');
+    const load = async files => {
+      if (!files.length) return;
       try {
-        const G = GA.parse(await readExport(files));
+        const sheets = await readExport(files), G = GA.parse(sheets);
         if (!G.ok) { err.textContent = G.error; return; }
-        DATA.set(D.site, { G, name: files.map(f => f.name).join(', '), sample: false }); rerender();
+        const entry = { G, sheets, name: files.map(f => f.name).join(', '), sample: false };
+        DATA.set(D.site, entry);
+        if (kp && kp.checked && !keep(D.site, entry)) MSG = 'Loaded, but the browser would not store it (storage is full or blocked).';
+        rerender();
       } catch (e) { err.textContent = e.message || 'That file could not be read.'; }
-    });
+    };
+    if (inp) inp.addEventListener('change', () => load([...inp.files]));
+    if (drop) {
+      ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+      ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, () => drop.classList.remove('over')));
+      drop.addEventListener('drop', e => { e.preventDefault(); load([...(e.dataTransfer && e.dataTransfer.files || [])]); });
+    }
+    if (kp) kp.addEventListener('change', () => { const cur = DATA.get(D.site); if (!kp.checked) unkeep(D.site); else if (cur && cur.sheets && !keep(D.site, cur)) err.textContent = 'The browser would not store it (storage is full or blocked).'; });
     const s = document.getElementById('ga-sample');
-    if (s) s.addEventListener('click', () => { const G = GA.parse(GA.sample(D)); if (G.ok) { DATA.set(D.site, { G, name: 'sample', sample: true }); rerender(); } });
+    if (s) s.addEventListener('click', () => { const sheets = GA.sample(D), G = GA.parse(sheets); if (G.ok) { const entry = { G, sheets, name: 'sample', sample: true }; DATA.set(D.site, entry); if (kp && kp.checked) keep(D.site, entry); rerender(); } });
     const c = document.getElementById('ga-clear');
-    if (c) c.addEventListener('click', () => { DATA.delete(D.site); rerender(); });
+    if (c) c.addEventListener('click', () => { DATA.delete(D.site); unkeep(D.site); rerender(); });
   }
 })();
