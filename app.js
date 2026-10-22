@@ -656,7 +656,7 @@
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
     if (!D || !confirm(`Forget ${D.site}? This deletes its brand names, ignored searches, page settings, saved workflows, tracked fixes, tasks, priority settings, growth target and client report branding from this browser. Your agency branding is kept for other clients.`)) return;
-    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); ['tasks', 'growth', 'tasks-seeded', 'genai', 'cc-guide-off'].forEach(k => localStorage.removeItem('cw:' + k + ':' + D.site)); } catch (e) { }
+    try { localStorage.removeItem('cw:site:' + D.site); localStorage.removeItem('cw:saved:' + D.site); localStorage.removeItem('cw:runs:' + D.site); localStorage.removeItem('cw:fixes:' + D.site); localStorage.removeItem('cw:client:' + D.site); ['tasks', 'growth', 'tasks-seeded', 'genai', 'cc-guide-off', 'hourly', 'hourly-on'].forEach(k => localStorage.removeItem('cw:' + k + ':' + D.site)); } catch (e) { }
     $('settings').close('forget'); reset();
   });
   $('btn-settings').addEventListener('click', () => {
