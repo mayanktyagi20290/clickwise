@@ -69,7 +69,10 @@
   const pathOf = u => CW.pathOf(u);
   const brandTest = D => { try { const s = JSON.parse(localStorage.getItem('cw:site:' + D.site)); return s && s.brand && s.brand.length ? CW.makeBrandTest(s.brand) : null; } catch (e) { return null; } };
 
+  // the page has two tabs: Trends (this file) and Best day & time (timing-view.js)
+  const tabs = on => `<div class="st-pagetabs" role="tablist" aria-label="Statistics views"><a role="tab" href="#stats" class="${on === 'trends' ? 'on' : ''}" aria-selected="${on === 'trends'}">Trends</a><a role="tab" href="#stats?tab=timing" class="${on === 'timing' ? 'on' : ''}" aria-selected="${on === 'timing'}">Best day &amp; time</a></div>`;
   V.stats = (A, D) => {
+    if (params().get('tab') === 'timing' && window.CW_TIMINGVIEW) return window.CW_TIMINGVIEW.render(A, D);
     const S = src();
     const title = 'Statistics & Trends';
     const sub = 'Your search performance over time: totals for any period, week-on-week, month-on-month and year-on-year changes, trends, and what moved.';
@@ -207,7 +210,7 @@
         { k: 'd', l: 'Change', r: 1, f: r => `<b class="${r.d >= 0 ? 'gainv' : 'lossv'}">${r.d > 0 ? '+' : ''}${fmtN(r.d)}</b>${r.ch != null ? ` <small class="flat">${sgn(r.ch)}%</small>` : ''}`, csv: r => r.d },
         { k: 'why', l: 'What changed', sort: false, f: r => `<small>${esc(ST.moverWhy(r))}${r.uncertain ? ' <span class="tag watch" title="One list reached its row limit, so this row may only have dropped below it">uncertain</span>' : ''}</small>`, csv: r => ST.moverWhy(r) + (r.uncertain ? ' (uncertain: row limit)' : '') }];
       return `<div class="st-wl"><div><h3 class="st-h3 gainv">Winners</h3>${table(`t-st-w${key}`, cols, mov.winners, { sort: 'd', file: `${kind}-winners`, search: false, pageSize: 15, empty: 'No gains.' })}</div>
-        <div><h3 class="st-h3 lossv">Losers</h3>${table(`t-st-l${key}`, cols, mov.losers, { sort: 'd', file: `${kind}-losers`, search: false, pageSize: 15, empty: 'No losses.' })}</div></div>`;
+        <div><h3 class="st-h3 lossv">Losers</h3>${table(`t-st-l${key}`, cols, mov.losers, { sort: 'd', dir: 1, file: `${kind}-losers`, search: false, pageSize: 15, empty: 'No losses.' })}</div></div>`;
     };
     const tab = p.get('wl') === 'q' ? 'q' : 'p';
     let wlBody;
@@ -233,7 +236,7 @@
       ${recs.length ? `<ol class="st-recs">${recs.map(r => `<li><div class="st-r1"><span class="tag ${r.priority === 'High' ? 'risk' : r.priority === 'Medium' ? 'watch' : ''}">${r.priority}</span>${r.url ? urlCell(r.url, r.title) : `<b>${esc(r.title)}</b>`}<span class="flat">${r.kind === 'recover' ? 'recover' : r.kind === 'grow' ? 'grow' : 'site-wide'} · about ${fmtN(r.impact)} clicks in the period</span></div><p class="flat">${esc(r.evidence)}</p><p>${esc(r.action)} <a href="${esc(r.view)}">${esc(r.label)}</a></p></li>`).join('')}</ol>`
         : `<p class="empty">${movP ? 'No page or search changes large enough to act on.' : 'Recommendations need page and search data for both periods.'}</p>`}</section>`;
 
-    const html = head(title, sub) + controls +
+    const html = head(title, sub) + tabs('trends') + controls +
       `<div class="st-notes">${notes.map(n => `<span>${n}</span>`).join('')}</div>` +
       (warn.length ? `<div class="note warn st-warn"><ul>${warn.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '') +
       kpis + stdHtml + charts + insHtml + recHtml + wlHtml + tablesHtml;
@@ -310,5 +313,5 @@
     a.download = `clickwise-statistics-${String(D.site).replace(/[^a-z0-9.-]+/gi, '-')}-${x.sel.start}-to-${x.sel.end}.csv`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  window.CW_STATSVIEW = { CACHE };
+  window.CW_STATSVIEW = { CACHE, load, history, periodRows, rowsOf, baseKey, chg, fmtD, rng, tabs, params, rerender };
 })();

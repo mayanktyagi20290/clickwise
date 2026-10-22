@@ -32,7 +32,7 @@
   // ── reusable table: sort, search, paginate, export ──
   const TABLES = {};
   function table(id, cols, rows, opt = {}) {
-    TABLES[id] = { cols, rows, opt, sort: opt.sort || null, dir: -1, page: 0, q: '', filter: opt.filters ? {} : null };
+    TABLES[id] = { cols, rows, opt, sort: opt.sort || null, dir: opt.dir === 1 ? 1 : -1, page: 0, q: '', filter: opt.filters ? {} : null };
     const filters = (opt.filters || []).map(f => `<select data-tf="${id}" data-key="${f.key}" aria-label="${esc(f.label)}"><option value="">${esc(f.label)}: all</option>${f.options.map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join('')}</select>`).join('');
     return `<div class="tools">
         ${opt.search !== false ? `<input type="search" data-ts="${id}" placeholder="${esc(opt.placeholder || 'Filter rows')}" aria-label="Filter rows">` : ''}

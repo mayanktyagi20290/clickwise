@@ -559,9 +559,36 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('Statistics & Trends › Best day & time: tab, weekday analysis, hourly, calendar, insights', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo#stats?tab=timing'); await toApp(); await page.waitForTimeout(500);
+    assert.equal(await text('.st-pagetabs a.on'), 'Best day & time', 'direct URL opens the tab');
+    assert.equal(await text('.nav a.on span'), 'Statistics & Trends', 'same nav item');
+    assert.ok(/Strongest/.test(await text('.tm-best')) && /Weakest/.test(await text('.tm-best')), 'best day card');
+    assert.ok(/not show that publishing/.test(await text('.tm-best')), 'no publishing-time claim');
+    assert.equal(await page.$$eval('#t-tm-wd tbody tr', r => r.length), 7, 'seven weekdays');
+    assert.equal(await page.$eval('#t-tm-wd tbody tr td', td => td.textContent.trim()), 'Monday', 'Monday first');
+    assert.ok(await page.evaluate(() => !!Chart.getChart('tm-ch-hours')), 'hourly chart');
+    assert.ok(/not<\/b> a reliable long-term best hour|not a reliable long-term best hour/.test(await page.$eval('#view', v => v.innerHTML)), 'hour-of-day caveat');
+    assert.ok(/preliminary/.test(await text('#view')), 'preliminary hours labelled');
+    assert.ok(!(await page.$('#tm-arc')), 'no archive option on sample data');
+    const cells12 = await page.$$eval('.tm-cal-g .tm-c:not(.empty)', c => c.length);
+    await page.click('[data-tm-w="26"]'); await page.waitForTimeout(400);
+    assert.ok(/weeks=26/.test(await page.evaluate(() => location.hash)) && /tab=timing/.test(await page.evaluate(() => location.hash)), 'window in the URL, tab kept');
+    const cells26 = await page.$$eval('.tm-cal-g .tm-c:not(.empty)', c => c.length);
+    assert.ok(cells26 > cells12, `calendar grows: ${cells12} → ${cells26} days`);
+    assert.ok(await page.evaluate(() => Chart.getChart('tm-ch-week').data.labels.length) >= 26, 'weekly trend follows the window');
+    assert.ok(await page.$('.st-recs li'), 'recommendations');
+    assert.ok(await page.$('#t-tm-qw tbody tr'), 'searches gaining');
+    // switching tabs keeps both views working
+    await page.click('.st-pagetabs a[href="#stats"]'); await page.waitForTimeout(400);
+    assert.ok(await page.$('.st-kpis'), 'Trends tab back');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing', 'stats', 'stats?range=365&g=week']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing', 'stats', 'stats?range=365&g=week', 'stats?tab=timing', 'stats?tab=timing&weeks=52']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);
