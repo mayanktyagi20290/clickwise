@@ -516,9 +516,52 @@ function writeComparisonExports(dir) {
     assert.ok(/\d/.test(await text('.nav-grp[data-grp="automation"] .nav-badge')), 'closed group shows how many screens it holds');
   });
 
+  await testAsync('Statistics & Trends: own tab and route, direct URL, filters, charts, export, other screens intact', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo#stats'); await toApp(); await page.waitForTimeout(400);
+    assert.equal(await page.evaluate(() => location.hash), '#stats', 'direct URL keeps the route');
+    assert.equal(await text('#view h1'), 'Statistics & Trends');
+    assert.equal(await text('.nav a.on span'), 'Statistics & Trends', 'its own nav item is active');
+    assert.equal(await page.$$eval('.nav a[data-view="stats"]', a => a.length), 1, 'one nav item');
+    assert.ok(!(await page.$('#view .cc-title')), 'not inside the Command Center');
+    // 3 months, weekly by default; totals equal the sum of the daily rows
+    const kpi = async () => (await text('.st-kpi.k-blue b'));
+    const sel = await page.evaluate(() => { const D = window.CW_SOURCE; return D && D.latest; });
+    const clicks90 = await kpi();
+    const bars = async () => page.evaluate(() => Chart.getChart('st-ch-traffic').data.labels.length);
+    const weekBars = await bars();
+    await page.click('[data-st-g="month"]'); await page.waitForTimeout(300);
+    assert.ok(/g=month/.test(await page.evaluate(() => location.hash)), 'granularity in the URL');
+    const monthBars = await bars();
+    assert.ok(monthBars < weekBars && monthBars >= 3, `chart regrouped: ${weekBars} weeks → ${monthBars} months`);
+    await page.click('[data-st-range="28"]'); await page.waitForTimeout(300);
+    assert.ok(await kpi() !== clicks90, 'KPIs follow the range');
+    await page.click('[data-st-range="365"]'); await page.waitForTimeout(400);
+    assert.ok(/No year-on-year comparison/.test(await text('.st-warn')), '12 months has no YoY in 16 months of history');
+    assert.ok((await page.$$eval('#t-st-week tbody tr', r => r.length)) > 20, 'weekly breakdown for 12 months');
+    // custom range, then reload: the selection survives
+    await page.click('[data-st-custom]'); await page.fill('#st-custom input[name=from]', '2026-08-01'); await page.fill('#st-custom input[name=to]', '2026-08-31'); await page.click('#st-custom button'); await page.waitForTimeout(300);
+    assert.ok(/1 Aug 2026 – 31 Aug 2026/.test(await text('.st-notes')), 'custom range applied');
+    await page.reload(); await toApp(); await page.waitForTimeout(400);
+    assert.ok(/1 Aug 2026 – 31 Aug 2026/.test(await text('.st-notes')), 'custom range survives a reload');
+    // 3 months vs previous period: winners and losers from the loaded sample periods
+    await go('#stats?range=90'); await page.waitForTimeout(300);
+    assert.ok(await page.$('#t-st-wp tbody tr td.u'), 'page winners listed');
+    await page.click('[data-st-wl="q"]'); await page.waitForTimeout(300);
+    assert.ok(await page.$('#t-st-wq'), 'search winners listed');
+    assert.ok(/Observed/.test(await text('.st-ins')) && /Possible explanations/.test(await text('.st-ins')), 'insights separate facts from explanations');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#st-export')]);
+    const csv = fs.readFileSync(await dl.path(), 'utf8');
+    assert.ok(/Clickwise Statistics & Trends/.test(csv) && /"Month"/.test(csv) && /"Week"/.test(csv), 'report CSV');
+    // the rest of the app still works
+    for (const v of ['priorities', 'tasks', 'ask', 'opps']) { await go('#' + v); assert.ok(await text('#view h1'), v); }
+    await go('#overview'); assert.ok(await page.$('#view .cc-title'), 'Command Center unchanged');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing']) {
+    for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing', 'stats', 'stats?range=365&g=week']) {
       await go('#' + v);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       assert.ok(over <= 0, `${v} overflows by ${over}px`);
@@ -721,7 +764,7 @@ function writeComparisonExports(dir) {
         const f = ((body.dimensionFilterGroups || [])[0] || { filters: [] }).filters.find(x => x.dimension === 'page');
         const rx = f ? new RegExp(f.expression) : null;
         const k = body.dimensions.join(','), m = (list, keys, page) => list.filter(r => !rx || !page || rx.test(page(r))).map(r => ({ keys: keys(r), clicks: r.clicks, impressions: r.impr, ctr: r.ctr / 100, position: r.pos }));
-        const rows = k === 'page' ? m(S.P, r => [r.p], r => r.p) : k === 'query,page' ? m(S.QP, r => [r.q, r.p], r => r.p) : k === 'query' ? m(S.QP.filter(r => !rx || rx.test(r.p)), r => [r.q]) : k === 'date' ? m(S.C, r => [r.d]) : m(S.Dev, r => [r.d]);
+        const rows = k === 'page' ? m(S.P, r => [r.p], r => r.p) : k === 'query,page' ? m(S.QP, r => [r.q, r.p], r => r.p) : k === 'query' ? m(S.QP.filter(r => !rx || rx.test(r.p)), r => [r.q]) : k === 'date' ? m(S.C.filter(r => r.d >= body.startDate && r.d <= body.endDate), r => [r.d]) : m(S.Dev, r => [r.d]);
         return r.fulfill({ json: { rows: rows.slice(body.startRow || 0, (body.startRow || 0) + body.rowLimit) } });
       }
       return r.fulfill({ status: 204, body: '' });
@@ -737,7 +780,8 @@ function writeComparisonExports(dir) {
     await p3.waitForSelector('#setup:not([hidden]), #app:not([hidden])', { timeout: 15000 });
     if (await p3.isVisible('#setup')) await p3.click('#setup-form button[type=submit]');
     await p3.waitForSelector('#app:not([hidden])');
-    assert.ok(bodies.length && bodies.every(b => (b.dimensionFilterGroups || [])[0] && b.dimensionFilterGroups[0].filters.some(f => f.dimension === 'page' && f.operator === 'includingRegex')), 'every request carries the page filter');
+    // the probe for the last day of final data is property-wide on purpose (dimensions: date, rowLimit 20)
+    assert.ok(bodies.length && bodies.filter(b => !(b.rowLimit === 20 && (b.dimensions || [])[0] === 'date')).every(b => (b.dimensionFilterGroups || [])[0] && b.dimensionFilterGroups[0].filters.some(f => f.dimension === 'page' && f.operator === 'includingRegex')), 'every request carries the page filter');
     assert.ok((await p3.$eval('#top-scope', e => e.textContent)).startsWith('Folder: /gear/'), 'scope shown');
     await p3.evaluate(() => { location.hash = '#pages'; }); await p3.waitForTimeout(250);
     const urls = await p3.$$eval('#view td.u', t => t.map(x => x.textContent));
@@ -769,8 +813,9 @@ function writeComparisonExports(dir) {
     assert.ok(await p3.isVisible('#scope-start'), 'date fields shown');
     await p3.click('#scope-presets [data-days="28"]'); await p3.click('#scope-go');
     await p3.waitForFunction(r => document.getElementById('top-range').textContent !== r, range0, { timeout: 15000 });
-    const end = new Date(); end.setDate(end.getDate() - 2); const st = new Date(end); st.setDate(end.getDate() - 27);
-    assert.ok(bodies.slice(b2).some(b => b.startDate === st.toISOString().slice(0, 10) && b.endDate === end.toISOString().slice(0, 10)), 'new dates sent');
+    // presets end on the last day Search Console has final data for (read from the property), not on a guess
+    const last = S.C[S.C.length - 1].d, first = new Date(Date.parse(last + 'T00:00:00Z') - 27 * 864e5).toISOString().slice(0, 10);
+    assert.ok(bodies.slice(b2).some(b => b.startDate === first && b.endDate === last), 'new dates sent: ' + JSON.stringify(bodies.slice(b2).map(b => [b.startDate, b.endDate])));
     // switch property from the site pill
     await p3.click('#top-site-btn'); await p3.waitForSelector('#scope-dialog[open]');
     assert.equal(await p3.$$eval('#scope-site option', o => o.length), 2, 'all properties offered');
