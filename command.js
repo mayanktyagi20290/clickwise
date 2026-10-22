@@ -17,14 +17,14 @@
   function statusBar(A, D) {
     const src = D.source === 'api' ? ['live', 'Live · Search Console (read-only)'] : D.source === 'demo' ? ['sample', 'Sample data · fictional site'] : ['file', 'Uploaded export'];
     const lag = daysAgo(D.end);
-    const fresh = D.source === 'demo' ? 'Generated data' : D.end ? `Data to ${fmtDate(D.end)}${lag != null ? ` (${lag <= 3 ? 'as fresh as Search Console gets, it runs 2–3 days behind' : lag + ' days ago'})` : ''}` : 'Dates not in export';
+    const fresh = D.source === 'demo' ? 'Generated data' : D.end ? `Final data to ${fmtDate(D.end)}${lag != null ? ` (${lag <= 4 ? 'the latest final day' : lag + ' days ago'})` : ''}` : 'Dates not in export';
     const cov = A.coverage ? `${(100 - A.coverage.notShown.share).toFixed(0)}% of clicks attributed to listed searches` : `${A.Q.length.toLocaleString()} searches, ${A.P.length.toLocaleString()} pages`;
     const cmp = D.prevStart ? `compared with ${fmtDate(D.prevStart)} – ${fmtDate(D.prevEnd)}` : 'no comparison period (declines can’t be detected)';
     const pend = D.pending && (D.pending.qp || D.pending.prev || D.pending.more);
     return `<div class="cc-status" role="status">
       <span class="cc-src ${src[0]}">${esc(src[1])}</span>
       <span>${svg('clock')}${esc(fmtDate(D.start))} – ${esc(fmtDate(D.end))}${D.days ? ` (${D.days} days)` : ''}, ${esc(cmp)}</span>
-      <span>${svg('pulse')}${esc(fresh)}${D.source !== 'demo' ? ' · <a href="#live">last 24 hours</a>' : ''}</span>
+      <span title="Clickwise uses final data only. Search Console's own Performance screen also adds the last 1–3 days of fresh, still-changing data, so its totals for a range like “Last 3 months” can be slightly higher. Pick the same start and end dates in both to compare like for like.">${svg('pulse')}${esc(fresh)}${D.source !== 'demo' ? ' · <a href="#live">last 24 hours</a>' : ''}</span>
       <span>${svg('eye')}${esc(cov)}</span>
       ${pend ? '<span class="cc-pend">Still loading extra data; this page updates by itself</span>' : ''}
       ${D.failed ? `<span class="lossv">Some data failed to load</span>` : ''}

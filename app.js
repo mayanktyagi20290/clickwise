@@ -249,10 +249,25 @@
   function progress(t) { $('pick-progress').textContent = t; $('scope-progress').textContent = t; }
 
   const iso = d => d.toISOString().slice(0, 10);
+  // Dates are plain YYYY-MM-DD strings moved in whole days, so the user's time zone never shifts them.
+  const addDays = (s, n) => { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+  // Last day with final Search Console data. Search Console's days are Pacific time and final data usually
+  // ends 2–3 days back; the real date is read from the property once signed in (latestFinal below).
+  const ptToday = () => (window.CW_SURF ? window.CW_SURF.ptDate(0) : new Date().toISOString().slice(0, 10));
+  let LATEST = addDays(ptToday(), -3), LATEST_KNOWN = false;
+  async function latestFinal(site) {
+    try {
+      const d = await api(`sites/${encodeURIComponent(site)}/searchAnalytics/query`, { startDate: addDays(ptToday(), -10), endDate: ptToday(), dimensions: ['date'], rowLimit: 20 });
+      const last = (d.rows || []).map(r => r.keys[0]).sort().pop();
+      if (last) { LATEST = last; LATEST_KNOWN = true; }
+    } catch (e) { /* keep the estimate */ }
+    return LATEST;
+  }
+  let PRESET = 90;
   function setRange(days) {
-    const end = new Date(); end.setDate(end.getDate() - 2);
-    const start = new Date(end); start.setDate(end.getDate() - days + 1);
-    $('pick-start').value = iso(start); $('pick-end').value = iso(end);
+    PRESET = days;
+    const end = LATEST, start = addDays(end, -days + 1);
+    $('pick-start').value = start; $('pick-end').value = end;
     document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.days === days));
   }
   $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRange(+b.dataset.days); });
@@ -270,6 +285,8 @@
       if (!sites.length) throw new Error('This Google account has no verified Search Console properties. Sign in with the account that owns the property.');
       SITES = sites.map(s => s.siteUrl);
       sel.innerHTML = SITES.map(u => `<option value="${esc(u)}">${esc(siteLabel(u))}</option>`).join('');
+      // end the preset ranges on the last day Search Console has final data for
+      await latestFinal(SITES[0]); setRange(PRESET);
     } catch (err) { $('pick-error').textContent = err.message; $('pick-error').hidden = false; }
   }
 
@@ -277,6 +294,7 @@
   // in the top bar, which re-runs the same property and dates for another folder or page.
   let LAST = null;
   async function analyseProperty(o, ui) {
+    if (o.end && o.end > LATEST && LATEST_KNOWN) o = { ...o, end: LATEST };
     const { site, start, end, compare } = o;
     FILTER = { type: o.type, device: o.device };
     // Optional scope: a folder ("/blog/") or one page, sent to Google as a page filter.
@@ -290,8 +308,7 @@
     const tick = setInterval(() => progress(`Fetching queries, pages and daily totals… ${Math.round((Date.now() - t0) / 1000)} s`), 1000);
     try {
       const days = Math.round((new Date(end) - new Date(start)) / 864e5) + 1;
-      const pe = new Date(start); pe.setDate(pe.getDate() - 1);
-      const ps = new Date(pe); ps.setDate(pe.getDate() - days + 1);
+      const pe = { v: addDays(start, -1) }, ps = { v: addDays(start, -days) };
       // Step 1, in parallel: enough to show the dashboard (first 25,000 queries and pages, dates, devices).
       const FIRST = 25000;
       const [q, p, c, dev] = await Promise.all([
@@ -305,7 +322,7 @@
       const more = { q: q.length === FIRST && CFG.maxRows > FIRST, p: p.length === FIRST && CFG.maxRows > FIRST };
       const data = {
         site: site.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, ''), siteUrl: site, source: 'api', start, end, days, filters: { ...FILTER }, scope: FILTER.scope || null,
-        prevStart: compare ? iso(ps) : null, prevEnd: compare ? iso(pe) : null,
+        prevStart: compare ? ps.v : null, prevEnd: compare ? pe.v : null, finalThrough: LATEST_KNOWN ? LATEST : null,
         Q: q.map(r => mapRow(r, ['q'])), P: p.map(r => mapRow(r, ['p'])), C: c.map(r => mapRow(r, ['d'])).sort((a, b) => a.d.localeCompare(b.d)),
         Dev: dev.map(r => mapRow(r, ['d'])), QP: null, prevQ: null, prevP: null, prevC: null,
         pending: { qp: true, prev: compare, more: more.q || more.p },
@@ -314,7 +331,7 @@
       };
       loaded(data);
       // Step 2, in the background: query-page pairs, the comparison period and any rows beyond 25,000.
-      background(id, data, { site, start, end, ps: iso(ps), pe: iso(pe), compare, more, FIRST });
+      background(id, data, { site, start, end, ps: ps.v, pe: pe.v, compare, more, FIRST });
     } catch (err) { ui.error.textContent = err.message; ui.error.hidden = false; progress(''); }
     finally { clearInterval(tick); ui.go.disabled = false; }
   }
@@ -339,7 +356,7 @@
       $('scope-start').value = LAST.start; $('scope-end').value = LAST.end;
       $('scope-in').value = LAST.scopeInput || ''; $('scope-exact').checked = !!LAST.exact; $('scope-compare').checked = !!LAST.compare;
       $('scope-device').value = LAST.device || '';
-      if (preset && preset.days) { const end = new Date(); end.setDate(end.getDate() - 2); const st = new Date(end); st.setDate(end.getDate() - preset.days + 1); $('scope-start').value = iso(st); $('scope-end').value = iso(end); }
+      if (preset && preset.days) { $('scope-start').value = addDays(LATEST, -preset.days + 1); $('scope-end').value = LATEST; }
       if (preset && preset.device) $('scope-device').value = preset.device;
       markPreset();
     } else {
@@ -352,17 +369,14 @@
     (f ? $(f) : $('scope-cancel')).focus();
   }
   function markPreset() {
-    const end = new Date(); end.setDate(end.getDate() - 2);
     const days = Math.round((new Date($('scope-end').value) - new Date($('scope-start').value)) / 864e5) + 1;
-    document.querySelectorAll('#scope-presets button[data-days]').forEach(b => b.classList.toggle('on', $('scope-end').value === iso(end) && +b.dataset.days === days));
+    document.querySelectorAll('#scope-presets button[data-days]').forEach(b => b.classList.toggle('on', $('scope-end').value === LATEST && +b.dataset.days === days));
   }
   $('scope-presets').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     // 24 hours is a separate hourly view, not an analysis range: open it and keep the current dates
     if (b.dataset.live) { $('scope-dialog').close(); location.hash = '#live'; return; }
-    const end = new Date(); end.setDate(end.getDate() - 2);
-    const start = new Date(end); start.setDate(end.getDate() - +b.dataset.days + 1);
-    $('scope-start').value = iso(start); $('scope-end').value = iso(end); markPreset();
+    $('scope-start').value = addDays(LATEST, -+b.dataset.days + 1); $('scope-end').value = LATEST; markPreset();
   });
   ['scope-start', 'scope-end'].forEach(id => $(id).addEventListener('change', markPreset));
   $('top-site-btn').addEventListener('click', () => openChange('site'));
@@ -423,7 +437,7 @@
     show('setup');
     $('brand-terms').focus();
   }
-  function shift(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return iso(x); }
+  function shift(d, n) { return addDays(d, n); }
   $('brand-suggest').addEventListener('click', e => {
     const b = e.target.closest('[data-add]'); if (!b) return;
     const t = $('brand-terms'); t.value = (t.value.trim() ? t.value.trim().replace(/,\s*$/, '') + ', ' : '') + b.dataset.add; b.remove();
@@ -518,12 +532,11 @@
   function setSource() {
     const kind = D.source === 'api' ? 'api' : D.source === 'demo' ? 'demo' : 'file';
     const cached = (key, fn) => { if (!SRC_CACHE.has(key)) SRC_CACHE.set(key, fn().catch(e => { SRC_CACHE.delete(key); throw e; })); return SRC_CACHE.get(key); };
-    const today = new Date(); today.setDate(today.getDate() - 3);
-    const old = new Date(); old.setDate(old.getDate() - 480);
+    const today = { toISOString: () => LATEST }, old = { toISOString: () => addDays(LATEST, -480) };
     const inRange = (rows, s, e) => rows.filter(r => r.d >= s && r.d <= e);
     window.CW_SOURCE = {
       kind, site: D.site, scope: D.scope || null,
-      latest: kind === 'api' ? today.toISOString().slice(0, 10) : D.end || null,
+      latest: kind === 'api' ? today.toISOString().slice(0, 10) : D.end || null, latestKnown: kind === 'api' && LATEST_KNOWN,
       earliest: kind === 'api' ? old.toISOString().slice(0, 10) : D.start || null,
       pages: A.P.map(r => ({ p: r.p, path: r.path, clicks: r.clicks })),
       canPage: kind !== 'file',
