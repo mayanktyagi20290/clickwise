@@ -1440,3 +1440,12 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .top-back:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
 .top-back[hidden]{display:none}
 @media (max-width:720px){.top-back span{display:none}.top-back{padding:7px}}
+.tm-pm{width:100%;border-collapse:collapse;font-size:12.5px}
+.tm-pm th,.tm-pm td{padding:7px 8px;border-bottom:1px solid var(--line-soft);text-align:left;white-space:nowrap}
+.tm-pm thead th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.tm-pm .r{text-align:right;font-variant-numeric:tabular-nums}
+.tm-pm td.u{max-width:320px;overflow:hidden;text-overflow:ellipsis}
+.tm-pm td.u a{display:block;overflow:hidden;text-overflow:ellipsis}
+.tm-pmc{background:color-mix(in srgb,var(--signal) calc(var(--t,0) * 38%),var(--surface))}
+.tm-pmc.lead{box-shadow:inset 0 0 0 2px var(--good);font-weight:700}
+@media (max-width:720px){.tm-pm td.u{max-width:180px}}

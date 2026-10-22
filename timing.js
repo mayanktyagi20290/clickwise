@@ -150,6 +150,38 @@
     (rows || []).forEach(r => { const k = days.get(r.d); if (k == null) return; const m = by[k]; const o = m.get(r.p) || { p: r.p, clicks: 0, impr: 0 }; o.clicks += r.clicks; o.impr += r.impr; m.set(r.p, o); });
     return by.map((m, k) => ({ k, name: WD[k], short: WDS[k], top: [...m.values()].map(o => ({ ...o, avg: count[k] ? o.clicks / count[k] : 0 })).sort((a, b) => b.clicks - a.clicks).slice(0, n || 5) }));
   }
+  // One row per page (the top pages by clicks, plus every weekday's leader): average clicks on each weekday and
+  // the page's own peak, so it is clear which pages lean to which day. A peak counts only if that weekday is
+  // at least 10% above the page's average day and was its best day in at least half of the weeks.
+  function pageWeekMatrix(rows, W, n) {
+    const days = new Map(); if (W && W.start) for (let d = W.start; d <= W.end; d = add(d, 1)) days.set(d, wdOf(d));
+    const count = [0, 0, 0, 0, 0, 0, 0]; days.forEach(k => count[k]++);
+    const weekOf = d => Math.floor((toUTC(d) - toUTC(W.start)) / (7 * DAY));
+    const m = new Map();
+    (rows || []).forEach(r => { const k = days.get(r.d); if (k == null) return; const o = m.get(r.p) || { p: r.p, c: [0, 0, 0, 0, 0, 0, 0], total: 0, wk: new Map() }; o.c[k] += r.clicks; o.total += r.clicks; const w = weekOf(r.d); const a = o.wk.get(w) || [0, 0, 0, 0, 0, 0, 0]; a[k] += r.clicks; o.wk.set(w, a); m.set(r.p, o); });
+    const all = [...m.values()].map(o => {
+      const avg = o.c.map((v, k) => count[k] ? v / count[k] : 0), mean = avg.reduce((s, v) => s + v, 0) / 7;
+      const best = avg.indexOf(Math.max(...avg)), lift = mean ? (avg[best] - mean) / mean * 100 : 0;
+      const weeks = [...o.wk.values()], wins = weeks.filter(a => a.indexOf(Math.max(...a)) === best).length;
+      // a near-tie with the runner-up (within 5%) is not one peak day; it may be a shared one below
+      const second = Math.max(...avg.filter((_, k) => k !== best));
+      const peak = lift >= 10 && weeks.length >= 4 && wins / weeks.length >= 0.5 && second < avg[best] * 0.95;
+      // two days sharing the lead (often Saturday and Sunday): their average is 15%+ above the page's average day
+      // and one of them was the page's best day in at least 75% of the weeks
+      let pair = null;
+      if (!peak && weeks.length >= 4) {
+        const ord = avg.map((v, k) => [v, k]).sort((x, y) => y[0] - x[0]), k1 = ord[0][1], k2 = ord[1][1];
+        const pl = mean ? ((avg[k1] + avg[k2]) / 2 - mean) / mean * 100 : 0;
+        const pw = weeks.filter(a => { const b = a.indexOf(Math.max(...a)); return b === k1 || b === k2; }).length;
+        if (pl >= 15 && pw / weeks.length >= 0.75) pair = { days: [k1, k2].sort((x, y) => x - y), lift: pl, wins: pw };
+      }
+      return { p: o.p, avg, mean, total: o.total, perDay: o.total / Math.max(1, days.size), best, lift, wins, weeks: weeks.length, peak, pair };
+    }).sort((a, b) => b.total - a.total);
+    const pick = new Set(all.slice(0, n || 15).map(r => r.p));
+    for (let k = 0; k < 7; k++) { const lead = all.slice().sort((a, b) => b.avg[k] - a.avg[k])[0]; if (lead) pick.add(lead.p); }
+    const leaders = Array.from({ length: 7 }, (_, k) => { const l = all.slice().sort((a, b) => b.avg[k] - a.avg[k])[0]; return l ? l.p : null; });
+    return { rows: all.filter(r => pick.has(r.p)), leaders, pages: all.length };
+  }
   // pages whose weekly clicks swing a lot (coefficient of variation), with enough clicks to matter
   function inconsistent(rows, W, minClicks) {
     if (!W || !W.list || !W.list.length) return [];
@@ -202,5 +234,5 @@
     return out.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 12);
   }
 
-  window.CW_TIMING = { WD, WDS, add, wdOf, median, tot, index, weeks, weekdays, calendar, extremes, anomalies, hourly, hourProfile, mergeArchive, archiveRows, pagesByWeekday, inconsistent, lowCtr, rankMoves, spikes, recommendations };
+  window.CW_TIMING = { WD, WDS, add, wdOf, median, tot, index, weeks, weekdays, calendar, extremes, anomalies, hourly, hourProfile, mergeArchive, archiveRows, pagesByWeekday, pageWeekMatrix, inconsistent, lowCtr, rankMoves, spikes, recommendations };
 })();
