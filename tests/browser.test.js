@@ -586,6 +586,29 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
+  await testAsync('reload stays on the same page; Back returns to the previous page or tab', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html'); await page.evaluate(() => { sessionStorage.clear(); });
+    await page.click('#btn-demo'); await toApp();
+    assert.ok(!(await page.isVisible('#btn-back')), 'no Back on the first page');
+    for (const h of ['#priorities', '#stats', '#stats?tab=timing']) await go(h);
+    await page.reload(); await toApp(); await page.waitForTimeout(400);
+    assert.equal(await page.evaluate(() => location.hash), '#stats?tab=timing', 'sample reload keeps the page');
+    assert.equal(await text('.st-pagetabs a.on'), 'Best day & time', 'and the tab');
+    await page.click('#btn-back'); await page.waitForTimeout(300); assert.equal(await page.evaluate(() => location.hash), '#stats', 'Back to the previous tab');
+    await page.click('#btn-back'); await page.waitForTimeout(300); assert.equal(await text('#view h1'), 'Priorities', 'Back to the previous page');
+    // an upload comes back from this tab's session after a reload
+    await page.click('#btn-new'); await page.setInputFiles('#file-input', cmp.cur); await toApp();
+    await go('#queries'); await page.reload(); await toApp(); await page.waitForTimeout(300);
+    assert.equal(await text('#view h1'), 'Queries', 'upload reload keeps the page');
+    assert.ok(!/sample/.test(await text('#top-site')), 'the uploaded data, not the sample');
+    // New analysis forgets the session: a reload then explains the start screen
+    await page.click('#btn-new'); await page.goto('about:blank'); await page.goto(base + 'app.html#overview');
+    assert.ok(await page.isVisible('#start') && await page.isVisible('#start-info'), 'start screen after New analysis');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
+    await page.goto(base + 'app.html?demo'); await toApp(); // leave the app open for the next tests
+  });
+
   await testAsync('every screen fits a 390 px phone', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     for (const v of ['overview', 'opps', 'plan', 'quickwins', 'ctr', 'workflows', 'filters', 'filters?q=' + encodeURIComponent('which pages should I fix first'), 'content?tab=topics', 'content?tab=titles', 'content?tab=links', 'content?tab=briefs', 'fixes', 'queries', 'ai', 'priorities', 'tasks', 'ask?q=' + encodeURIComponent('Which five pages should I improve first?'), 'live', 'discover', 'news', 'indexing', 'stats', 'stats?range=365&g=week', 'stats?tab=timing', 'stats?tab=timing&weeks=52']) {

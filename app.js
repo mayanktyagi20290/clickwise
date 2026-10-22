@@ -15,6 +15,20 @@
     set(k, v) { try { localStorage.setItem('cw:' + k, JSON.stringify(v)); } catch (e) { } }
   };
 
+  // ── this tab's session: lets a reload continue where you were ──
+  // Kept in sessionStorage, which belongs to this browser tab only and is cleared when the tab closes or a new
+  // analysis starts: which source was open, the Search Console token (it expires within an hour) and the
+  // property, dates and folder chosen, or an uploaded export's parsed rows. Search data from Google is not kept;
+  // a reload fetches it again.
+  const sess = {
+    get(k) { try { return JSON.parse(sessionStorage.getItem('cw:' + k)); } catch (e) { return null; } },
+    set(k, v) { try { sessionStorage.setItem('cw:' + k, JSON.stringify(v)); return true; } catch (e) { try { sessionStorage.removeItem('cw:' + k); } catch (x) { } return false; } },
+    clear() { try { ['src', 'tok', 'last', 'file'].forEach(k => sessionStorage.removeItem('cw:' + k)); } catch (e) { } }
+  };
+
+  // pages visited in this tab, newest last, for the Back button (survives a reload)
+  const NAV = (sess.get('nav') || []).filter(h => typeof h === 'string' && h.length < 600).slice(-50);
+
   // ── start screen ──
   function startError(msg) { const e = $('start-error'); e.textContent = msg; e.hidden = !msg; }
   $('btn-demo').addEventListener('click', () => { loaded(window.CW_DEMO.build()); });
@@ -159,7 +173,7 @@
   function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return null; } }
 
   // ── Google sign-in (Google Identity Services token flow) ──
-  let token = null, tokenClient = null, tokenExpires = 0;
+  let token = null, tokenClient = null, tokenExpires = 0, RESUME = null;
   $('btn-connect').addEventListener('click', () => {
     startError('');
     if (!CFG.googleClientId || CFG.googleClientId.startsWith('YOUR_')) { startError('Google sign-in is not configured yet. Add your OAuth client ID in config.js. Meanwhile, upload an export or try the sample data.'); return; }
@@ -167,7 +181,11 @@
     tokenClient = tokenClient || google.accounts.oauth2.initTokenClient({
       client_id: CFG.googleClientId,
       scope: 'https://www.googleapis.com/auth/webmasters.readonly',
-      callback: r => { if (r.error) { startError('Sign-in was not completed: ' + r.error); return; } token = r.access_token; tokenExpires = Date.now() + (+r.expires_in || 3600) * 1000; openPicker(); },
+      callback: r => {
+        if (r.error) { startError('Sign-in was not completed: ' + r.error); return; }
+        token = r.access_token; tokenExpires = Date.now() + (+r.expires_in || 3600) * 1000; sess.set('tok', { t: token, exp: tokenExpires });
+        if (RESUME) { const o = RESUME; RESUME = null; resumeApi(o); } else openPicker();
+      },
       error_callback: e => startError(e && e.type === 'popup_closed' ? 'The sign-in window was closed before finishing.' : 'Sign-in failed. Allow pop-ups for this site and try again.')
     });
     tokenClient.requestAccessToken({ prompt: token ? '' : 'consent' });
@@ -303,7 +321,7 @@
     FILTER.page = sc.regex; FILTER.scope = sc.label;
     if (!site || !start || !end || start > end) { ui.error.textContent = 'Choose a property and a valid date range.'; ui.error.hidden = false; return; }
     ui.error.hidden = true; ui.go.disabled = true;
-    LAST = { ...o };
+    LAST = { ...o }; sess.set('src', 'api'); sess.set('last', LAST); sess.set('file', null);
     const id = ++LOAD, t0 = Date.now();
     const tick = setInterval(() => progress(`Fetching queries, pages and daily totals… ${Math.round((Date.now() - t0) / 1000)} s`), 1000);
     try {
@@ -426,8 +444,14 @@
   }
 
   // ── after data is loaded ──
+  let RESTORING = false;
   function loaded(data) {
     D = data;
+    // a fresh analysis starts a fresh Back history; a reload that restores the last one keeps it
+    if (!RESTORING) { NAV.length = 0; sess.set('nav', []); }
+    RESTORING = false;
+    if (data.source === 'demo') { sess.set('src', 'demo'); sess.set('file', null); }
+    else if (data.source === 'file') { sess.set('src', 'file'); if (!sess.set('file', data)) sess.set('src', null); }
     if (D.source === 'demo') { D.prevStart = shift(D.start, -90); D.prevEnd = shift(D.start, -1); }
     const saved = store.get('site:' + D.site);
     if (saved && saved.brand) { S = saved; launch(); return; }
@@ -636,6 +660,12 @@
     view.innerHTML = out.html;
     if (out.mount) out.mount();
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
+    // Back: remember this page unless it is the one already on top (a refresh or a data update re-renders it)
+    const here = '#' + raw;
+    if (NAV[NAV.length - 1] !== here) { NAV.push(here); if (NAV.length > 50) NAV.splice(0, NAV.length - 50); sess.set('nav', NAV); }
+    const prevH = NAV.length > 1 ? NAV[NAV.length - 2] : null;
+    $('btn-back').hidden = !prevH;
+    if (prevH) { const v = prevH.slice(1).split('?')[0], l = document.querySelector(`.nav a[data-view="${v.startsWith('section=') ? 'sections' : v.startsWith('wf=') ? 'workflows' : v}"] span`); $('btn-back').title = 'Back to ' + (l ? l.textContent : 'the previous page'); }
     $('top-24').classList.toggle('on', name === 'live');
     openNavGroupOf(document.querySelector('.nav a.on'));
     const onLink = document.querySelector('.nav a.on span');
@@ -645,13 +675,18 @@
     window.scrollTo(0, 0); view.focus({ preventScroll: true });
   }
   window.addEventListener('hashchange', route);
+  $('btn-back').addEventListener('click', () => {
+    if (NAV.length < 2) return;
+    NAV.pop(); const prev = NAV.pop(); sess.set('nav', NAV);
+    if (location.hash === prev) route(); else location.hash = prev;
+  });
 
   // ── chrome ──
   $('menu-btn').addEventListener('click', () => { const o = $('nav').classList.toggle('open'); $('menu-btn').setAttribute('aria-expanded', String(o)); });
   // Print the one-page opportunity report (the browser can save it as PDF).
   $('btn-print').addEventListener('click', () => { if (location.hash !== '#wf=report') { location.hash = '#wf=report'; setTimeout(() => window.print(), 400); } else window.print(); });
   function revoke() { try { if (token && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(token, () => { }); } catch (e) { } token = null; tokenExpires = 0; }
-  function reset() { LOAD++; status(''); A = null; D = null; revoke(); history.replaceState(null, '', location.pathname); fi.value = ''; $('start-info').hidden = true; show('start'); }
+  function reset() { LOAD++; status(''); A = null; D = null; revoke(); sess.clear(); NAV.length = 0; sess.set('nav', []); history.replaceState(null, '', location.pathname); fi.value = ''; $('start-info').hidden = true; show('start'); }
   $('btn-new').addEventListener('click', reset);
   // Forget everything stored in this browser for the current site.
   $('set-forget').addEventListener('click', () => {
@@ -692,8 +727,38 @@
     }
   });
 
-  // Data is never stored, so a reload starts over; say so instead of silently resetting.
-  if (location.hash.length > 1 && !/[?&]demo\b/.test(location.search)) {
+  // A reload continues where you were: the sample loads again, a Search Console analysis is fetched again with
+  // the same property, dates and folder (one click to sign in again if the token has expired), and an upload
+  // comes back from this tab's session. Otherwise, say why the start screen is showing.
+  async function resumeApi(o) {
+    show('start'); startError('');
+    $('start-info').textContent = 'Restoring your analysis of ' + siteLabel(o.site) + '…'; $('start-info').hidden = false;
+    await latestFinal(o.site);
+    RESTORING = true;
+    await analyseProperty(o, { error: $('start-error'), go: {} });
+    RESTORING = false;
+    if (!D) { $('start-info').hidden = true; }
+  }
+  function restore() {
+    if (location.hash.length <= 1 || /[?&]demo\b/.test(location.search)) return false;
+    const src = sess.get('src');
+    if (src === 'demo') { document.addEventListener('DOMContentLoaded', () => { RESTORING = true; loaded(window.CW_DEMO.build()); }); return true; }
+    if (src === 'file') { const f = sess.get('file'); if (f && f.Q) { document.addEventListener('DOMContentLoaded', () => { RESTORING = true; loaded(f); }); return true; } }
+    if (src === 'api') {
+      const o = sess.get('last'), tk = sess.get('tok');
+      if (o && o.site) {
+        if (tk && tk.t && tk.exp - Date.now() > 120000) { token = tk.t; tokenExpires = tk.exp; document.addEventListener('DOMContentLoaded', () => resumeApi(o)); return true; }
+        // the token has expired: one click signs in again (Google needs a click for its window) and continues
+        RESUME = o;
+        $('start-info').innerHTML = `Your Google session ended. <button type="button" class="btn-primary sm" id="btn-resume">Continue with ${esc(siteLabel(o.site))}</button>`;
+        $('start-info').hidden = false;
+        $('btn-resume').addEventListener('click', () => $('btn-connect').click());
+        return true;
+      }
+    }
+    return false;
+  }
+  if (!restore() && location.hash.length > 1 && !/[?&]demo\b/.test(location.search)) {
     $('start-info').textContent = 'Clickwise doesn\'t keep your search data, so reloading starts a new analysis. Upload the file again or reconnect — settings for each site are remembered.';
     $('start-info').hidden = false;
   }
