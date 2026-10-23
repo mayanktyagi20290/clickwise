@@ -573,7 +573,8 @@
       gsc: kind === 'api' ? {
         siteUrl: D.siteUrl, type: FILTER.type || 'web',
         query(body) {
-          const b = { ...body }, filters = [];
+          // keep filters the caller sent (e.g. branded / non-branded searches) and add the analysis's page and device filters
+          const b = { ...body }, filters = [...(((body.dimensionFilterGroups || [])[0] || {}).filters || [])];
           if (FILTER.page) filters.push({ dimension: 'page', operator: 'includingRegex', expression: FILTER.page });
           if (FILTER.device && !['discover', 'googleNews'].includes(b.type) && !(b.dimensions || []).includes('device')) filters.push({ dimension: 'device', operator: 'equals', expression: FILTER.device });
           if (filters.length) b.dimensionFilterGroups = [{ groupType: 'and', filters }];

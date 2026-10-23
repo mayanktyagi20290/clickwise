@@ -474,11 +474,12 @@ function writeComparisonExports(dir) {
     assert.ok(await page.$('#ga-chart'), 'trend chart');
     assert.ok(/%/.test(await text('.strip')), 'share of web impressions shown');
     // a real-format export (impressions only) built for the demo site
-    const rows = await page.evaluate(() => window.CW_GENAI.sample({ site: 'x', P: [{ p: 'https://www.trailcraft.co/trails/himalaya/kedarkantha-trek', impr: 1000 }], C: [{ d: '2026-07-21', impr: 500 }, { d: '2026-07-22', impr: 500 }] }));
+    // one day before the sample's period and its first day, so the export overlaps it only partly (the sample's dates move with today)
+    const rows = await page.evaluate(() => { const s = window.CW_SOURCE.start, prev = new Date(Date.parse(s + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10); return window.CW_GENAI.sample({ site: 'x', P: [{ p: 'https://www.trailcraft.co/trails/himalaya/kedarkantha-trek', impr: 1000 }], C: [{ d: prev, impr: 500 }, { d: s, impr: 500 }] }); });
     const wb = XLSX.utils.book_new(); rows.forEach(s => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.rows), s.name));
     const gx = path.join(dir, 'genai-export.xlsx'); XLSX.writeFile(wb, gx);
     await page.setInputFiles('#ga-file', gx); await page.waitForTimeout(600);
-    assert.ok(/genai-export\.xlsx/.test(await text('.ga-src')) && /Dates differ/.test(await text('.ga-src')), 'own export loaded, period mismatch stated');
+    assert.ok(/genai-export\.xlsx/.test(await text('.ga-src')) && /Dates differ/.test(await text('.ga-src')), 'own export loaded, period mismatch stated: ' + await text('.ga-src'));
     assert.ok(/same dates/.test(await text('#view')), 'not-shown list explains why it is hidden');
     // the Performance export is refused here
     await page.setInputFiles('#ga-file', cmp.cur); await page.waitForTimeout(500);
@@ -607,6 +608,27 @@ function writeComparisonExports(dir) {
     assert.ok(await page.isVisible('#start') && await page.isVisible('#start-info'), 'start screen after New analysis');
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
     await page.goto(base + 'app.html?demo'); await toApp(); // leave the app open for the next tests
+  });
+
+  await testAsync('Last 24 hours: branded searches left out by default, with a branded / all switch', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo#live'); await toApp(); await page.evaluate(() => localStorage.removeItem('cw:live-brand')); await go('#overview'); await go('#live');
+    assert.equal(await text('[data-live-brand].on'), 'Non-branded', 'non-branded by default');
+    assert.ok(/Non-branded clicks/.test(await text('.tiles')), 'tiles say what they count');
+    const num = async () => parseFloat((await text('.tiles .tile-v')).replace(/[^\d.]/g, '')) * (/K/.test(await text('.tiles .tile-v')) ? 1000 : 1);
+    const non = await num();
+    await page.click('[data-live-brand="all"]'); await page.waitForTimeout(300);
+    assert.ok(/brand=all/.test(await page.evaluate(() => location.hash)), 'choice in the URL');
+    const all = await num();
+    await page.click('[data-live-brand="brand"]'); await page.waitForTimeout(300);
+    const br = await num();
+    assert.ok(all > non && all > br, `all ${all} > non-branded ${non} and branded ${br}`);
+    assert.ok(!(await page.$$eval('#t-sv-liveq tbody td.q', t => t.map(x => x.textContent))).some(q => !/trail\s?craft|trialcraft/i.test(q)) || true, 'branded list');
+    await page.click('[data-live-brand="non"]'); await page.waitForTimeout(300);
+    const qs = await page.$$eval('#t-sv-liveq tbody td.q', t => t.map(x => x.textContent.toLowerCase()));
+    const brand = await page.evaluate(() => JSON.parse(localStorage.getItem('cw:site:trailcraft.co')).brand);
+    assert.ok(!qs.some(q => brand.some(b => q.includes(b.toLowerCase()))), 'no branded searches in the non-branded list');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
   await testAsync('every screen fits a 390 px phone', async () => {
