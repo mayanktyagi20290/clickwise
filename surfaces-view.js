@@ -175,8 +175,20 @@
     out.dayQueries = fq.status === 'fulfilled' ? fq.value : []; out.dayPages = fp.status === 'fulfilled' ? fp.value : []; out.dayPrevQueries = pq.status === 'fulfilled' ? pq.value : [];
     return out;
   }
+  // "/employers/" means that page and everything under it: /employers, /employers/ and /employers/anything,
+  // with or without a trailing slash, but not /employers-old or /blog/employers/. A full URL also limits the host.
+  function folderRegex(input) {
+    let v = String(input || '').trim(); if (!v) return null;
+    let host = null;
+    if (/^https?:\/\//i.test(v)) { try { const u = new URL(v); host = u.hostname; v = u.pathname; } catch (e) { return null; } }
+    const path = ('/' + v.replace(/^\/+/, '')).replace(/[?#].*$/, '').replace(/\/+$/, '');
+    if (!path) return null;
+    const esc2 = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return '^https?://' + (host ? esc2(host) : '[^/]+') + esc2(path) + '(?:[/?#].*)?$';
+  }
   async function fetchLive(D, mode, pattern, pageContains, isBrand) {
-    const base = pageContains ? [{ dimension: 'page', operator: 'contains', expression: pageContains }] : [];
+    const rx = folderRegex(pageContains);
+    const base = rx ? [{ dimension: 'page', operator: 'includingRegex', expression: rx }] : [];
     const brandF = pattern ? [{ dimension: 'query', operator: 'includingRegex', expression: pattern }] : [];
     let out;
     if (mode === 'brand' && pattern) out = await fetchSet(D, base.concat(brandF));
@@ -204,12 +216,12 @@
     const saved = (() => { try { return localStorage.getItem('cw:live-brand'); } catch (e) { return null; } })();
     const pick = ['all', 'brand', 'non'].includes(hp.get('brand')) ? hp.get('brand') : ['all', 'brand', 'non'].includes(saved) ? saved : 'non';
     const mode = !pattern ? 'all' : pick;
-    // optional page filter, like Search Console's "Page: URLs containing"
+    // optional folder filter: the page and every page under it
     const pageContains = (hp.get('page') || '').trim().slice(0, 200);
     const modeLabel = { non: 'Non-branded', all: 'All searches', brand: 'Branded' }[mode];
     const seg = `<div class="sv-brand"><div class="seg" role="group" aria-label="Searches to include">${[['non', 'Non-branded'], ['all', 'All searches'], ['brand', 'Branded']].map(([k, l]) => `<button type="button" data-live-brand="${k}" class="${mode === k ? 'on' : ''}"${!pattern ? ' disabled' : ''} aria-pressed="${mode === k}">${l}</button>`).join('')}</div>
       <span class="flat">${pattern ? `Brand names: ${esc(terms.join(', '))} · <button type="button" class="btn-link" id="sv-brand-edit">Edit</button>${mode !== 'all' ? ' · Non-branded = all searches minus branded ones, so searches Google keeps private count as non-branded, as in Search Console. Search Console decides “branded” with its own AI classifier (misspellings, product names); Clickwise uses the brand names you list, so the split can differ slightly.' : ''}` : 'No brand names set, so all searches are shown. <button type="button" class="btn-link" id="sv-brand-edit">Add brand names</button> to split branded and non-branded.'}</span></div>`;
-    const pageForm = S.kind === 'api' ? `<form class="sv-pagef" id="sv-pagef" autocomplete="off"><label class="field"><span>Page contains</span><input name="page" value="${esc(pageContains)}" placeholder="e.g. /employers/" maxlength="200"></label><button class="btn-quiet" type="submit">Apply</button>${pageContains ? '<button class="btn-link" type="button" id="sv-pagef-x">Clear</button>' : ''}<span class="flat">${pageContains ? `Only URLs containing “${esc(pageContains)}”` : 'All pages'}${D.scope ? ` · within the analysed ${esc(D.scope)}` : ''}</span></form>` : '';
+    const pageForm = S.kind === 'api' ? `<form class="sv-pagef" id="sv-pagef" autocomplete="off"><label class="field"><span>Folder or page</span><input name="page" value="${esc(pageContains)}" placeholder="e.g. /employers/" maxlength="200"></label><button class="btn-quiet" type="submit">Apply</button>${pageContains ? '<button class="btn-link" type="button" id="sv-pagef-x">Clear</button>' : ''}<span class="flat">${pageContains ? `${esc(pageContains.replace(/\/+$/, ''))} and every page under it` : 'All pages'}${D.scope ? ` · within the analysed ${esc(D.scope)}` : ''}</span></form>` : '';
     const segAll = seg + pageForm;
     let data, demoNote = '';
     if (S.kind === 'api') {
@@ -471,5 +483,5 @@
     const c = e.target.closest('[data-sv-clear]');
     if (c && window.CW_SOURCE) { UPLOADS.delete(window.CW_SOURCE.site + '|' + c.dataset.svClear); rerender(c.dataset.svClear === 'index' ? 'indexing' : c.dataset.svClear); }
   });
-  window.CW_SURFVIEW = { CACHE, UPLOADS, RUNS };
+  window.CW_SURFVIEW = { CACHE, UPLOADS, RUNS, folderRegex };
 })();
