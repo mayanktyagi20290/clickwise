@@ -145,10 +145,22 @@
   function brandTerms(D) { try { const s = JSON.parse(localStorage.getItem('cw:site:' + D.site)); return s && Array.isArray(s.brand) ? s.brand.map(String).map(t => t.trim()).filter(Boolean).slice(0, 30) : []; } catch (e) { return []; } }
   const brandPattern = terms => terms.length ? '(?i)(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')' : null;
   const brandTestOf = terms => { const p = brandPattern(terms); if (!p) return () => false; const re = new RegExp(p.slice(4), 'i'); return q => re.test(String(q || '')); };
-  async function fetchLive(D, mode, pattern) {
+  // Non-branded is worked out as all searches minus branded ones, the way Search Console's own Branded /
+  // Non-branded filter splits them: every search lands in one of the two, and searches Google keeps private count
+  // as non-branded. Excluding the brand pattern directly would drop those private searches altogether.
+  // Position is re-weighted: (pos × impressions of all − pos × impressions of branded) ÷ remaining impressions.
+  function minus(all, brand, keyOf) {
+    const b = new Map((brand || []).map(r => [keyOf(r), r]));
+    return (all || []).map(r => {
+      const x = b.get(keyOf(r)); if (!x) return r;
+      const clicks = Math.max(0, r.clicks - x.clicks), impr = Math.max(0, r.impr - x.impr);
+      const pos = impr ? Math.max(1, (r.pos * r.impr - x.pos * x.impr) / impr) : 0;
+      return { ...r, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos };
+    }).filter(r => r.impr > 0 || r.clicks > 0);
+  }
+  async function fetchSet(D, filters) {
     const S = src(), type = S.gsc.type;
-    const bf = mode === 'all' || !pattern ? null : [{ groupType: 'and', filters: [{ dimension: 'query', operator: mode === 'brand' ? 'includingRegex' : 'excludingRegex', expression: pattern }] }];
-    const q = body => S.gsc.query({ type, ...body, ...(bf ? { dimensionFilterGroups: bf } : {}) });
+    const q = body => S.gsc.query({ type, ...body, ...(filters.length ? { dimensionFilterGroups: [{ groupType: 'and', filters }] } : {}) });
     const H = await q({ startDate: SURF.ptDate(-8), endDate: SURF.ptDate(0), dimensions: ['hour'], dataState: 'hourly_all', rowLimit: 500 });
     const rows = (H.rows || []).map(r => ({ h: r.keys[0], clicks: r.clicks, impr: r.impressions, ctr: r.ctr * 100, pos: r.position }));
     const meta = H.metadata || {};
@@ -156,11 +168,32 @@
     // top queries and pages by hour; if Search Console refuses the hour pairing, fall back to fresh daily data
     const hx = dim => q({ startDate: SURF.ptDate(-3), endDate: SURF.ptDate(0), dimensions: ['hour', dim], dataState: 'hourly_all', rowLimit: 25000 }).then(d => (d.rows || []).map(r => ({ h: r.keys[0], [dim === 'query' ? 'q' : 'p']: r.keys[1], clicks: r.clicks, impr: r.impressions, pos: r.position })));
     const [hq, hp] = await Promise.allSettled([hx('query'), hx('page')]);
-    if (hq.status === 'fulfilled' && hp.status === 'fulfilled') { out.queries = hq.value; out.pages = hp.value; out.prevQueries = hq.value; out.prevPages = hp.value; return out; }
+    if (hq.status === 'fulfilled' && hp.status === 'fulfilled') { out.queries = hq.value; out.pages = hp.value; return out; }
     out.exact = false;
     const dx = (dim, s, e) => q({ startDate: s, endDate: e, dimensions: [dim], dataState: 'all', rowLimit: 5000 }).then(d => rowsOf(d, [dim === 'query' ? 'q' : 'p']));
     const [fq, fp, pq] = await Promise.allSettled([dx('query', SURF.ptDate(-1), SURF.ptDate(0)), dx('page', SURF.ptDate(-1), SURF.ptDate(0)), dx('query', SURF.ptDate(-3), SURF.ptDate(-2))]);
-    out.dayQueries = fq.status === 'fulfilled' ? fq.value : []; out.dayPages = fp.status === 'fulfilled' ? fp.value.map(r => ({ ...r, path: SURF.pathOf(r.p) })) : []; out.dayPrevQueries = pq.status === 'fulfilled' ? pq.value : [];
+    out.dayQueries = fq.status === 'fulfilled' ? fq.value : []; out.dayPages = fp.status === 'fulfilled' ? fp.value : []; out.dayPrevQueries = pq.status === 'fulfilled' ? pq.value : [];
+    return out;
+  }
+  async function fetchLive(D, mode, pattern, pageContains, isBrand) {
+    const base = pageContains ? [{ dimension: 'page', operator: 'contains', expression: pageContains }] : [];
+    const brandF = pattern ? [{ dimension: 'query', operator: 'includingRegex', expression: pattern }] : [];
+    let out;
+    if (mode === 'brand' && pattern) out = await fetchSet(D, base.concat(brandF));
+    else if (mode === 'non' && pattern) {
+      const [all, br] = await Promise.all([fetchSet(D, base), fetchSet(D, base.concat(brandF))]);
+      out = { ...all, rows: minus(all.rows, br.rows, r => r.h), split: { all: all.rows, brand: br.rows } };
+      if (all.exact && br.exact) {
+        out.queries = (all.queries || []).filter(r => !isBrand(r.q));
+        out.pages = minus(all.pages, br.pages || [], r => r.h + '|' + r.p);
+      } else {
+        out.exact = false;
+        out.dayQueries = (all.dayQueries || []).filter(r => !isBrand(r.q)); out.dayPrevQueries = (all.dayPrevQueries || []).filter(r => !isBrand(r.q));
+        out.dayPages = minus(all.dayPages, br.dayPages || [], r => r.p);
+      }
+    } else out = await fetchSet(D, base);
+    out.prevQueries = out.queries; out.prevPages = out.pages;
+    if (out.dayPages) out.dayPages = out.dayPages.map(r => ({ ...r, path: SURF.pathOf(r.p) }));
     return out;
   }
   V.live = (A, D) => {
@@ -171,14 +204,18 @@
     const saved = (() => { try { return localStorage.getItem('cw:live-brand'); } catch (e) { return null; } })();
     const pick = ['all', 'brand', 'non'].includes(hp.get('brand')) ? hp.get('brand') : ['all', 'brand', 'non'].includes(saved) ? saved : 'non';
     const mode = !pattern ? 'all' : pick;
+    // optional page filter, like Search Console's "Page: URLs containing"
+    const pageContains = (hp.get('page') || '').trim().slice(0, 200);
     const modeLabel = { non: 'Non-branded', all: 'All searches', brand: 'Branded' }[mode];
     const seg = `<div class="sv-brand"><div class="seg" role="group" aria-label="Searches to include">${[['non', 'Non-branded'], ['all', 'All searches'], ['brand', 'Branded']].map(([k, l]) => `<button type="button" data-live-brand="${k}" class="${mode === k ? 'on' : ''}"${!pattern ? ' disabled' : ''} aria-pressed="${mode === k}">${l}</button>`).join('')}</div>
-      <span class="flat">${pattern ? `Brand names: ${esc(terms.join(', '))} · <button type="button" class="btn-link" id="sv-brand-edit">Edit</button>${mode !== 'all' ? ' · Filtering by search leaves out searches Google keeps private, so branded + non-branded add up to a little less than all searches.' : ''}` : 'No brand names set, so all searches are shown. <button type="button" class="btn-link" id="sv-brand-edit">Add brand names</button> to split branded and non-branded.'}</span></div>`;
+      <span class="flat">${pattern ? `Brand names: ${esc(terms.join(', '))} · <button type="button" class="btn-link" id="sv-brand-edit">Edit</button>${mode !== 'all' ? ' · Non-branded = all searches minus branded ones, so searches Google keeps private count as non-branded, as in Search Console. Search Console decides “branded” with its own AI classifier (misspellings, product names); Clickwise uses the brand names you list, so the split can differ slightly.' : ''}` : 'No brand names set, so all searches are shown. <button type="button" class="btn-link" id="sv-brand-edit">Add brand names</button> to split branded and non-branded.'}</span></div>`;
+    const pageForm = S.kind === 'api' ? `<form class="sv-pagef" id="sv-pagef" autocomplete="off"><label class="field"><span>Page contains</span><input name="page" value="${esc(pageContains)}" placeholder="e.g. /employers/" maxlength="200"></label><button class="btn-quiet" type="submit">Apply</button>${pageContains ? '<button class="btn-link" type="button" id="sv-pagef-x">Clear</button>' : ''}<span class="flat">${pageContains ? `Only URLs containing “${esc(pageContains)}”` : 'All pages'}${D.scope ? ` · within the analysed ${esc(D.scope)}` : ''}</span></form>` : '';
+    const segAll = seg + pageForm;
     let data, demoNote = '';
     if (S.kind === 'api') {
-      const k = keyOf(D, 'live:' + mode + ':' + (pattern || '') + ':' + (LIVE_TICK.get(D.site) || 0));
-      const st = load(k, 'live', () => fetchLive(D, mode, pattern));
-      if (st.status === 'loading') { const l = loading(title, sub, `Fetching hourly data (${modeLabel.toLowerCase()}) from Search Console…`); l.html = l.html.replace('</header>', '</header>' + seg); return { html: l.html, mount: () => liveSeg(D) }; }
+      const k = keyOf(D, 'live:' + mode + ':' + (pattern || '') + ':' + pageContains + ':' + (LIVE_TICK.get(D.site) || 0));
+      const st = load(k, 'live', () => fetchLive(D, mode, pattern, pageContains, isBrand));
+      if (st.status === 'loading') { const l = loading(title, sub, `Fetching hourly data (${modeLabel.toLowerCase()}) from Search Console…`); l.html = l.html.replace('</header>', '</header>' + segAll); return { html: l.html, mount: () => liveSeg(D) }; }
       if (st.status === 'error') return failed(title, sub, `Search Console did not return hourly data: ${st.err}`, 'live');
       data = st.data;
     } else if (S.kind === 'demo') {
@@ -221,7 +258,7 @@
     const prevCol = { k: 'prev', l: 'Previous 24 h', r: 1, f: r => r.prev == null ? '—' : fmtN(r.prev) };
     const qCols = [C.q, C.clicks, C.impr, C.ctr, C.pos].concat(data.exact ? [prevCol] : []);
     const pCols = [C.page, C.clicks, C.impr, C.ctr, C.pos].concat(data.exact ? [prevCol] : []);
-    const html = head(title, sub + ` (${esc(tz)}).` + (S.kind === 'demo' ? ' <b>Sample data:</b> generated for the fictional site.' + demoNote : '')) + seg +
+    const html = head(title, sub + ` (${esc(tz)}).` + (S.kind === 'demo' ? ' <b>Sample data:</b> generated for the fictional site.' + demoNote : '')) + segAll +
       `<div class="sv-bar"><span class="flat">Latest hour with data: <b>${esc(dm(H.end))}, ${esc(hm(H.end))}</b>${H.incomplete ? ` · hours from ${esc(hm(H.incomplete))} are still filling in` : ''}</span>${S.kind === 'api' ? '<button type="button" class="btn-quiet" id="sv-live-refresh">Refresh</button>' : ''}</div>
       <section class="tiles" aria-label="Last 24 hours totals, ${esc(modeLabel.toLowerCase())}">
         ${T('t-blue', fmtN(L.clicks), mode === 'all' ? 'Clicks' : modeLabel + ' clicks', cmp(L.clicks, P && P.clicks, W && W.clicks))}
@@ -252,9 +289,13 @@
   };
   const LIVE_TICK = new Map();
   function liveSeg(D) {
+    const go = ch => { const p = new URLSearchParams((location.hash.split('?')[1]) || ''); Object.entries(ch).forEach(([k, v]) => v ? p.set(k, v) : p.delete(k)); location.hash = '#live' + (p.toString() ? '?' + p.toString() : ''); };
+    const f = document.getElementById('sv-pagef');
+    if (f) f.addEventListener('submit', e => { e.preventDefault(); go({ page: String(new FormData(f).get('page') || '').trim().slice(0, 200) }); });
+    const x = document.getElementById('sv-pagef-x'); if (x) x.addEventListener('click', () => go({ page: '' }));
     document.querySelectorAll('[data-live-brand]').forEach(b => b.addEventListener('click', () => {
       try { localStorage.setItem('cw:live-brand', b.dataset.liveBrand); } catch (e) { }
-      location.hash = '#live?brand=' + b.dataset.liveBrand;
+      go({ brand: b.dataset.liveBrand });
     }));
     const e = document.getElementById('sv-brand-edit'); if (e) e.addEventListener('click', () => document.getElementById('btn-settings').click());
   }

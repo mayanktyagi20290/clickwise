@@ -1451,3 +1451,6 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 @media (max-width:720px){.tm-pm td.u{max-width:180px}}
 .sv-brand{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:-4px 0 12px;font-size:12.5px}
 .sv-brand .seg button[disabled]{opacity:.5;cursor:not-allowed}
+.sv-pagef{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:end;margin:0 0 12px}
+.sv-pagef .field{min-width:220px}.sv-pagef .field input{padding:7px 10px}
+.sv-pagef .flat{font-size:12.5px;align-self:center}
