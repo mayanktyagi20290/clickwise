@@ -139,9 +139,16 @@
   }
 
   // ── Last 24 hours ──
-  async function fetchLive(D) {
+  // Branded / non-branded: the brand names from Settings, as one case-insensitive pattern Search Console applies
+  // on its side (its regex syntax is RE2). Filtering by search leaves out searches Google keeps private, so
+  // branded + non-branded is a little less than all searches.
+  function brandTerms(D) { try { const s = JSON.parse(localStorage.getItem('cw:site:' + D.site)); return s && Array.isArray(s.brand) ? s.brand.map(String).map(t => t.trim()).filter(Boolean).slice(0, 30) : []; } catch (e) { return []; } }
+  const brandPattern = terms => terms.length ? '(?i)(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')' : null;
+  const brandTestOf = terms => { const p = brandPattern(terms); if (!p) return () => false; const re = new RegExp(p.slice(4), 'i'); return q => re.test(String(q || '')); };
+  async function fetchLive(D, mode, pattern) {
     const S = src(), type = S.gsc.type;
-    const q = body => S.gsc.query({ type, ...body });
+    const bf = mode === 'all' || !pattern ? null : [{ groupType: 'and', filters: [{ dimension: 'query', operator: mode === 'brand' ? 'includingRegex' : 'excludingRegex', expression: pattern }] }];
+    const q = body => S.gsc.query({ type, ...body, ...(bf ? { dimensionFilterGroups: bf } : {}) });
     const H = await q({ startDate: SURF.ptDate(-8), endDate: SURF.ptDate(0), dimensions: ['hour'], dataState: 'hourly_all', rowLimit: 500 });
     const rows = (H.rows || []).map(r => ({ h: r.keys[0], clicks: r.clicks, impr: r.impressions, ctr: r.ctr * 100, pos: r.position }));
     const meta = H.metadata || {};
@@ -158,14 +165,34 @@
   }
   V.live = (A, D) => {
     const S = src(), title = 'Last 24 hours', sub = 'Hour-by-hour Search performance, as fresh as Search Console has it (usually a few hours behind). Times are shown in your time zone.';
-    let data;
+    // branded searches are left out by default; the choice is kept in the address so a reload keeps it
+    const terms = brandTerms(D), pattern = brandPattern(terms), isBrand = brandTestOf(terms);
+    const hp = new URLSearchParams((location.hash.split('?')[1]) || '');
+    const saved = (() => { try { return localStorage.getItem('cw:live-brand'); } catch (e) { return null; } })();
+    const pick = ['all', 'brand', 'non'].includes(hp.get('brand')) ? hp.get('brand') : ['all', 'brand', 'non'].includes(saved) ? saved : 'non';
+    const mode = !pattern ? 'all' : pick;
+    const modeLabel = { non: 'Non-branded', all: 'All searches', brand: 'Branded' }[mode];
+    const seg = `<div class="sv-brand"><div class="seg" role="group" aria-label="Searches to include">${[['non', 'Non-branded'], ['all', 'All searches'], ['brand', 'Branded']].map(([k, l]) => `<button type="button" data-live-brand="${k}" class="${mode === k ? 'on' : ''}"${!pattern ? ' disabled' : ''} aria-pressed="${mode === k}">${l}</button>`).join('')}</div>
+      <span class="flat">${pattern ? `Brand names: ${esc(terms.join(', '))} · <button type="button" class="btn-link" id="sv-brand-edit">Edit</button>${mode !== 'all' ? ' · Filtering by search leaves out searches Google keeps private, so branded + non-branded add up to a little less than all searches.' : ''}` : 'No brand names set, so all searches are shown. <button type="button" class="btn-link" id="sv-brand-edit">Add brand names</button> to split branded and non-branded.'}</span></div>`;
+    let data, demoNote = '';
     if (S.kind === 'api') {
-      const k = keyOf(D, 'live:' + (LIVE_TICK.get(D.site) || 0));
-      const st = load(k, 'live', () => fetchLive(D));
-      if (st.status === 'loading') return loading(title, sub, 'Fetching hourly data from Search Console…');
+      const k = keyOf(D, 'live:' + mode + ':' + (pattern || '') + ':' + (LIVE_TICK.get(D.site) || 0));
+      const st = load(k, 'live', () => fetchLive(D, mode, pattern));
+      if (st.status === 'loading') { const l = loading(title, sub, `Fetching hourly data (${modeLabel.toLowerCase()}) from Search Console…`); l.html = l.html.replace('</header>', '</header>' + seg); return { html: l.html, mount: () => liveSeg(D) }; }
       if (st.status === 'error') return failed(title, sub, `Search Console did not return hourly data: ${st.err}`, 'live');
       data = st.data;
-    } else if (S.kind === 'demo') data = SURF.demoHourly(D);
+    } else if (S.kind === 'demo') {
+      data = SURF.demoHourly(D);
+      if (mode !== 'all') {
+        // sample only: the generated hourly totals carry no search text, so they are split by the sample site's branded share of clicks
+        const tot = (D.Q || []).reduce((a, r) => (a.c += r.clicks, a.b += isBrand(r.q) ? r.clicks : 0, a.i += r.impr, a.bi += isBrand(r.q) ? r.impr : 0, a), { c: 0, b: 0, i: 0, bi: 0 });
+        const sc = mode === 'brand' ? tot.b / (tot.c || 1) : 1 - tot.b / (tot.c || 1), si = mode === 'brand' ? tot.bi / (tot.i || 1) : 1 - tot.bi / (tot.i || 1);
+        data = { ...data, rows: data.rows.map(r => ({ ...r, clicks: Math.round(r.clicks * sc), impr: Math.round(r.impr * si) })) };
+        demoNote = ` The sample's hourly ${mode === 'brand' ? 'branded' : 'non-branded'} totals are its generated totals scaled by its branded share of clicks.`;
+      }
+      const keep = r => mode === 'all' || (mode === 'brand') === isBrand(r.q);
+      data = { ...data, queries: (data.queries || []).filter(keep), prevQueries: (data.prevQueries || []).filter(keep) };
+    }
     else return { html: head(title, sub) + `<section class="panel"><p class="empty">Hourly data comes straight from the Search Console API, so it needs a connected property. Click <b>New analysis</b> and sign in with Google, or open <a href="https://search.google.com/search-console/performance/search-analytics" target="_blank" rel="noopener">Performance › 24 hours</a> in Search Console.</p></section>` };
     const H = SURF.hourly(data.rows, data.firstIncomplete);
     if (H.empty) return { html: head(title, sub) + '<section class="panel"><p class="empty">No hourly impressions in the last 8 days for this property and filter.</p></section>' };
@@ -188,20 +215,21 @@
     const hm = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const dm = ts => new Date(ts).toLocaleDateString([], { day: 'numeric', month: 'short' });
     const L = H.tot, P = H.prevTot, W = H.weekTot;
-    const cmp = (cur, a, b, inv, unit) => (tileDelta(cur, a, inv, unit) || '').replace('vs previous', 'vs day before') + (b ? (tileDelta(cur, b, inv, unit) || '').replace('vs previous', 'vs last week') : '');
+    // tileDelta says "vs previous" (in its tooltip too), so every occurrence is renamed
+    const cmp = (cur, a, b, inv, unit) => (tileDelta(cur, a, inv, unit) || '').split('vs previous').join('vs day before') + (b ? (tileDelta(cur, b, inv, unit) || '').split('vs previous').join('vs last week') : '');
     const T = (tone, v, l, d) => `<div class="tile ${tone}"><div class="tile-v">${v}</div><div class="tile-l">${l}</div><div class="tile-s">${esc(dm(H.start))} ${esc(hm(H.start))} – ${esc(dm(H.end))} ${esc(hm(H.end + 36e5))}</div>${d}</div>`;
     const prevCol = { k: 'prev', l: 'Previous 24 h', r: 1, f: r => r.prev == null ? '—' : fmtN(r.prev) };
     const qCols = [C.q, C.clicks, C.impr, C.ctr, C.pos].concat(data.exact ? [prevCol] : []);
     const pCols = [C.page, C.clicks, C.impr, C.ctr, C.pos].concat(data.exact ? [prevCol] : []);
-    const html = head(title, sub + ` (${esc(tz)}).` + (S.kind === 'demo' ? ' <b>Sample data:</b> generated for the fictional site.' : '')) +
+    const html = head(title, sub + ` (${esc(tz)}).` + (S.kind === 'demo' ? ' <b>Sample data:</b> generated for the fictional site.' + demoNote : '')) + seg +
       `<div class="sv-bar"><span class="flat">Latest hour with data: <b>${esc(dm(H.end))}, ${esc(hm(H.end))}</b>${H.incomplete ? ` · hours from ${esc(hm(H.incomplete))} are still filling in` : ''}</span>${S.kind === 'api' ? '<button type="button" class="btn-quiet" id="sv-live-refresh">Refresh</button>' : ''}</div>
-      <section class="tiles" aria-label="Last 24 hours totals">
-        ${T('t-blue', fmtN(L.clicks), 'Clicks', cmp(L.clicks, P && P.clicks, W && W.clicks))}
+      <section class="tiles" aria-label="Last 24 hours totals, ${esc(modeLabel.toLowerCase())}">
+        ${T('t-blue', fmtN(L.clicks), mode === 'all' ? 'Clicks' : modeLabel + ' clicks', cmp(L.clicks, P && P.clicks, W && W.clicks))}
         ${T('t-green', fmtN(L.impr), 'Impressions', cmp(L.impr, P && P.impr, W && W.impr))}
         ${T('t-amber', pctf(L.ctr, 2), 'CTR', cmp(L.ctr, P && P.ctr, W && W.ctr, false, 'pt'))}
         ${T('t-red', L.pos ? L.pos.toFixed(1) : '—', 'Avg. position', cmp(L.pos, P && P.pos, W && W.pos, true))}
       </section>
-      <section class="panel"><div class="panel-h"><h2>Clicks by hour</h2><p>Bars: the last 24 hours. Lines: the same hours the day before and a week before. ${H.best && H.best.clicks ? `Busiest hour: ${esc(hm(H.best.ts))} (${fmtN(H.best.clicks)} clicks).` : ''}</p></div>
+      <section class="panel"><div class="panel-h"><h2>${mode === 'all' ? 'Clicks' : modeLabel + ' clicks'} by hour</h2><p>Bars: the last 24 hours. Lines: the same hours the day before and a week before. ${H.best && H.best.clicks ? `Busiest hour: ${esc(hm(H.best.ts))} (${fmtN(H.best.clicks)} clicks).` : ''}</p></div>
         <div class="panel-b"><div class="chart-box"><canvas id="sv-ch-live" aria-label="Clicks by hour, last 24 hours"></canvas></div></div></section>
       ${approx}
       ${newQ.length ? `<section class="panel"><div class="panel-h"><h2>New searches today (${newQ.length})</h2><p>${data.exact ? 'Showed your site in the last 24 hours but not in the 24 hours before.' : 'In today’s data but not in the two days before.'} Early signs of trends, news or a page Google just started ranking.</p></div>
@@ -211,6 +239,7 @@
       <p class="flat">Hourly numbers are provisional and can still change; Search Console keeps hourly data for about 10 days.${S.gsc && S.gsc.type !== 'web' ? ` Search type: ${esc(S.gsc.type)}.` : ''}</p>`;
     const mount = () => {
       ['t-sv-newq', 't-sv-liveq', 't-sv-livep'].forEach(drawTable);
+      liveSeg(D);
       chart('sv-ch-live', { data: { labels: H.last.map(r => hm(r.ts)), datasets: [
         { type: 'bar', label: 'Last 24 hours', data: H.last.map(r => r.clicks), backgroundColor: H.last.map(r => H.incomplete && r.ts >= H.incomplete ? cssVar('--signal-soft') : cssVar('--signal')), borderRadius: 4, order: 2 },
         { type: 'line', label: 'Day before', data: H.prev.map(r => r.clicks), borderColor: cssVar('--watch'), pointRadius: 0, borderWidth: 2, tension: .3, order: 1 },
@@ -222,6 +251,13 @@
     return { html, mount };
   };
   const LIVE_TICK = new Map();
+  function liveSeg(D) {
+    document.querySelectorAll('[data-live-brand]').forEach(b => b.addEventListener('click', () => {
+      try { localStorage.setItem('cw:live-brand', b.dataset.liveBrand); } catch (e) { }
+      location.hash = '#live?brand=' + b.dataset.liveBrand;
+    }));
+    const e = document.getElementById('sv-brand-edit'); if (e) e.addEventListener('click', () => document.getElementById('btn-settings').click());
+  }
 
   // ── Indexing ──
   function sitemapState(D) {

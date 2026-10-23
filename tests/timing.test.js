@@ -89,6 +89,17 @@ test('pages and searches: by weekday, inconsistent, low CTR, ranking moves, spik
   const sp = T.spikes([{ q: 'new', clicks: 70 }, { q: 'flat', clicks: 70 }], [{ q: 'flat', clicks: 280 }, { q: 'gone', clicks: 400 }], 'q');
   assert.equal(sp.up[0].q, 'new'); assert.ok(!sp.up.some(r => r.q === 'flat')); assert.equal(sp.down[0].q, 'gone');
 });
+test('page × weekday table: own peak, shared weekend peak, even pages, weekday leaders', () => {
+  const Wk = T.weeks(T.index(daily('2026-01-05', 84, FLAT)), 12);
+  const shapes = { mon: [1.4, 1, 1, 1, 1, 0.8, 0.8], wkend: [0.5, 0.5, 0.5, 0.5, 0.6, 1.8, 1.8], even: [1, 1, 1, 1, 1, 1, 1] };
+  const dp = []; Wk.list.forEach((w, i) => w.days.forEach(d => { const k = T.wdOf(d.d); Object.entries(shapes).forEach(([p, sh]) => dp.push({ d: d.d, p, clicks: Math.round(100 * sh[k] + (i % 3)), impr: 1000 })); }));
+  const M = T.pageWeekMatrix(dp, Wk, 10), get = p => M.rows.find(r => r.p === p);
+  assert.ok(get('mon').peak && get('mon').best === 0, 'Monday peak');
+  assert.ok(!get('wkend').peak && get('wkend').pair && get('wkend').pair.days.join() === '5,6', 'Saturday and Sunday share the peak');
+  assert.ok(!get('even').peak && !get('even').pair, 'no peak on an even page');
+  assert.equal(M.leaders[0], 'mon'); assert.equal(M.leaders[6], 'wkend');
+  assert.near(get('even').avg[2], 100 + (0 + 1 + 2) * 4 / 12, 0.01, 'average per occurrence of the weekday');
+});
 test('recommendations: grounded in findings, never about publishing time', () => {
   const recs = T.recommendations({ anomalies: [{ d: '2026-10-01', wd: 3, kind: 'drop', clicks: 100, typical: 300, vsTypical: -66 }], lowCtr: [{ p: 'https://x.test/a', impr: 5000, pos: 4, ctr: 1, expected: 4, gap: 150 }], pathOf: u => u });
   assert.equal(recs[0].kind, 'investigate'); assert.ok(recs.some(r => r.kind === 'snippet'));
