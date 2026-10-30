@@ -84,4 +84,35 @@ test('copilot: the six spec questions route to grounded answers', () => {
   assert.ok(noPrev.limits.length && !noPrev.rows.length, 'missing data explained, nothing made up');
   assert.ok(ask('AI overview losses').limits.some(l => /Inferred/.test(l)), 'AI visibility marked as inferred');
 });
+test('results ledger: only settled, clear gains count; site movement removed; nothing double-counted', () => {
+  const FX = W.CW_FIXES;
+  const m = (perB, perA, site, L, verdict) => ({ status: 'measured', verdict, before: { perDay: perB }, after: { perDay: perA }, site: site == null ? null : { change: site }, window: { L } });
+  // page 2 → 3 clicks a day while the site rose 10%: the page's own part is 3 − 2×1.1 = 0.8 a day
+  assert.near(TK.attributable(m(2, 3, 10, 28, 'improved')), 24, 0.01);
+  assert.near(TK.attributable(m(2, 3, null, 28, 'improved')), 30, 0.01, 'no site data: the raw change');
+  assert.equal(TK.attributable({ status: 'too-early' }), null);
+  const c = (o) => ({ window: 28, estimate: { lo: 10, hi: 30, kind: 'growth' }, ...o });
+  const L = TK.ledger([
+    { c: c(), r: m(2, 3, 10, 28, 'improved') },
+    { c: c(), r: m(2, 2.6, 0, 28, 'maybe-improved') },
+    { c: c(), r: m(4, 3, 0, 28, 'declined') },
+    { c: c(), r: m(2, 2.2, 10, 28, 'no-change') },
+    { c: c(), r: m(2, 4, 0, 14, 'improved') },        // early read: half the window
+    { c: c(), r: { status: 'too-early' } },
+    { c: c(), r: null }
+  ]);
+  assert.equal(L.shipped, 7); assert.equal(L.settled, 4); assert.equal(L.early, 1); assert.equal(L.waiting, 2);
+  assert.equal(L.nGained, 1); assert.equal(L.gained, 24, 'only the clear, settled gain');
+  assert.equal(L.nMaybe, 1); assert.equal(L.maybe, 18); assert.equal(L.nLost, 1); assert.equal(L.lost, -30); assert.equal(L.flat, 1);
+  assert.equal(L.est.n, 4, 'estimate vs result only for settled changes'); assert.equal(L.est.hi, 120);
+  assert.equal(L.rows.length, 7);
+  assert.equal(TK.ledger([]).shipped, 0);
+  // the sample site: one clear win, one smaller win, one change that only rode the site's own rise
+  const S = W.CW_DEMO.sampleChanges(D);
+  const res = S.map(x => ({ c: { window: 28, estimate: { lo: x.est[0], hi: x.est[1], kind: 'growth' } }, r: FX.measure({ scope: 'page', url: x.url, date: x.date }, W.CW_DEMO.pageDaily(D, x.url), D.C, D.end, D.start, { window: 28 }) }));
+  assert.equal(res.map(x => x.r.verdict).join(','), 'improved,improved,no-change');
+  S.forEach(x => { const pg = D.P.find(p => p.p === x.url); const sum = W.CW_DEMO.pageDaily(D, x.url).reduce((s, r) => s + r.clicks, 0); assert.ok(Math.abs(sum - pg.clicks) / pg.clicks < 0.05, 'a sample change keeps the page total'); });
+  const LS = TK.ledger(res);
+  assert.ok(LS.gained > 0 && LS.nGained === 2 && LS.flat === 1);
+});
 process.exit(report('growth') ? 1 : 0);

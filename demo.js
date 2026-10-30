@@ -155,14 +155,29 @@
     return { site: 'trailcraft.co', siteUrl: 'sc-domain:trailcraft.co', source: 'demo', start, end: endD, days: 90, Q, P, C, Dev, QP, prevQ, prevP };
   }
 
+  // Sample changes on the fictional site, so the results ledger has something to show: one that clearly worked,
+  // one smaller lift and one that did nothing. `ago` is days before the last day of data; `lift` is how much the
+  // page's daily clicks rise after the change (spread over a week). The page's 90-day total stays the same.
+  const SAMPLE_CHANGES = [
+    { path: '/compare/hiking-boots-vs-trail-runners', ago: 56, lift: 0.55, title: 'Rewrote the title and added a comparison table', category: 'CTR', est: [20, 45] },
+    { path: '/gear/hiking-boots', ago: 49, lift: 0.22, title: 'Added an FAQ section with FAQPage markup', category: 'AI & SERP features', est: [12, 30] },
+    { path: '/guides/how-to-pack-a-backpack', ago: 42, lift: 0, title: 'Refreshed the intro and the date', category: 'Content', est: [8, 20] }
+  ];
+  const shiftDay = (s, n) => { const x = new Date(s + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const sampleChanges = D => SAMPLE_CHANGES.map(c => ({ ...c, url: 'https://www.trailcraft.co' + c.path, date: shiftDay(D.end, -c.ago) }));
+
   // Daily clicks for one sample page: its 90-day total spread over the site's daily shape with fixed noise.
   // Sample data only (the site is fictional); real analyses get this from Search Console.
   function pageDaily(D, url) {
     const pg = (D.P || []).find(r => r.p === url); if (!pg) return [];
     let h = 0; for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) | 0;
     const R = rng(h), C = D.C || [], tc = C.reduce((s, r) => s + r.clicks, 0) || 1, ti = C.reduce((s, r) => s + r.impr, 0) || 1;
-    return C.map(r => { const n = 0.75 + R() * 0.5; const clicks = Math.max(0, Math.round(pg.clicks * r.clicks / tc * n)), impr = Math.max(clicks, Math.round(pg.impr * r.impr / ti * (0.9 + R() * 0.2))); return { d: r.d, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos: Math.max(1, pg.pos + (R() - 0.5)) }; });
+    const ch = sampleChanges(D).find(c => c.url === url && c.lift);
+    const lift = d => { if (!ch || d < ch.date) return 1; const k = Math.min(1, (Date.parse(d) - Date.parse(ch.date)) / (7 * 864e5)); return 1 + ch.lift * k; };
+    // with a sample change, rescale so the page still adds up to its 90-day total
+    const scale = ch ? tc / C.reduce((s, r) => s + r.clicks * lift(r.d), 0) : 1;
+    return C.map(r => { const n = 0.75 + R() * 0.5, f = lift(r.d) * scale; const clicks = Math.max(0, Math.round(pg.clicks * r.clicks / tc * n * f)), impr = Math.max(clicks, Math.round(pg.impr * r.impr / ti * (0.9 + R() * 0.2) * (ch ? f : 1))); return { d: r.d, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos: Math.max(1, pg.pos + (R() - 0.5) - (ch && r.d >= ch.date ? ch.lift * 3 : 0)) }; });
   }
 
-  window.CW_DEMO = { build, pageDaily };
+  window.CW_DEMO = { build, pageDaily, sampleChanges };
 })();

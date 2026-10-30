@@ -1454,3 +1454,20 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .sv-pagef{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:end;margin:0 0 12px}
 .sv-pagef .field{min-width:220px}.sv-pagef .field input{padding:7px 10px}
 .sv-pagef .flat{font-size:12.5px;align-self:center}
+
+/* ── results ledger (Command Center, Action board, report) ── */
+.lg-head{margin:0;font:700 17px/1.3 var(--display)}
+.lg-head b{font-size:24px;font-variant-numeric:tabular-nums}
+.lg-sub{margin:4px 0 12px;color:var(--muted);font-size:13px;max-width:70ch}
+.lg-chips{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.lg-chips li{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--sunk);border:1px solid var(--line-soft);color:var(--ink-2)}
+.lg-chips li b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.lg-chips li small{color:var(--muted)}
+.lg-chips li.gain{background:var(--good-soft);border-color:transparent}
+.lg-chips li.risk{background:var(--risk-soft);border-color:transparent}
+.lg-chips li.watch{background:var(--watch-soft);border-color:transparent}
+.lg-est{margin:0 0 4px;font-size:13px;color:var(--ink-2)}
+.lg-t td.r,.lg-t th.r{text-align:right;font-variant-numeric:tabular-nums}
+.tk-results .panel-b,.cc-results .panel-b{padding:14px 20px}
+.rp-page .lg-head{font-size:14px}.rp-page .lg-head b{font-size:18px}
+.rp-page .lg-chips li{font-size:11.5px;padding:2px 8px}

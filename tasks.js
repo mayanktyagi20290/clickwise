@@ -117,8 +117,45 @@
   }
   // The measured change as clicks a month, for comparing with the estimate made when the task was created.
   const measuredMonthly = r => r && r.status === 'measured' && r.before && r.after ? (r.after.perDay - r.before.perDay) * 30 : null;
+  // The part of a measured change that is the page's own: clicks a month beyond what the site's movement over
+  // the same days would have given it anyway. Without site data it is the raw change.
+  function attributable(r) {
+    if (!r || r.status !== 'measured' || !r.before || !r.after) return null;
+    const s = r.site && r.site.change != null && isFinite(r.site.change) ? r.site.change / 100 : 0;
+    return (r.after.perDay - r.before.perDay * (1 + s)) * 30;
+  }
+  // A result is settled once both windows are as long as the change's observation window; until then it is an
+  // early read and stays out of the totals.
+  const settled = (r, win) => !!(r && r.status === 'measured' && r.window && r.window.L >= (win || 28));
+  // Results ledger: every change that went live (entries from changeLog) with its measured result, summed into
+  // what the work achieved. Only settled, clearly improved changes count toward the headline gain; "probably"
+  // results, declines and changes without a result yet are counted separately, never folded in.
+  // items: [{ c: changeLog entry, r: fix-tracker result or null }]
+  function ledger(items) {
+    const L = { shipped: 0, settled: 0, early: 0, waiting: 0, gained: 0, nGained: 0, maybe: 0, nMaybe: 0, lost: 0, nLost: 0, flat: 0, est: { n: 0, lo: 0, hi: 0, measured: 0 }, rows: [] };
+    (items || []).forEach(({ c, r }) => {
+      if (!c) return;
+      L.shipped++;
+      const win = c.window || 28, ok = settled(r, win), a = attributable(r);
+      const row = { c, r, settled: ok, monthly: a == null ? null : Math.round(a), verdict: r && r.status === 'measured' ? r.verdict : null };
+      L.rows.push(row);
+      if (!r || r.status !== 'measured') { L.waiting++; return; }
+      if (!ok) { L.early++; return; }
+      L.settled++;
+      if (r.verdict === 'improved') { L.nGained++; L.gained += Math.max(0, a || 0); }
+      else if (r.verdict === 'maybe-improved') { L.nMaybe++; L.maybe += Math.max(0, a || 0); }
+      else if (r.verdict === 'declined' || r.verdict === 'maybe-declined') { L.nLost++; L.lost += Math.min(0, a || 0); }
+      else L.flat++;
+      // estimate vs result, only for growth estimates made when the task was created
+      const e = c.estimate;
+      if (e && e.hi > 0 && e.kind === 'growth' && a != null) { L.est.n++; L.est.lo += e.lo || 0; L.est.hi += e.hi; L.est.measured += a; }
+    });
+    ['gained', 'maybe', 'lost'].forEach(k => { L[k] = Math.round(L[k]); });
+    L.est.lo = Math.round(L.est.lo); L.est.hi = Math.round(L.est.hi); L.est.measured = Math.round(L.est.measured);
+    return L;
+  }
   // Chart markers for the trend: implemented changes by date.
   const markers = (list, fixes) => list.filter(t => t.implDate).map(t => ({ d: t.implDate, label: t.title })).concat((fixes || []).map(f => ({ d: f.date, label: f.note || 'Tracked fix' })));
 
-  window.CW_TASKS = { STATUS, ORDER, WINDOWS, fromOpportunity, manual, normalise, load, validate, setStatus, overdue, measurable, confounders, outcomes, summary, markers, baselineOf, pathOf, changeLog, measuredMonthly };
+  window.CW_TASKS = { STATUS, ORDER, WINDOWS, fromOpportunity, manual, normalise, load, validate, setStatus, overdue, measurable, confounders, outcomes, summary, markers, baselineOf, pathOf, changeLog, measuredMonthly, attributable, settled, ledger };
 })();

@@ -30,10 +30,29 @@
   function upsert(site, t) { const { list } = tasks(site); const i = list.findIndex(x => x.id === t.id); if (i >= 0) list[i] = t; else list.unshift(t); return saveTasks(site, list); }
   const fixesOf = site => { const l = store.get('fixes:' + site); return Array.isArray(l) ? l.filter(f => f && FX.isDate(f.date)) : []; };
   // The sample site gets three example tasks once, so the loop can be tried without real data.
+  // Plus three finished sample changes whose results are in, so the results ledger can be tried too. Their dates
+  // follow the sample data (which always ends a few days ago), so they are refreshed on every load.
+  function seedSamples(D) {
+    const SC = window.CW_DEMO && window.CW_DEMO.sampleChanges; if (!SC) return;
+    const { list } = tasks(D.site); let changed = false;
+    if (store.get('samples-removed:' + D.site)) return;
+    SC(D).forEach((c, i) => {
+      const id = 'sample-' + (i + 1), cur = list.find(t => t.id === id);
+      if (cur) { if (cur.implDate !== c.date) { cur.implDate = c.date; cur.outcome = null; changed = true; } return; }
+      const at = new Date().toISOString();
+      const t = TK.normalise({ id, oppId: null, title: c.path + ': ' + c.title, category: c.category, type: 'sample', subject: { kind: 'page', label: c.path, url: c.url }, url: c.url,
+        action: c.title, owner: ['Asha', 'Rohan', 'Asha'][i], due: '', status: 'implemented', change: c.title + ' (sample change)', implDate: c.date, window: 28,
+        estimate: { lo: c.est[0], hi: c.est[1], kind: 'growth' }, score: null, priority: null, baseline: null, created: at, updated: at, history: [{ at, status: 'implemented' }], outcome: null });
+      if (t) { list.push(t); changed = true; }
+    });
+    if (changed) saveTasks(D.site, list);
+  }
   function seedDemo(D, P) {
-    if (D.source !== 'demo' || store.get('tasks-seeded:' + D.site)) return;
+    if (D.source !== 'demo') return;
+    seedSamples(D);
+    if (store.get('tasks-seeded:' + D.site)) return;
     store.set('tasks-seeded:' + D.site, true);
-    if (tasks(D.site).list.length || !P) return;
+    if (tasks(D.site).list.some(t => !t.id.startsWith('sample-')) || !P) return;
     const pick = P.items.filter(g => g.page).slice(0, 3);
     const d = n => { const x = new Date(D.end + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - n); return x.toISOString().slice(0, 10); };
     const list = pick.map((g, i) => {
@@ -43,7 +62,7 @@
       if (i === 2) t = { ...t, due: d(3) };
       return t;
     });
-    saveTasks(D.site, list);
+    saveTasks(D.site, list.concat(tasks(D.site).list));
   }
 
   // ── priorities, cached per analysis ──
@@ -102,7 +121,36 @@
   const statusTag = s => s === 'open' ? '<span class="flat">Open</span>' : `<span class="tag st-${s}">${esc(TK.STATUS[s])}</span>`;
   const INTENT = { info: 'Learning', comm: 'Comparing', trans: 'Ready to act', nav: 'Brand / navigational', other: 'Unclear' };
   const SEV = { critical: ['risk', 'Critical'], high: ['risk', 'High'], medium: ['watch', 'Medium'], watch: ['', 'Watch'] };
-  window.CW_GROWTH = { prio, tasks, saveTasks, upsert, settings, saveSettings, measureTask, resultTag, priTag, impactTxt, fixesOf, SEV, seedDemo };
+
+  // ── results ledger: every change that went live, measured (cached) and summed by tasks.js ──
+  const LEDGER_MAX = 30;
+  function results(D) {
+    const S = window.CW_SOURCE, FV = window.CW_FIXVIEW, list = tasks(D.site).list;
+    const log = TK.changeLog(list, fixesOf(D.site)).slice(0, LEDGER_MAX);
+    return Promise.all(log.map(c => {
+      let p;
+      if (c.from === 'task') { const t = list.find(x => x.id === c.taskId); p = t ? measureTask(t) : Promise.resolve(null); }
+      else p = !S || !FV ? Promise.resolve(null) : c.scope === 'page' && !S.canPage ? Promise.resolve({ status: 'no-page' }) : FV.measureFix({ id: c.key, scope: c.scope, url: c.url, date: c.date }, S);
+      return Promise.resolve(p).catch(() => ({ status: 'error' })).then(r => ({ c, r }));
+    })).then(items => ({ L: TK.ledger(items), capped: TK.changeLog(list, fixesOf(D.site)).length > LEDGER_MAX }));
+  }
+  const signed = v => `${v >= 0 ? '+' : '−'}${fmtN(Math.abs(v))}`;
+  // The summary shown on the Command Center, the Action board and the report: one headline, then every other
+  // kind of result counted on its own so nothing is hidden or folded into the headline.
+  function ledgerSummary(L, opts) {
+    opts = opts || {};
+    if (!L.shipped) return `<p class="empty">No changes have gone live yet. Mark a task <b>Implemented</b> with the date it went live, and its result appears here once ${FX.MAX_WINDOW} days of data have come in after it.</p>`;
+    const head = L.nGained
+      ? `<p class="lg-head"><b class="gainv">${signed(L.gained)}</b> clicks a month from <b>${L.nGained}</b> change${L.nGained === 1 ? '' : 's'} that clearly worked</p><p class="lg-sub">The pages' own gain, after removing the site's movement over the same days. Measured with equal windows before and after each change.</p>`
+      : L.settled ? `<p class="lg-head">No change has a clear gain yet</p><p class="lg-sub">${L.settled} change${L.settled === 1 ? ' has' : 's have'} a full result; none moved clearly beyond the site's own movement.</p>`
+        : `<p class="lg-head">No full results yet</p><p class="lg-sub">A result needs ${FX.MAX_WINDOW} days of data after the change went live.</p>`;
+    const chip = (n, label, tone, extra) => n ? `<li class="${tone || ''}"><b>${n}</b> ${label}${extra ? ` <small>${extra}</small>` : ''}</li>` : '';
+    const chips = `<ul class="lg-chips">${chip(L.shipped, `change${L.shipped === 1 ? '' : 's'} went live`)}${chip(L.nMaybe, 'probably helped', 'gain', `${signed(L.maybe)} a month, not counted above`)}${chip(L.flat, 'no clear change')}${chip(L.nLost, 'declined', 'risk', `${signed(L.lost)} a month`)}${chip(L.early, 'early read', 'watch', 'window not complete')}${chip(L.waiting, 'waiting for data')}</ul>`;
+    const est = L.est.n ? `<p class="lg-est">For ${L.est.n} of these changes Clickwise estimated <b>${range(L.est.lo, L.est.hi)}</b> clicks a month; the measured result was <b>${signed(L.est.measured)}</b>.</p>` : '';
+    return (opts.compact ? head.replace(/<p class="lg-sub">[\s\S]*?<\/p>/, '') : head) + chips + (opts.compact ? '' : est);
+  }
+  const verdictTag = row => row.r && row.r.status === 'measured' && !row.settled ? `${resultTag(row.r)} <small class="flat">early read</small>` : resultTag(row.r) || '<span class="flat">—</span>';
+  window.CW_GROWTH = { prio, tasks, saveTasks, upsert, settings, saveSettings, measureTask, resultTag, priTag, impactTxt, fixesOf, SEV, seedDemo, results, ledgerSummary, verdictTag, signed };
 
   // ════════ Priorities ════════
   V.priorities = (A, D) => {
@@ -257,7 +305,7 @@
     const fixOnly = TK.changeLog(list, fixesOf(D.site)).filter(c => c.from === 'fix');
     const lanes = ['planned', 'progress', 'implemented', 'validated'];
     const STAGE = { planned: 0, progress: 34, implemented: 67, validated: 100, dropped: 0 };
-    const card = t => `<li class="tk-card${TK.overdue(t) ? ' late' : ''}" data-tk="${esc(t.id)}"><div class="tk-tags"><span class="tag cat">${esc(t.category)}</span>${t.type === 'manual' ? '<span class="tag">Manual</span>' : ''}</div><a href="#tasks?id=${encodeURIComponent(t.id)}"><b>${esc(t.title)}</b></a>
+    const card = t => `<li class="tk-card${TK.overdue(t) ? ' late' : ''}" data-tk="${esc(t.id)}"><div class="tk-tags"><span class="tag cat">${esc(t.category)}</span>${t.type === 'manual' ? '<span class="tag">Manual</span>' : t.type === 'sample' ? '<span class="tag">Sample</span>' : ''}</div><a href="#tasks?id=${encodeURIComponent(t.id)}"><b>${esc(t.title)}</b></a>
         ${t.status !== 'dropped' ? `<div class="tk-prog"><div><span>Progress</span><span>${STAGE[t.status]}%</span></div><i><span style="width:${STAGE[t.status]}%"></span></i></div>` : ''}
         <div class="tk-meta">${t.priority ? `<span class="tag ${PRI_TONE[t.priority]}">${t.priority}</span>` : ''}${t.owner ? `<span>${esc(t.owner)}</span>` : '<span class="flat">No owner</span>'}${t.due ? `<span class="${TK.overdue(t) ? 'lossv' : ''}">due ${esc(t.due)}</span>` : ''}${t.implDate ? `<span>live ${esc(t.implDate)}</span>` : ''}</div>
         ${t.estimate && t.estimate.hi ? `<small class="flat">Estimate ${esc(range(t.estimate.lo, t.estimate.hi))} clicks / month</small>` : ''}
@@ -265,8 +313,10 @@
         <label class="tk-move"><span class="sr">Status</span><select data-tkst="${esc(t.id)}">${TK.ORDER.map(k => `<option value="${k}"${k === t.status ? ' selected' : ''}>${esc(TK.STATUS[k])}</option>`).join('')}</select></label></li>`;
     const html = head('Action board', 'Turn opportunities into tasks, record what changed and when, and see whether it worked. Results compare equal windows before and after the change, against the rest of the site.') +
       `<div class="strip">${stat(sum.open, 'open tasks', '')}${stat(sum.overdue, 'overdue', sum.overdue ? 'risk' : '')}${stat(sum.implemented, 'implemented, being measured', 'watch')}${stat(sum.validated, 'validated', 'gain')}</div>
+      <section class="panel tk-results" id="tk-results"><div class="panel-h"><h2>Results so far</h2><p>Everything that went live, from tasks and the Fix tracker, and what it did. Only settled, clear gains count toward the headline.</p></div>
+        <div class="panel-b" id="tk-results-b"><p class="flat">Measuring…</p></div></section>
       ${damaged ? `<div class="note warn">${damaged} saved task${damaged === 1 ? ' was' : 's were'} damaged and left out.</div>` : ''}
-      ${S.kind === 'demo' ? '<p class="flat">Sample site: the first three tasks are examples you can edit or delete.</p>' : S.kind === 'file' ? '<p class="flat">Uploaded export: results can be measured for whole-site changes only. Connect Search Console to measure single pages.</p>' : ''}
+      ${S.kind === 'demo' ? '<p class="flat">Sample site: every task here is an example you can edit or delete. The three finished sample changes have results in, so you can see the Results ledger work.</p>' : S.kind === 'file' ? '<p class="flat">Uploaded export: results can be measured for whole-site changes only. Connect Search Console to measure single pages.</p>' : ''}
       <div class="tk-board">${lanes.map(l => { const ts = list.filter(t => t.status === l); return `<section class="tk-lane"><h2>${esc(TK.STATUS[l])} <span class="pill indigo">${ts.length}</span></h2><ul>${ts.map(card).join('') || '<li class="flat tk-empty">None</li>'}</ul></section>`; }).join('')}</div>
       ${fixOnly.length ? `<section class="panel"><div class="panel-h"><h2>Also logged in the Fix tracker (${fixOnly.length})</h2><a href="#fixes">Fix tracker</a><p>Changes logged there without a task. Implemented tasks show in the Fix tracker automatically, so each change is measured once.</p></div><ul class="tk-fx">${fixOnly.slice(0, 8).map(c => `<li><a href="#fixes?fix=${encodeURIComponent(c.fixId)}">${c.scope === 'site' ? 'Whole site' : esc(c.path)}</a><span class="flat">live ${esc(c.date)}${c.note ? ' · ' + esc(c.note) : ''}</span></li>`).join('')}</ul></section>` : ''}
       ${sum.byStatus.dropped ? `<p class="flat">${sum.byStatus.dropped} dropped task${sum.byStatus.dropped === 1 ? '' : 's'}: <a href="#tasks?status=dropped">show</a></p>` : ''}
@@ -281,6 +331,27 @@
         </form></section>
       <p class="flat tk-io">Tasks are kept in this browser only. <button type="button" class="btn-link" id="tk-export">Download a backup</button> · <label class="btn-link" for="tk-import">restore from a backup</label><input type="file" id="tk-import" accept=".json" hidden></p>`;
     const mount = () => {
+      const rb = document.getElementById('tk-results-b');
+      if (rb) results(D).then(({ L, capped }) => {
+        if (!rb.isConnected) return;
+        const fmtD = d => esc(d);
+        const rows = L.rows;
+        rb.innerHTML = ledgerSummary(L) + (rows.length ? `<div class="tw"><table class="lg-t"><thead><tr><th scope="col">Went live</th><th scope="col">Change</th><th scope="col">Page</th><th scope="col">Result</th><th scope="col" class="r">Clicks / month, page's own</th><th scope="col" class="r">Estimate</th></tr></thead><tbody>
+          ${rows.map(x => `<tr><td class="nw">${fmtD(x.c.date)}</td><td><a href="${x.c.from === 'task' ? `#tasks?id=${encodeURIComponent(x.c.taskId)}` : `#fixes?fix=${encodeURIComponent(x.c.fixId)}`}">${esc(x.c.note || x.c.title)}</a>${x.c.owner ? `<small class="flat"> · ${esc(x.c.owner)}</small>` : ''}</td>
+            <td class="u">${x.c.scope === 'site' ? '<span class="flat">Whole site</span>' : urlCell(x.c.url, x.c.path)}</td><td>${verdictTag(x)}</td>
+            <td class="r">${x.monthly == null ? '<span class="flat">—</span>' : `<span class="${x.monthly >= 0 ? 'gainv' : 'lossv'}">${signed(x.monthly)}</span>`}</td>
+            <td class="r">${x.c.estimate && x.c.estimate.hi ? esc(range(x.c.estimate.lo, x.c.estimate.hi)) : '<span class="flat">—</span>'}</td></tr>`).join('')}</tbody></table></div>
+          <p class="flat">${capped ? `The ${LEDGER_MAX} most recent changes. ` : ''}Before and after cannot rule out other causes, such as seasons, Google updates or other edits. <button type="button" class="btn-link" id="tk-results-csv">Export CSV</button></p>` : '');
+        const csvB = document.getElementById('tk-results-csv');
+        if (csvB) csvB.addEventListener('click', () => {
+          const cell = v => { const s = v == null ? '' : String(v), f = /^[=+\-@]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s); return /[",\n]/.test(s) || f ? '"' + (f ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
+          const out = [['Went live', 'Change', 'Page', 'Result', 'Settled', 'Clicks a month (page own)', 'Change in clicks %', 'Site change %', 'Estimate low', 'Estimate high']].concat(rows.map(x => [x.c.date, x.c.note || x.c.title, x.c.scope === 'site' ? 'Whole site' : x.c.url,
+            x.r && x.r.status === 'measured' ? FX.label(x.r) : (FX.STATUS[x.r && x.r.status] || ''), x.settled ? 'yes' : 'no', x.monthly, x.r && x.r.change && x.r.change.clicks != null ? x.r.change.clicks.toFixed(1) : '', x.r && x.r.site && x.r.site.change != null ? x.r.site.change.toFixed(1) : '',
+            x.c.estimate ? Math.round(x.c.estimate.lo) : '', x.c.estimate ? Math.round(x.c.estimate.hi) : '']));
+          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + out.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' }));
+          a.download = 'clickwise-results-' + hostOf(D.site) + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        });
+      });
       list.filter(TK.measurable).forEach(t => measureTask(t).then(r => { const el = document.querySelector(`[data-tkres="${CSS.escape(t.id)}"]`); if (el) el.innerHTML = resultTag(r) + (r && r.relative != null ? ` <small class="flat">${r.relative > 0 ? '+' : ''}${r.relative.toFixed(0)}% vs site</small>` : r && r.change && r.change.clicks != null ? ` <small class="flat">${r.change.clicks > 0 ? '+' : ''}${r.change.clicks.toFixed(0)}% clicks</small>` : ''); }));
       document.querySelectorAll('[data-tkst]').forEach(sel => sel.addEventListener('change', () => {
         const t = list.find(x => x.id === sel.dataset.tkst); if (!t) return;
@@ -356,7 +427,7 @@
         if (!upsert(D.site, next)) { err.textContent = 'Could not save: browser storage is full or blocked.'; return; }
         location.hash = '#tasks?id=' + encodeURIComponent(t.id); rerender();
       });
-      document.getElementById('tk-del').addEventListener('click', () => { if (!confirm('Delete this task?')) return; saveTasks(D.site, tasks(D.site).list.filter(x => x.id !== t.id)); location.hash = '#tasks'; });
+      document.getElementById('tk-del').addEventListener('click', () => { if (!confirm('Delete this task?')) return; if (t.id.startsWith('sample-')) store.set('samples-removed:' + D.site, true); saveTasks(D.site, tasks(D.site).list.filter(x => x.id !== t.id)); location.hash = '#tasks'; });
       if (!TK.measurable(t)) return;
       measureTask(t).then(r => {
         const el = document.getElementById('tk-result'); if (!el || !r) return;

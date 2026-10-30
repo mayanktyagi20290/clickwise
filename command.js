@@ -265,6 +265,11 @@
           <td class="r cc-ba"><span class="flat">Measuring…</span></td><td class="r cc-pc"></td></tr>`).join('')}</tbody></table></div>`
         : `<p class="empty">No implemented changes recorded yet. Create a task from an opportunity, then mark it implemented with the date it went live, or log one in the <a href="#fixes">Fix tracker</a>.</p>`}</section>`;
   }
+  // ── Results so far: what the shipped work achieved (filled in mount, after measuring) ──
+  function results(A, D) {
+    return `<section class="panel cc-results"><div class="panel-h"><h2>Results so far</h2><a href="#tasks">Full results →</a><p>What the changes you shipped did for clicks. Only settled, clear gains count toward the headline.</p></div>
+      <div class="panel-b" id="cc-results-b"><p class="flat">Measuring…</p></div></section>`;
+  }
   // ── Top winning pages: biggest gains against the previous period ──
   function winners(A, D) {
     const rising = A.decay && A.decay.rising ? A.decay.rising.slice(0, 5) : null;
@@ -340,6 +345,8 @@
     document.querySelectorAll('[data-cc-connect]').forEach(b => b.addEventListener('click', () => { const s = document.getElementById('top-site-btn'); if (s) s.click(); }));
     const gx = document.getElementById('cc-guide-x');
     if (gx) gx.addEventListener('click', () => { store.set('cc-guide-off:' + D.site, true); const g = gx.closest('.cc-guide'); if (g) g.remove(); });
+    const rb = document.getElementById('cc-results-b');
+    if (rb && G().results) G().results(D).then(({ L }) => { if (rb.isConnected) rb.innerHTML = G().ledgerSummary(L); }).catch(() => { if (rb.isConnected) rb.innerHTML = '<p class="flat">Could not measure the changes right now.</p>'; });
     // Changes and impact: each change measured with the fix tracker method, one at a time
     const rows = [...document.querySelectorAll('[data-ccrow]')];
     if (rows.length) {
@@ -428,5 +435,5 @@
   }
   const hasMarkers = D => !!(G() && TK.markers(G().tasks(D.site).list, G().fixesOf(D.site)).some(m => m.d >= D.start && m.d <= D.end));
 
-  window.CW_COMMAND = { html, target, opps, tasksPanel, insights, changes, winners, body, mount, markerPlugin, hasMarkers, vsEstimate, DEF, headline };
+  window.CW_COMMAND = { html, target, opps, tasksPanel, insights, changes, winners, results, body, mount, markerPlugin, hasMarkers, vsEstimate, DEF, headline };
 })();

@@ -325,6 +325,7 @@
       ${CC && CC.target ? `<div class="cc-grid wide stretch">${trend}${CC.target(A, D)}</div>` : trend}
       ${banner}
       ${CC && CC.opps ? `<div class="cc-grid wide">${CC.opps(A, D)}<div class="cc-col">${CC.tasksPanel(A, D)}${CC.insights(A, D)}</div></div>
+      ${CC.results ? CC.results(A, D) : ''}
       <div class="cc-grid wide">${CC.changes(A, D)}${CC.winners(A, D)}</div>
       ${CC.body(A, D)}` : `<section class="panel"><div class="panel-h"><h2>Do these first</h2><a href="#plan">Full action plan</a></div>${ledger(A.plan, 3)}</section>`}
 
