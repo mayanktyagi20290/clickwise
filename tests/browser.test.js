@@ -1007,7 +1007,7 @@ function writeComparisonExports(dir) {
     assert.ok(!(await p5.$('img.rp-clogo')), 'SVG logo refused');
     // tracked fix result and the print button
     await p5.waitForSelector('#rp-fixes .rp-fx', { timeout: 15000 });
-    assert.ok(/kedarkantha-trek/.test(await t5('#rp-fixes')) && /clicks a day|Too little|Waiting/.test(await t5('#rp-fixes')), 'fix result shown: ' + await t5('#rp-fixes'));
+    assert.ok(/kedarkantha-trek/.test(await t5('#rp-fixes')) && /clicks a month, the page's own|Too little|Waiting/.test(await t5('#rp-fixes')), 'fix result shown: ' + await t5('#rp-fixes'));
     await p5.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
     await p5.click('#rep-print');
     assert.equal(await p5.evaluate(() => window.__printed), 1, 'print button opens the print dialog');

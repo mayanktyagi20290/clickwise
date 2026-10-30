@@ -509,7 +509,7 @@
             <h3>Where the growth is</h3><p>${r.potential.hi >= 1 ? `Searches the site already ranks for could bring roughly <b>${fmtN(r.potential.lo)}–${fmtN(r.potential.hi)} more clicks a month</b>.` : 'No clear click opportunities in searches the site already ranks for.'}${r.recovery && r.recovery.n ? ` Pages that lost clicks could win back about <b>${fmtN(r.recovery.lo)}–${fmtN(r.recovery.hi)} a month</b>.` : ''}</p>
             ${b.notes ? `<h3>Notes from ${esc(b.agency || 'us')}</h3><p class="rp-notes">${esc(b.notes)}</p>` : ''}</div>
           <div><h3>Top 5 things to do next</h3>${acts.length ? `<ol class="rp-acts">${acts.map(it => `<li><b>${esc(it.subject.label)}</b> <span class="flat">${esc(it.typeLabel)} · ${esc(it.effort.level.toLowerCase())} effort${it.impact.hi >= 1 ? ` · ${range(it.impact.lo, it.impact.hi)} clicks/month` : ''}</span><br>${esc(it.action)}</li>`).join('')}</ol>` : '<p class="flat">No actions with enough confidence in this data.</p>'}
-            <h3>Results of recent changes</h3><div id="rp-fixes"><p class="flat">Checking tracked changes…</p></div></div>
+            <h3>Results of shipped work</h3><div id="rp-fixes"><p class="flat">Checking tracked changes…</p></div></div>
         </div>
         <footer class="rp-foot">${by ? `<span>${by}</span>` : ''}<span>${esc(today)}</span><span>Click figures for the future are estimates for prioritising, not guarantees.</span>${b.showClickwise ? '<span>Made with Clickwise</span>' : ''}</footer>
       </section>`;
@@ -545,15 +545,14 @@
       });
     }
     const p = document.getElementById('rep-print'); if (p) p.addEventListener('click', () => window.print());
-    // tracked fixes and their measured results (the same numbers as the Fix tracker)
-    const box = document.getElementById('rp-fixes'), S = window.CW_SOURCE, FV = window.CW_FIXVIEW;
+    // results of shipped work: tasks and tracked fixes, the same ledger as the Action board and Command Center
+    const box = document.getElementById('rp-fixes'), G = window.CW_GROWTH;
     if (!box) return;
-    if (!S || !FV) { box.innerHTML = '<p class="flat">No tracked changes.</p>'; return; }
-    const fixes = FV.load(D.site).list.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
-    if (!fixes.length) { box.innerHTML = '<p class="flat">No changes tracked yet. Log them in the Fix tracker to show their results here.</p>'; return; }
-    Promise.all(fixes.map(f => FV.measureFix(f, S).catch(e => ({ fix: f, error: e.message })))).then(rs => {
+    if (!G || !G.results) { box.innerHTML = '<p class="flat">No tracked changes.</p>'; return; }
+    G.results(D).then(({ L }) => {
       if (!box.isConnected) return;
-      box.innerHTML = `<ul class="rp-fx">${rs.map(r => `<li><b>${esc(r.fix.scope === 'site' ? 'Whole site' : r.fix.path)}</b> <span class="flat">changed ${esc(r.fix.date)}${r.fix.note ? ': ' + esc(r.fix.note) : ''}</span><br>${r.error ? `<span class="flat">${esc(r.error)}</span>` : `${esc(window.CW_FIXES.label(r))}${r.before ? ` · ${r.before.perDay.toFixed(1)} → ${r.after.perDay.toFixed(1)} clicks a day${r.relative != null ? ` (${r.relative > 0 ? '+' : ''}${r.relative.toFixed(0)}% against the site)` : ''}` : ''}`}</li>`).join('')}</ul>`;
-    });
+      const shown = L.rows.filter(x => x.r && x.r.status === 'measured' && x.settled).slice(0, 2);
+      box.innerHTML = G.ledgerSummary(L, { compact: true }) + (shown.length ? `<ul class="rp-fx">${shown.map(x => `<li><b>${esc(x.c.scope === 'site' ? 'Whole site' : x.c.path)}</b> <span class="flat">changed ${esc(x.c.date)}${x.c.note ? ': ' + esc(x.c.note) : ''}</span><br>${esc(window.CW_FIXES.label(x.r))}${x.settled ? '' : ' (early read)'}${x.monthly != null ? ` · ${G.signed(x.monthly)} clicks a month, the page's own` : ''}</li>`).join('')}</ul>` : '');
+    }).catch(() => { if (box.isConnected) box.innerHTML = '<p class="flat">Could not measure the changes right now.</p>'; });
   }
 })();
