@@ -750,7 +750,7 @@
     const pages = A.P.filter(inF);
     const qp = ((A.data && A.data.QP) || []).filter(r => inF({ path: r.p.replace(/^https?:\/\/[^/]+/, '') }) && !A.isBrand(r.q));
     const picker = `<div style="margin:0 0 12px"><label>Folder: <select id="folder-pick">${folders.map(x => `<option value="${esc(x[0])}" ${x[0] === folder ? 'selected' : ''}>${esc(x[0])} (${fmtN(x[1])} impr)</option>`).join('')}</select></label></div>`;
-    if (!pages.length) return { html: head('Folder intelligence', 'What to push first, folder by folder.') + picker + '<section class="panel"><div class="panel-b">No pages in this folder for this date range.</div></section>', mount() { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; } };
+    if (!pages.length) return { html: head('AI Powered Intelligence', 'What to push first, folder by folder.') + picker + '<section class="panel"><div class="panel-b">No pages in this folder for this date range.</div></section>', mount() { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; } };
     const exp = r => { try { return A.curve.at(r.pos); } catch (e) { return 0; } };
     const gainOf = (r, tgt) => Math.max(0, Math.round(r.impr * ((A.curve.at(tgt) || 0) - r.ctr) / 100 / Math.max(1, A.days) * 30));
     const withG = (rows, tgt) => rows.map(r => ({ ...r, gain: gainOf(r, tgt), gainLo: gainOf(r, tgt), gainHi: gainOf(r, tgt) })).sort((a, b) => b.gain - a.gain || b.impr - a.impr);
@@ -760,17 +760,58 @@
     const qNear = qp.filter(r => r.pos > 3 && r.pos <= 20 && r.impr >= 50).map(r => ({ ...r, path: r.p.replace(/^https?:\/\/[^/]+/, '') })).sort((a, b) => b.impr - a.impr);
     const ghost = pages.filter(r => r.impr >= 300 && r.clicks <= 2).sort((a, b) => b.impr - a.impr);
     const tc = pages.reduce((a, r) => a + r.clicks, 0), ti = pages.reduce((a, r) => a + r.impr, 0);
-    const sec = (id, ic, tone, title, desc, rows, cols, sort) => `<details class="acc" ${id === 'near' ? 'open' : ''}>${accHead(ic, tone, title, desc, rows.length.toLocaleString() + ' items')}${rows.length ? table('t-bl-' + id, cols, rows, { sort, file: 'blog-' + id, searchKeys: ['path', 'q'], pageSize: 25, placeholder: 'Filter' }) : '<div class="panel-b">Nothing here in this range.</div>'}</details>`;
-    const html = head('Folder intelligence', 'Non-branded intelligence for one folder: what to push first to get more traffic.') + picker +
-      `<div class="strip">${stat(pages.length.toLocaleString(), 'Pages with impressions')}${stat(fmtN(tc), 'Folder clicks')}${stat(fmtN(ti), 'Folder impressions')}${stat(near.length + far.length, 'Pages within reach of the top')}</div>
+    const topQ = new Map(); qp.slice().sort((a, b) => b.impr - a.impr).forEach(r => { const a = topQ.get(r.p) || []; if (a.length < 3) a.push(r.q); topQ.set(r.p, a); });
+    const lostMap = new Map(((A.decay && A.decay.pages) || []).map(x => [x.p, x]));
+    const plan = [];
+    pages.forEach(r => {
+      const cands = [], lo = lostMap.get(r.p);
+      if (r.pos > 3 && r.pos <= 10 && r.impr >= 100) cands.push({ act: 'Push to top 3', why: 'Page one, position ' + r.pos.toFixed(1) + '. Add depth, FAQ/schema, internal links from strong pages.', gain: gainOf(r, 3) });
+      if (r.pos > 10 && r.pos <= 20 && r.impr >= 100) cands.push({ act: 'Move to page 1', why: 'Position ' + r.pos.toFixed(1) + '. Expand the content, cover the target queries, add links.', gain: gainOf(r, 8) });
+      if (r.pos <= 10 && r.impr >= 100 && exp(r) > 0 && r.ctr < exp(r) * 0.7) cands.push({ act: 'Rewrite title + meta', why: 'CTR ' + r.ctr.toFixed(1) + '% vs ~' + exp(r).toFixed(1) + '% expected at this position.', gain: Math.max(0, Math.round(r.impr * (exp(r) - r.ctr) / 100 / Math.max(1, A.days) * 30)) });
+      if (lo && lo.lost >= 5) cands.push({ act: 'Refresh: losing traffic', why: 'Lost ~' + Math.round(lo.lost) + ' clicks vs the previous period. Update facts and dates, recheck ranking and intent.', gain: Math.round(lo.lost / Math.max(1, A.days) * 30) });
+      if (r.impr >= 300 && r.clicks <= 2) cands.push({ act: 'Fix intent / title', why: r.impr.toLocaleString() + ' impressions, ' + r.clicks + ' clicks. Title or intent does not match the searches.', gain: Math.round(r.impr * 0.01 / Math.max(1, A.days) * 30) });
+      if (!cands.length) return;
+      cands.sort((a, b) => b.gain - a.gain);
+      plan.push({ ...r, act: cands[0].act, why: cands[0].why, gain: cands[0].gain, gainLo: cands[0].gain, gainHi: cands[0].gain, tq: (topQ.get(r.p) || []).join(' | ') });
+    });
+    plan.sort((a, b) => b.gain - a.gain);
+    const cut = plan.length ? plan[Math.floor(plan.length / 4)].gain : 0;
+    plan.forEach(r => r.prio = r.gain >= cut && r.gain > 0 ? 'High' : 'Medium');
+    const CP = [C.page, { k: 'prio', l: 'Priority', f: r => `<b style="color:${r.prio === 'High' ? '#d93025' : '#b06000'}">${r.prio}</b>` }, { k: 'act', l: 'Do this', f: r => `<b>${esc(r.act)}</b>`, csv: r => r.act }, { k: 'why', l: 'Why', f: r => esc(r.why), csv: r => r.why }, { k: 'tq', l: 'Target queries', f: r => esc(r.tq), csv: r => r.tq }, C.impr, C.pos, C.gain];
+    const rise = ((A.decay && A.decay.rising) || []).filter(x => inF(x)).map(x => ({ p: x.p, path: x.path, clicks: x.cur.clicks, impr: x.cur.impr, ctr: x.cur.ctr, pos: x.cur.pos, won: x.won }));
+    const lose = ((A.decay && A.decay.pages) || []).filter(x => inF(x)).map(x => ({ p: x.p, path: x.path, clicks: x.cur.clicks, impr: x.cur.impr, ctr: x.cur.ctr, pos: x.cur.pos, lost: Math.round(x.lost) }));
+    const can = (A.cannibal || []).filter(c => c.pages.filter(inF).length >= 2).map(c => ({ q: c.q, path: c.pages.map(p => p.path).join('  vs  '), clicks: Math.round(c.pages.reduce((a, p) => a + (p.clicks || 0), 0)), impr: c.impr, ctr: c.ctr, pos: c.pos }));
+    const siteCtr = A.site && A.site.ctr, sh = A.site && A.site.clicks ? tc / A.site.clicks * 100 : 0;
+    const avgPos = ti ? pages.reduce((a, r) => a + r.pos * r.impr, 0) / ti : 0;
+    const sec = (id, ic, tone, title, desc, rows, cols, sort) => `<details class="acc" ${id === 'plan' ? 'open' : ''}>${accHead(ic, tone, title, desc, rows.length.toLocaleString() + ' items')}${rows.length ? table('t-bl-' + id, cols, rows, { sort, file: 'blog-' + id, searchKeys: ['path', 'q'], pageSize: 25, placeholder: 'Filter' }) : '<div class="panel-b">Nothing here in this range.</div>'}</details>`;
+    const qa = new Map(); qp.forEach(r => { const o = qa.get(r.q) || { q: r.q, clicks: 0, impr: 0, pw: 0, p: r.p, path: r.p.replace(/^https?:\/\/[^/]+/, ''), top: 0 }; o.clicks += r.clicks; o.impr += r.impr; o.pw += r.pos * r.impr; if (r.impr > o.top) { o.top = r.impr; o.p = r.p; o.path = r.p.replace(/^https?:\/\/[^/]+/, ''); } qa.set(r.q, o); });
+    const QA = [...qa.values()].map(o => ({ ...o, ctr: o.impr ? o.clicks / o.impr * 100 : 0, pos: o.impr ? o.pw / o.impr : 0 })).sort((a, b) => b.impr - a.impr);
+    const PATS = [['Year (2024, 2025, 2026...)', '\\b20\\d\\d\\b'], ['Questions (how, what, why...)', '^(how|what|why|when|where|which|who|can|does|is|are|should)\\b'], ['Best / top', '\\b(best|top)\\b'], ['Compare (vs, difference)', '\\b(vs|versus|compare|comparison|difference)\\b'], ['Freshers / students', '\\b(fresher|freshers|student|students|college)\\b'], ['Salary / price / fees', '\\b(salary|salaries|price|cost|fees?)\\b'], ['Meaning / definition', '\\b(meaning|definition|full form)\\b'], ['Template / format / sample', '\\b(template|format|sample|example|examples)\\b'], ['Near me / city', '\\b(near me|delhi|mumbai|bangalore|bengaluru|hyderabad|pune|chennai|kolkata|noida|gurgaon|gurugram)\\b']];
+    const patRows = PATS.map(([name, rx]) => { const re = new RegExp(rx, 'i'), m = QA.filter(r => re.test(r.q)), c = m.reduce((a, r) => a + r.clicks, 0), im = m.reduce((a, r) => a + r.impr, 0); return { name, rx, n: m.length, clicks: c, impr: im, ctr: im ? c / im * 100 : 0, pos: im ? m.reduce((a, r) => a + r.pos * r.impr, 0) / im : 0 }; }).filter(r => r.n);
+    const patSec = `<details class="acc">${accHead('target', 'teal', 'Query patterns (regex)', 'Year, questions, best/top, vs, salary and more. Click a pattern or type your own regex to list the queries and their pages.', patRows.length + ' patterns')}
+      <div class="panel-b">${table('t-bl-pat', [{ k: 'name', l: 'Pattern', f: r => `<button type="button" class="btn-quiet" data-rx="${esc(r.rx)}">${esc(r.name)}</button>`, csv: r => r.name }, { k: 'n', l: 'Queries', r: 1, f: r => fmtN(r.n) }, C.clicks, C.impr, C.ctr, C.pos], patRows, { sort: 'impr', file: 'blog-patterns', search: false, exportable: true })}
+      <div style="margin:12px 0"><input id="rx-in" type="text" placeholder="Regex on queries, e.g. 2026|salary|^how" style="width:60%;padding:6px"> <span class="meta" id="rx-msg"></span></div>
+      ${table('t-bl-rx', [C.q, C.page, C.clicks, C.impr, C.ctr, C.pos], QA, { sort: 'impr', file: 'blog-queries', searchKeys: ['q', 'path'], pageSize: 25, placeholder: 'Filter queries' })}</div></details>`;
+    const html = head('AI Powered Intelligence', 'Non-branded intelligence for one folder: what to push first to get more traffic.') + picker +
+      `<div class="strip">${stat(pages.length.toLocaleString(), 'Pages with impressions')}${stat(fmtN(tc), 'Folder clicks')}${stat(fmtN(ti), 'Folder impressions')}${stat(ti ? (tc / ti * 100).toFixed(1) + '%' : '-', 'Folder CTR' + (siteCtr ? ' (site ' + Number(siteCtr).toFixed(1) + '%)' : ''))}${stat(avgPos ? avgPos.toFixed(1) : '-', 'Avg position')}${stat(plan.reduce((a, r) => a + r.gain, 0).toLocaleString(), 'Est. clicks/month if all done')}</div>
       <div class="stack">
+      ${sec('plan', 'target', 'green', 'Action plan: do these in order', 'One row per page with the single best action, why, and which queries to target. Sorted by estimated extra clicks per month.', plan, CP, 'gain')}
+      ${sec('lose', 'target', 'orange', 'Losing traffic (vs previous period)', 'Refresh these first, they ranked before.', lose, [C.page, C.clicks, C.impr, C.ctr, C.pos, { k: 'lost', l: 'Clicks lost', r: 1, f: r => fmtN(r.lost) }], 'lost')}
+      ${sec('rise', 'target', 'green', 'Rising: double down', 'Gaining traffic. Add internal links to these and build related posts around them.', rise, [C.page, C.clicks, C.impr, C.ctr, C.pos, { k: 'won', l: 'Clicks gained', r: 1, f: r => fmtN(r.won) }], 'won')}
+      ${sec('can', 'target', 'violet', 'Cannibalisation inside this folder', 'Two pages of this folder compete for the same query. Merge them or differentiate the targeting.', can, [C.q, { k: 'path', l: 'Pages', f: r => esc(r.path), sort: false }, C.impr], 'impr')}
       ${sec('near', 'target', 'green', '1. Push first: pages at positions 4-10', 'Already on page one. Better content depth, internal links and FAQ/schema can move them to the top 3. Sorted by estimated extra clicks per month.', near, [C.page, C.clicks, C.impr, C.ctr, C.pos, C.gain], 'gain')}
       ${sec('far', 'target', 'orange', '2. Next: pages at positions 11-20', 'Close to page one. Refresh, expand and link to them.', far, [C.page, C.clicks, C.impr, C.ctr, C.pos, C.gain], 'gain')}
       ${sec('ctr', 'target', 'indigo', '3. Rewrite title and meta: CTR below expected', 'Ranking well on page one but getting fewer clicks than the position normally earns.', lowCtr, [C.page, C.clicks, C.impr, C.ctr, C.bench, C.pos, C.gain], 'gain')}
       ${sec('q', 'target', 'violet', '4. Queries to target (positions 4-20)', 'Non-branded searches these pages already show for. Add a section or heading for each and link to the page.', qNear, [C.q, C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
+      ${patSec}
       ${sec('ghost', 'target', 'teal', '5. Seen but not clicked', 'Hundreds of impressions, almost no clicks. Check the title, intent match and ranking.', ghost, [C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
       </div>`;
-    return { html, mount: () => { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; ['near', 'far', 'ctr', 'q', 'ghost'].forEach(k => drawTable('t-bl-' + k)); } };
+    return { html, mount: () => { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; ['plan', 'lose', 'rise', 'can', 'near', 'far', 'ctr', 'q', 'ghost', 'pat', 'rx'].forEach(k => drawTable('t-bl-' + k));
+      const inp = document.getElementById('rx-in'), msg = document.getElementById('rx-msg');
+      const apply = v => { const t = TABLES['t-bl-rx']; if (!t) return; let re = null; try { re = v ? new RegExp(v, 'i') : null; if (msg) msg.textContent = ''; } catch (e) { if (msg) msg.textContent = 'Invalid regex'; return; } t.rows = re ? QA.filter(r => re.test(r.q)) : QA; t.page = 0; drawTable('t-bl-rx'); if (msg && re) msg.textContent = t.rows.length.toLocaleString() + ' queries'; };
+      if (inp) inp.oninput = () => apply(inp.value);
+      const pt = document.getElementById('t-bl-pat'); if (pt) pt.addEventListener('click', e => { const b = e.target.closest('[data-rx]'); if (!b || !inp) return; inp.value = b.dataset.rx; apply(inp.value); inp.scrollIntoView({ block: 'center' }); });
+    } };
   };
   const INTENT_ICON = { info: ['book', 'indigo'], comm: ['scale', 'orange'], trans: ['cart', 'green'], nav: ['star', 'violet'], other: ['compass', 'teal'] };
   const INTENT_HELP = { info: 'Learning: questions, guides, how-tos. Build depth and answer directly.', comm: 'Comparing options: best, top, reviews, vs. Lists and comparison pages win here.', trans: 'Ready to act: price, buy, book, download. Send these to pages with a clear next step.', nav: 'Looking for you by name. Track as brand demand, not SEO performance.', other: 'No clear signal. Often short head terms; check what the ranking page offers.' };
