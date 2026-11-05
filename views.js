@@ -708,24 +708,25 @@
   V.intent = (A) => {
     const list = A.intents.filter(i => i.n);
     const alerts = (() => {
-      const tot = list.reduce((a, i) => ({ c: a.c + i.clicks, m: a.m + i.impr }), { c: 0, m: 0 });
+      const L = list.map(i => { const rows = i.rows.filter(r => !r.brand), clicks = rows.reduce((a, r) => a + r.clicks, 0), impr = rows.reduce((a, r) => a + r.impr, 0); return { key: i.key, label: i.label, rows, clicks, impr, ctr: impr ? clicks / impr * 100 : 0, pos: impr ? rows.reduce((a, r) => a + r.pos * r.impr, 0) / impr : 0 }; });
+      const tot = L.reduce((a, i) => ({ c: a.c + i.clicks, m: a.m + i.impr }), { c: 0, m: 0 });
       const avg = tot.m ? tot.c / tot.m * 100 : 0, out = [];
-      list.forEach(i => {
+      L.forEach(i => {
         const share = tot.m ? i.impr / tot.m * 100 : 0, nm = i.label;
         const near = i.rows.filter(r => r.pos > 3 && r.pos <= 10 && r.impr >= 50), far = i.rows.filter(r => r.pos > 10 && r.pos <= 20 && r.impr >= 50);
         const nI = near.reduce((a, r) => a + r.impr, 0), fI = far.reduce((a, r) => a + r.impr, 0);
         const val = i.key === 'trans' ? 3 : i.key === 'comm' ? 2 : 1;
-        if (i.ctr < avg * 0.7 && share >= 10) out.push({ lv: 'hi', t: nm + ': CTR ' + i.ctr.toFixed(1) + '% is below your site average (' + avg.toFixed(1) + '%)', a: 'Impressions are there, clicks are not. Rewrite titles and meta descriptions on the top ' + nm.toLowerCase() + ' queries below.', w: share * 2 + val });
-        if (near.length) out.push({ lv: val >= 2 ? 'hi' : 'md', t: nm + ': ' + near.length + ' queries sit at positions 4-10 (' + fmtN(nI) + ' impressions)', a: 'Page one, but under the top 3. Strengthen the ranking page (content depth, internal links, FAQ/schema) to move up.', w: nI / Math.max(1, tot.m) * 100 + val * 2 });
-        if (far.length) out.push({ lv: 'md', t: nm + ': ' + far.length + ' queries sit at positions 11-20 (' + fmtN(fI) + ' impressions)', a: 'Page two, close to page one. A small update or a few internal links can bring these onto page one.', w: fI / Math.max(1, tot.m) * 100 + val });
-        if (i.pos > 15 && share >= 5) out.push({ lv: 'hi', t: nm + ': average position ' + i.pos.toFixed(1) + ' with ' + share.toFixed(0) + '% of impressions', a: 'Weak rankings on a big share of demand. Create or expand dedicated pages for this intent.', w: share + val });
+        if (i.ctr < avg * 0.7 && share >= 10) out.push({ rows: i.rows.slice().sort((a, b) => b.impr - a.impr), lv: 'hi', t: nm + ': CTR ' + i.ctr.toFixed(1) + '% is below your site average (' + avg.toFixed(1) + '%)', a: 'Impressions are there, clicks are not. Rewrite titles and meta descriptions on the top ' + nm.toLowerCase() + ' queries below.', w: share * 2 + val });
+        if (near.length) out.push({ rows: near, lv: val >= 2 ? 'hi' : 'md', t: nm + ': ' + near.length + ' queries sit at positions 4-10 (' + fmtN(nI) + ' impressions)', a: 'Page one, but under the top 3. Strengthen the ranking page (content depth, internal links, FAQ/schema) to move up.', w: nI / Math.max(1, tot.m) * 100 + val * 2 });
+        if (far.length) out.push({ rows: far, lv: 'md', t: nm + ': ' + far.length + ' queries sit at positions 11-20 (' + fmtN(fI) + ' impressions)', a: 'Page two, close to page one. A small update or a few internal links can bring these onto page one.', w: fI / Math.max(1, tot.m) * 100 + val });
+        if (i.pos > 15 && share >= 5) out.push({ rows: i.rows.slice().sort((a, b) => b.impr - a.impr), lv: 'hi', t: nm + ': average position ' + i.pos.toFixed(1) + ' with ' + share.toFixed(0) + '% of impressions', a: 'Weak rankings on a big share of demand. Create or expand dedicated pages for this intent.', w: share + val });
       });
-      const t = list.find(i => i.key === 'trans'), c = list.find(i => i.key === 'comm');
-      if (!t || !t.n) out.push({ lv: 'md', t: 'No transactional queries found', a: 'Nothing that signals readiness to act. Add pages aimed at apply / register / price style searches.', w: 5 });
+      const t = L.find(i => i.key === 'trans');
+      if (!t || !t.rows.length) out.push({ lv: 'md', t: 'No transactional queries found', a: 'Nothing that signals readiness to act. Add pages aimed at apply / register / price style searches.', w: 5 });
       else if (tot.m && t.impr / tot.m < 0.05) out.push({ lv: 'md', t: 'Transactional intent is only ' + (t.impr / tot.m * 100).toFixed(1) + '% of impressions', a: 'Little demand captured where users are ready to act. Build more apply / register / enroll landing pages.', w: 6 });
-      return out.sort((a, b) => b.w - a.w).slice(0, 6);
+      return out.sort((a, b) => b.w - a.w).slice(0, 6).map((x, k) => ({ ...x, id: 't-al-' + k }));
     })();
-    const alertHtml = alerts.length ? `<section class="panel"><div class="panel-h"><h2>Where to focus</h2></div><div class="panel-b">${alerts.map(x => `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line,#eee)"><span style="flex:none;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;height:max-content;color:#fff;background:${x.lv === 'hi' ? '#d93025' : '#f29900'}">${x.lv === 'hi' ? 'HIGH' : 'MEDIUM'}</span><div><b>${esc(x.t)}</b><div style="opacity:.8">${esc(x.a)}</div></div></div>`).join('')}</div></section>` : '';
+    const alertHtml = alerts.length ? `<section class="panel"><div class="panel-h"><h2>Where to focus</h2><span class="meta">Non-branded queries only. Click an alert to see its queries.</span></div><div class="panel-b">${alerts.map(x => `<details style="border-bottom:1px solid var(--line,#eee);padding:8px 0"><summary style="display:flex;gap:10px;cursor:pointer;list-style:none"><span style="flex:none;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;height:max-content;color:#fff;background:${x.lv === 'hi' ? '#d93025' : '#f29900'}">${x.lv === 'hi' ? 'HIGH' : 'MEDIUM'}</span><div><b>${esc(x.t)}</b><div style="opacity:.8">${esc(x.a)}</div></div></summary>${x.rows && x.rows.length ? table(x.id, [C.q, C.clicks, C.impr, C.ctr, C.pos], x.rows, { sort: 'impr', file: 'focus-' + x.id, pageSize: 25 }) : ''}</details>`).join('')}</div></section>` : '';
     const html = head('Search intent', 'Every query sorted by what the searcher wants: to learn, to compare, to act, or to find you.') + alertHtml +
       `<div class="grid-2"><section class="panel"><div class="panel-h"><h2>Clicks by intent</h2></div><div class="panel-b"><div class="chart-box"><canvas id="ch-intent" aria-label="Clicks and impressions by intent"></canvas></div></div></section>
        <section class="panel"><div class="panel-h"><h2>Summary</h2></div><div class="panel-b flush"><table><thead><tr><th>Intent</th><th class="r">Queries</th><th class="r">CTR</th><th class="r">Position</th></tr></thead><tbody>${list.map(i => `<tr><td>${esc(i.label)}</td><td class="r">${i.n.toLocaleString()}</td><td class="r">${pctf(i.ctr)}</td><td class="r">${posTag(i.pos)}</td></tr>`).join('')}</tbody></table></div></section></div>
@@ -734,6 +735,7 @@
         ${table('t-in-' + i.key, [C.q, C.clicks, C.impr, C.ctr, C.pos], i.rows, { sort: 'impr', file: 'intent-' + i.key, pageSize: 25 })}</details>`).join('')}</div>`;
     const mount = () => {
       list.forEach(i => drawTable('t-in-' + i.key));
+      alerts.forEach(x => x.rows && drawTable(x.id));
       chart('ch-intent', { type: 'bar', data: { labels: list.map(i => i.label), datasets: [{ label: 'Clicks', data: list.map(i => i.clicks), backgroundColor: cssVar('--signal'), borderRadius: 4 }, { label: 'Impressions ÷ 10', data: list.map(i => i.impr / 10), backgroundColor: cssVar('--sky-soft'), borderColor: cssVar('--sky'), borderWidth: 1, borderRadius: 4 }] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => fmtN(v) } } } } });
     };
     return { html, mount };
