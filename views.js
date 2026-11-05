@@ -740,6 +740,38 @@
     };
     return { html, mount };
   };
+  V.blog = (A) => {
+    const seg = r => '/' + ((r.path || '').split('/').filter(Boolean)[0] || '') + '/';
+    const fm = new Map(); A.P.forEach(r => fm.set(seg(r), (fm.get(seg(r)) || 0) + r.impr));
+    const folders = [...fm].filter(x => x[0] !== '//').sort((a, b) => b[1] - a[1]);
+    let folder = decodeURIComponent((location.hash.match(/[?&]folder=([^&]*)/) || [])[1] || '');
+    if (!folder) folder = (folders.find(x => /blog/i.test(x[0])) || folders[0] || ['/'])[0];
+    const inF = r => (r.path || '').startsWith(folder.replace(/\/$/, '') + '/') || (r.path || '') === folder.replace(/\/$/, '');
+    const pages = A.P.filter(inF);
+    const qp = ((A.data && A.data.QP) || []).filter(r => inF({ path: r.p.replace(/^https?:\/\/[^/]+/, '') }) && !A.isBrand(r.q));
+    const picker = `<div style="margin:0 0 12px"><label>Folder: <select id="folder-pick">${folders.map(x => `<option value="${esc(x[0])}" ${x[0] === folder ? 'selected' : ''}>${esc(x[0])} (${fmtN(x[1])} impr)</option>`).join('')}</select></label></div>`;
+    if (!pages.length) return { html: head('Folder intelligence', 'What to push first, folder by folder.') + picker + '<section class="panel"><div class="panel-b">No pages in this folder for this date range.</div></section>', mount() { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; } };
+    const exp = r => { try { return A.curve.at(r.pos); } catch (e) { return 0; } };
+    const gainOf = (r, tgt) => Math.max(0, Math.round(r.impr * ((A.curve.at(tgt) || 0) - r.ctr) / 100 / Math.max(1, A.days) * 30));
+    const withG = (rows, tgt) => rows.map(r => ({ ...r, gain: gainOf(r, tgt), gainLo: gainOf(r, tgt), gainHi: gainOf(r, tgt) })).sort((a, b) => b.gain - a.gain || b.impr - a.impr);
+    const near = withG(pages.filter(r => r.pos > 3 && r.pos <= 10 && r.impr >= 100), 3);
+    const far = withG(pages.filter(r => r.pos > 10 && r.pos <= 20 && r.impr >= 100), 8);
+    const lowCtr = pages.filter(r => r.pos <= 10 && r.impr >= 100 && exp(r) > 0 && r.ctr < exp(r) * 0.7).map(r => ({ ...r, bench: exp(r), gain: Math.max(0, Math.round(r.impr * (exp(r) - r.ctr) / 100 / Math.max(1, A.days) * 30)) })).sort((a, b) => b.gain - a.gain);
+    const qNear = qp.filter(r => r.pos > 3 && r.pos <= 20 && r.impr >= 50).map(r => ({ ...r, path: r.p.replace(/^https?:\/\/[^/]+/, '') })).sort((a, b) => b.impr - a.impr);
+    const ghost = pages.filter(r => r.impr >= 300 && r.clicks <= 2).sort((a, b) => b.impr - a.impr);
+    const tc = pages.reduce((a, r) => a + r.clicks, 0), ti = pages.reduce((a, r) => a + r.impr, 0);
+    const sec = (id, ic, tone, title, desc, rows, cols, sort) => `<details class="acc" ${id === 'near' ? 'open' : ''}>${accHead(ic, tone, title, desc, rows.length.toLocaleString() + ' items')}${rows.length ? table('t-bl-' + id, cols, rows, { sort, file: 'blog-' + id, searchKeys: ['path', 'q'], pageSize: 25, placeholder: 'Filter' }) : '<div class="panel-b">Nothing here in this range.</div>'}</details>`;
+    const html = head('Folder intelligence', 'Non-branded intelligence for one folder: what to push first to get more traffic.') + picker +
+      `<div class="strip">${stat(pages.length.toLocaleString(), 'Pages with impressions')}${stat(fmtN(tc), 'Folder clicks')}${stat(fmtN(ti), 'Folder impressions')}${stat(near.length + far.length, 'Pages within reach of the top')}</div>
+      <div class="stack">
+      ${sec('near', 'target', 'green', '1. Push first: pages at positions 4-10', 'Already on page one. Better content depth, internal links and FAQ/schema can move them to the top 3. Sorted by estimated extra clicks per month.', near, [C.page, C.clicks, C.impr, C.ctr, C.pos, C.gain], 'gain')}
+      ${sec('far', 'target', 'orange', '2. Next: pages at positions 11-20', 'Close to page one. Refresh, expand and link to them.', far, [C.page, C.clicks, C.impr, C.ctr, C.pos, C.gain], 'gain')}
+      ${sec('ctr', 'target', 'indigo', '3. Rewrite title and meta: CTR below expected', 'Ranking well on page one but getting fewer clicks than the position normally earns.', lowCtr, [C.page, C.clicks, C.impr, C.ctr, C.bench, C.pos, C.gain], 'gain')}
+      ${sec('q', 'target', 'violet', '4. Queries to target (positions 4-20)', 'Non-branded searches these pages already show for. Add a section or heading for each and link to the page.', qNear, [C.q, C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
+      ${sec('ghost', 'target', 'teal', '5. Seen but not clicked', 'Hundreds of impressions, almost no clicks. Check the title, intent match and ranking.', ghost, [C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
+      </div>`;
+    return { html, mount: () => { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; ['near', 'far', 'ctr', 'q', 'ghost'].forEach(k => drawTable('t-bl-' + k)); } };
+  };
   const INTENT_ICON = { info: ['book', 'indigo'], comm: ['scale', 'orange'], trans: ['cart', 'green'], nav: ['star', 'violet'], other: ['compass', 'teal'] };
   const INTENT_HELP = { info: 'Learning: questions, guides, how-tos. Build depth and answer directly.', comm: 'Comparing options: best, top, reviews, vs. Lists and comparison pages win here.', trans: 'Ready to act: price, buy, book, download. Send these to pages with a clear next step.', nav: 'Looking for you by name. Track as brand demand, not SEO performance.', other: 'No clear signal. Often short head terms; check what the ranking page offers.' };
 
