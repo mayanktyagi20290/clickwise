@@ -792,6 +792,28 @@
       <div class="panel-b">${table('t-bl-pat', [{ k: 'name', l: 'Pattern', f: r => `<button type="button" class="btn-quiet" data-rx="${esc(r.rx)}">${esc(r.name)}</button>`, csv: r => r.name }, { k: 'n', l: 'Queries', r: 1, f: r => fmtN(r.n) }, C.clicks, C.impr, C.ctr, C.pos], patRows, { sort: 'impr', file: 'blog-patterns', search: false, exportable: true })}
       <div style="margin:12px 0"><input id="rx-in" type="text" placeholder="Regex on queries, e.g. 2026|salary|^how" style="width:60%;padding:6px"> <span class="meta" id="rx-msg"></span></div>
       ${table('t-bl-rx', [C.q, C.page, C.clicks, C.impr, C.ctr, C.pos], QA, { sort: 'impr', file: 'blog-queries', searchKeys: ['q', 'path'], pageSize: 25, placeholder: 'Filter queries' })}</div></details>`;
+    const FO_T = [['Question', ['what is {s}', 'how to {s}', 'why {s}', '{s} meaning', 'is {s} worth it', '{s} step by step', '{s} explained']], ['Compare', ['best {s}', 'top {s}', '{s} vs alternatives', '{s} pros and cons', '{s} comparison']], ['Freshness', ['{s} ' + new Date().getFullYear(), '{s} ' + (new Date().getFullYear() + 1), '{s} latest', '{s} new']], ['Audience', ['{s} for freshers', '{s} for students', '{s} for beginners', '{s} for working professionals']], ['Commercial', ['{s} price', '{s} cost', '{s} salary', '{s} free', '{s} online']], ['Local', ['{s} near me', '{s} in india', '{s} in delhi', '{s} in mumbai', '{s} in bangalore']], ['Format', ['{s} template', '{s} examples', '{s} checklist', '{s} pdf', '{s} faq']]];
+    const FSTOP = new Set('a an the for and or to in of on at by with is are how what why do does can i me my your'.split(' '));
+    const tok = t => t.toLowerCase().split(/[^a-z0-9]+/).filter(w => w && !FSTOP.has(w));
+    const QT = QA.map(r => ({ r, t: r.q.toLowerCase() }));
+    const fanOut = seed => {
+      seed = seed.trim().toLowerCase(); if (!seed) return [];
+      const st = tok(seed), host = QT.filter(x => st.every(w => x.t.includes(w))).sort((a, b) => b.r.impr - a.r.impr)[0];
+      const home = host ? host.r.path : '';
+      const rows = [], seen = new Set();
+      FO_T.forEach(([type, tp]) => tp.forEach(t => {
+        const v = t.replace('{s}', seed); if (seen.has(v)) return; seen.add(v);
+        const vt = tok(v), m = QT.filter(x => vt.every(w => x.t.includes(w))).sort((a, b) => b.r.impr - a.r.impr)[0];
+        const st2 = m ? (m.r.pos <= 10 ? 'Ranking' : 'Weak') : 'Gap';
+        rows.push({ q: v, type, st: st2, hit: m ? m.r.q : '', path: m ? m.r.path : home, clicks: m ? m.r.clicks : 0, impr: m ? m.r.impr : 0, ctr: m ? m.r.ctr : 0, pos: m ? m.r.pos : 0, act: !m ? (home ? 'Add a section / FAQ on ' + home + ', or write a new post' : 'Create a new post') : m.r.pos <= 3 ? 'Defend: already top 3' : m.r.pos <= 10 ? 'Strengthen ' + m.r.path : 'Improve ' + m.r.path + ' (position ' + m.r.pos.toFixed(1) + ')' });
+      }));
+      QT.filter(x => st.every(w => x.t.includes(w)) && !seen.has(x.t)).slice(0, 15).forEach(x => rows.push({ q: x.r.q, type: 'Already in GSC', st: x.r.pos <= 10 ? 'Ranking' : 'Weak', hit: x.r.q, path: x.r.path, clicks: x.r.clicks, impr: x.r.impr, ctr: x.r.ctr, pos: x.r.pos, act: x.r.pos <= 10 ? 'Strengthen ' + x.r.path : 'Improve ' + x.r.path }));
+      const o = { Gap: 0, Weak: 1, Ranking: 2 }; return rows.sort((a, b) => o[a.st] - o[b.st] || b.impr - a.impr);
+    };
+    const FC = [{ k: 'q', l: 'Fan-out query', f: r => esc(r.q), csv: r => r.q }, { k: 'type', l: 'Type', f: r => esc(r.type), csv: r => r.type }, { k: 'st', l: 'Status', f: r => `<b style="color:${r.st === 'Gap' ? '#d93025' : r.st === 'Weak' ? '#b06000' : '#188038'}">${r.st}</b>`, csv: r => r.st }, { k: 'hit', l: 'Matching GSC query', f: r => esc(r.hit || '-'), csv: r => r.hit }, { k: 'path', l: 'Page', f: r => esc(r.path || '-'), csv: r => r.path }, C.impr, C.pos, { k: 'act', l: 'Do this', f: r => esc(r.act), csv: r => r.act }];
+    const foSec = `<details class="acc">${accHead('target', 'indigo', 'Query fan-out', 'AI answer engines split one question into many sub-queries. Pick a seed query and see which sub-queries you already rank for, where you are weak, and where there is a gap.', 'seed → sub-queries')}
+      <div class="panel-b"><div style="margin:0 0 12px"><input id="fo-in" list="fo-list" type="text" placeholder="Seed query, e.g. ${esc(QA[0] ? QA[0].q : 'best treks in india')}" style="width:60%;padding:6px"> <button type="button" class="btn-quiet" id="fo-go">Fan out</button> <span class="meta" id="fo-msg"></span></div><datalist id="fo-list">${QA.slice(0, 40).map(r => `<option value="${esc(r.q)}">`).join('')}</datalist>
+      ${table('t-bl-fo', FC, [], { sort: null, file: 'fan-out', searchKeys: ['q', 'hit', 'path'], pageSize: 50, placeholder: 'Filter' })}</div></details>`;
     const html = head('AI Powered Intelligence', 'Non-branded intelligence for one folder: what to push first to get more traffic.') + picker +
       `<div class="strip">${stat(pages.length.toLocaleString(), 'Pages with impressions')}${stat(fmtN(tc), 'Folder clicks')}${stat(fmtN(ti), 'Folder impressions')}${stat(ti ? (tc / ti * 100).toFixed(1) + '%' : '-', 'Folder CTR' + (siteCtr ? ' (site ' + Number(siteCtr).toFixed(1) + '%)' : ''))}${stat(avgPos ? avgPos.toFixed(1) : '-', 'Avg position')}${stat(plan.reduce((a, r) => a + r.gain, 0).toLocaleString(), 'Est. clicks/month if all done')}</div>
       <div class="stack">
@@ -803,10 +825,14 @@
       ${sec('far', 'target', 'orange', '2. Next: pages at positions 11-20', 'Close to page one. Refresh, expand and link to them.', far, [C.page, C.clicks, C.impr, C.ctr, C.pos, C.gain], 'gain')}
       ${sec('ctr', 'target', 'indigo', '3. Rewrite title and meta: CTR below expected', 'Ranking well on page one but getting fewer clicks than the position normally earns.', lowCtr, [C.page, C.clicks, C.impr, C.ctr, C.bench, C.pos, C.gain], 'gain')}
       ${sec('q', 'target', 'violet', '4. Queries to target (positions 4-20)', 'Non-branded searches these pages already show for. Add a section or heading for each and link to the page.', qNear, [C.q, C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
+      ${foSec}
       ${patSec}
       ${sec('ghost', 'target', 'teal', '5. Seen but not clicked', 'Hundreds of impressions, almost no clicks. Check the title, intent match and ranking.', ghost, [C.page, C.clicks, C.impr, C.ctr, C.pos], 'impr')}
       </div>`;
-    return { html, mount: () => { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; ['plan', 'lose', 'rise', 'can', 'near', 'far', 'ctr', 'q', 'ghost', 'pat', 'rx'].forEach(k => drawTable('t-bl-' + k));
+    return { html, mount: () => { const p = document.getElementById('folder-pick'); if (p) p.onchange = () => { location.hash = 'blog?folder=' + encodeURIComponent(p.value); }; ['plan', 'lose', 'rise', 'can', 'near', 'far', 'ctr', 'q', 'ghost', 'pat', 'rx', 'fo'].forEach(k => drawTable('t-bl-' + k));
+      const fi = document.getElementById('fo-in'), fm2 = document.getElementById('fo-msg');
+      const go = () => { const t = TABLES['t-bl-fo']; if (!t || !fi) return; t.rows = fanOut(fi.value); t.page = 0; drawTable('t-bl-fo'); const g = t.rows.filter(r => r.st === 'Gap').length; if (fm2) fm2.textContent = t.rows.length ? t.rows.length + ' sub-queries · ' + g + ' gaps' : ''; };
+      if (fi) { fi.onchange = go; fi.onkeydown = e => { if (e.key === 'Enter') go(); }; const b = document.getElementById('fo-go'); if (b) b.onclick = go; }
       const inp = document.getElementById('rx-in'), msg = document.getElementById('rx-msg');
       const apply = v => { const t = TABLES['t-bl-rx']; if (!t) return; let re = null; try { re = v ? new RegExp(v, 'i') : null; if (msg) msg.textContent = ''; } catch (e) { if (msg) msg.textContent = 'Invalid regex'; return; } t.rows = re ? QA.filter(r => re.test(r.q)) : QA; t.page = 0; drawTable('t-bl-rx'); if (msg && re) msg.textContent = t.rows.length.toLocaleString() + ' queries'; };
       if (inp) inp.oninput = () => apply(inp.value);
