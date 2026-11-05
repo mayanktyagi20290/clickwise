@@ -796,12 +796,13 @@
     const FSTOP = new Set('a an the for and or to in of on at by with is are how what why do does can i me my your'.split(' '));
     const tok = t => t.toLowerCase().split(/[^a-z0-9]+/).filter(w => w && !FSTOP.has(w));
     const QT = QA.map(r => ({ r, t: r.q.toLowerCase() }));
+    let aiLines = [];
     const fanOut = seed => {
       seed = seed.trim().toLowerCase(); if (!seed) return [];
       const st = tok(seed), host = QT.filter(x => st.every(w => x.t.includes(w))).sort((a, b) => b.r.impr - a.r.impr)[0];
       const home = host ? host.r.path : '';
       const rows = [], seen = new Set();
-      FO_T.forEach(([type, tp]) => tp.forEach(t => {
+      (aiLines.length ? FO_T.concat([['AI', aiLines]]) : FO_T).forEach(([type, tp]) => tp.forEach(t => {
         const v = t.replace('{s}', seed); if (seen.has(v)) return; seen.add(v);
         const vt = tok(v), m = QT.filter(x => vt.every(w => x.t.includes(w))).sort((a, b) => b.r.impr - a.r.impr)[0];
         const st2 = m ? (m.r.pos <= 10 ? 'Ranking' : 'Weak') : 'Gap';
@@ -812,7 +813,7 @@
     };
     const FC = [{ k: 'q', l: 'Fan-out query', f: r => esc(r.q), csv: r => r.q }, { k: 'type', l: 'Type', f: r => esc(r.type), csv: r => r.type }, { k: 'st', l: 'Status', f: r => `<b style="color:${r.st === 'Gap' ? '#d93025' : r.st === 'Weak' ? '#b06000' : '#188038'}">${r.st}</b>`, csv: r => r.st }, { k: 'hit', l: 'Matching GSC query', f: r => esc(r.hit || '-'), csv: r => r.hit }, { k: 'path', l: 'Page', f: r => esc(r.path || '-'), csv: r => r.path }, C.impr, C.pos, { k: 'act', l: 'Do this', f: r => esc(r.act), csv: r => r.act }];
     const foSec = `<details class="acc">${accHead('target', 'indigo', 'Query fan-out', 'AI answer engines split one question into many sub-queries. Pick a seed query and see which sub-queries you already rank for, where you are weak, and where there is a gap.', 'seed → sub-queries')}
-      <div class="panel-b"><div style="margin:0 0 12px"><input id="fo-in" list="fo-list" type="text" placeholder="Seed query, e.g. ${esc(QA[0] ? QA[0].q : 'best treks in india')}" style="width:60%;padding:6px"> <button type="button" class="btn-quiet" id="fo-go">Fan out</button> <span class="meta" id="fo-msg"></span></div><datalist id="fo-list">${QA.slice(0, 40).map(r => `<option value="${esc(r.q)}">`).join('')}</datalist>
+      <div class="panel-b"><div style="margin:0 0 12px"><input id="fo-in" list="fo-list" type="text" placeholder="Seed query, e.g. ${esc(QA[0] ? QA[0].q : 'best treks in india')}" style="width:60%;padding:6px"> <button type="button" class="btn-quiet" id="fo-go">Fan out</button> <button type="button" class="btn-quiet" id="fo-ai">AI sub-queries</button> <button type="button" class="btn-quiet" id="fo-ti">AI title ideas</button> <span class="meta" id="fo-msg"></span></div><div id="fo-out" style="white-space:pre-wrap;margin:0 0 12px"></div><datalist id="fo-list">${QA.slice(0, 40).map(r => `<option value="${esc(r.q)}">`).join('')}</datalist>
       ${table('t-bl-fo', FC, [], { sort: null, file: 'fan-out', searchKeys: ['q', 'hit', 'path'], pageSize: 50, placeholder: 'Filter' })}</div></details>`;
     const html = head('AI Powered Intelligence', 'Non-branded intelligence for one folder: what to push first to get more traffic.') + picker +
       `<div class="strip">${stat(pages.length.toLocaleString(), 'Pages with impressions')}${stat(fmtN(tc), 'Folder clicks')}${stat(fmtN(ti), 'Folder impressions')}${stat(ti ? (tc / ti * 100).toFixed(1) + '%' : '-', 'Folder CTR' + (siteCtr ? ' (site ' + Number(siteCtr).toFixed(1) + '%)' : ''))}${stat(avgPos ? avgPos.toFixed(1) : '-', 'Avg position')}${stat(plan.reduce((a, r) => a + r.gain, 0).toLocaleString(), 'Est. clicks/month if all done')}</div>
@@ -833,6 +834,30 @@
       const fi = document.getElementById('fo-in'), fm2 = document.getElementById('fo-msg');
       const go = () => { const t = TABLES['t-bl-fo']; if (!t || !fi) return; t.rows = fanOut(fi.value); t.page = 0; drawTable('t-bl-fo'); const g = t.rows.filter(r => r.st === 'Gap').length; if (fm2) fm2.textContent = t.rows.length ? t.rows.length + ' sub-queries · ' + g + ' gaps' : ''; };
       if (fi) { fi.onchange = go; fi.onkeydown = e => { if (e.key === 'Enter') go(); }; const b = document.getElementById('fo-go'); if (b) b.onclick = go; }
+      const aiRun = async (prompt, label) => {
+        if (!fi || !fi.value.trim()) { fm2.textContent = 'Type a seed query first'; return null; }
+        const LM = window.LanguageModel || (window.ai && window.ai.languageModel);
+        if (!LM || !LM.create) { fm2.textContent = 'Chrome built-in AI not available. Use desktop Chrome and turn on chrome://flags/#prompt-api-for-gemini-nano, then restart.'; return null; }
+        try {
+          const av = LM.availability ? await LM.availability() : 'available';
+          if (av === 'unavailable') { fm2.textContent = 'This device cannot run Chrome built-in AI.'; return null; }
+          fm2.textContent = av === 'available' ? label + '...' : 'Downloading the on-device model (first time only)...';
+          const ses = await LM.create({ expectedOutputs: [{ type: 'text', languages: ['en'] }], monitor(m) { m.addEventListener('downloadprogress', e => { fm2.textContent = 'Downloading model ' + Math.round(e.loaded * 100) + '%'; }); } });
+          const out = await ses.prompt(prompt); try { ses.destroy(); } catch (e) {} fm2.textContent = ''; return String(out);
+        } catch (e) { fm2.textContent = 'AI error: ' + (e.message || e); return null; }
+      };
+      const fo = document.getElementById('fo-out');
+      const bA = document.getElementById('fo-ai'), bT = document.getElementById('fo-ti');
+      if (bA) bA.onclick = async () => {
+        const seed = fi.value.trim(), out = await aiRun('You are an SEO expert. A search engine or AI assistant splits the question "' + seed + '" into related sub-queries. List 15 distinct realistic sub-queries a searcher in India would type. Output one query per line, lowercase, no numbering, no bullets, no explanations.', 'Thinking');
+        if (out == null) return;
+        aiLines = out.split('\n').map(x => x.replace(/^[\s\-*\d.)]+/, '').trim().toLowerCase()).filter(x => x && x.length < 90).slice(0, 20);
+        go(); if (fo) fo.textContent = '';
+      };
+      if (bT) bT.onclick = async () => {
+        const seed = fi.value.trim(), out = await aiRun('You are an SEO copywriter. Write 5 title tag options (max 60 characters each) and one meta description (max 155 characters) for a page targeting the search query "' + seed + '". Make them click-worthy and truthful. Format: lines "Title 1: ...", then "Meta: ...".', 'Writing');
+        if (out != null && fo) fo.textContent = out;
+      };
       const inp = document.getElementById('rx-in'), msg = document.getElementById('rx-msg');
       const apply = v => { const t = TABLES['t-bl-rx']; if (!t) return; let re = null; try { re = v ? new RegExp(v, 'i') : null; if (msg) msg.textContent = ''; } catch (e) { if (msg) msg.textContent = 'Invalid regex'; return; } t.rows = re ? QA.filter(r => re.test(r.q)) : QA; t.page = 0; drawTable('t-bl-rx'); if (msg && re) msg.textContent = t.rows.length.toLocaleString() + ' queries'; };
       if (inp) inp.oninput = () => apply(inp.value);
