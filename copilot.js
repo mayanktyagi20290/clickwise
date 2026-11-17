@@ -20,8 +20,11 @@
   const INTENTS = [
     { id: 'incomplete', test: t => /\b(incomplete|unfinished|pending|open|remain\w*|not (?:yet )?done|overdue|outstanding|baaki|backlog)\b/.test(t) && /\b(task|action|work|fix|change|to.?do|item)s?\b/.test(t) },
     { id: 'changed', test: t => /\b(what changed|did (?:it|that|they|our|my|the).*(work|help)|result|impact|effect|after (?:our|my|the) (?:last )?(?:content )?(?:update|change|edit|fix)|last (?:content )?update|worked)\b/.test(t) },
+    { id: 'competitor', test: t => /\b(competitors?|rivals?|outrank\w*|ahead of (?:me|us)|against competitors?)\b/.test(t) },
+    { id: 'today', test: t => /\b(optimi[sz]e|improve|fix|work on)\b.*\b(today|now)\b/.test(t) },
+    { id: 'content', test: t => /\b(content (?:gaps?|ideas?|to (?:create|write))|(?:create|write|publish)\b.*\b(content|topics?|articles?|posts?)|(?:content|topics?|articles?) .*\b(create|write|missing))\b/.test(t) },
     { id: 'losing', test: t => /\b(los(?:e|ing|t)|drop\w*|declin\w*|fall\w*|fell|decreas\w*|down|gir\w*|kam ho\w*|decay\w*)\b/.test(t) },
-    { id: 'near', test: t => /\b(close to|near|almost|just (?:outside|below|off|missing)|striking|page two|2nd page|second page|position 1[1-9]|11.?20|reach page one)\b/.test(t) || /\bpage (?:one|1)\b/.test(t) && /\b(close|near|almost|get|reach|push)\b/.test(t) },
+    { id: 'near', test: t => /\b(close to|near|almost|just (?:outside|below|off|missing)|striking|page two|2nd page|second page|position 1[1-9]|11.?20|reach page one|top (?:10|ten)|first page)\b/.test(t) || /\bpage (?:one|1)\b/.test(t) && /\b(close|near|almost|get|reach|push)\b/.test(t) },
     { id: 'ctr', test: t => /\b(ctr|click.?through|titles?|meta|snippets?|under.?clicked|low clicks)\b/.test(t) },
     { id: 'cannibal', test: t => /\b(cannibal\w*|competing|compete|duplicate|same keyword|overlap\w*)\b/.test(t) },
     { id: 'index', test: t => /\b(index\w*|crawl\w*|not showing in google|sitemap|deindex\w*|noindex)\b/.test(t) },
@@ -77,6 +80,27 @@
         rows: list.map(g => row(g.page.path, g.page.url, `${g.priority} · score ${g.score} · ${g.impact.kind === 'none' ? 'no click estimate' : range(g.impact.lo, g.impact.hi) + ' clicks / month'} · ${g.confidence.level} confidence · ${g.effort.level} effort`, g.action, '#opp?id=' + encodeURIComponent(g.id))),
         limits: D.QP && D.QP.length ? [] : ['Without Search Console’s query-to-page data, searches cannot be tied to their ranking page, so some opportunities have no page. Connect Search Console for the full picture.'],
         links: [{ href: '#priorities', label: 'All priorities' }, { href: '#pages', label: 'Pages' }]
+      };
+    },
+    competitor(t, { A, D }) {
+      const n = countIn(t, 8), rows = A.quickWins.slice(0, n);
+      return {
+        title: 'Where you are likely losing to other results',
+        summary: rows.length ? `Search Console has no competitor data, so Clickwise shows where your rankings leave clicks on the table: ${A.quickWins.length} searches sit just below the top results with real demand. Competitors hold the positions above you there.` : 'No searches with enough impressions sit just below the top results.',
+        evidence: ['Gain = impressions × the CTR this site earns at the target position, minus current clicks, per month.', A.cannibal && A.cannibal.length ? `${A.cannibal.length} searches also split clicks between two of your own pages.` : 'No searches were found where two of your pages compete.'],
+        rows: rows.map(r => row(r.q, null, `position ${p1(r.pos)} · ${fmtN(r.impr)} impressions · ${range(r.gainLo, r.gainHi)} clicks / month`, 'Open the live results, compare the pages above you, and close the gap in depth, title and internal links.')),
+        limits: ['Named competitors, their rankings and their traffic are not in Search Console. Use a rank-tracking or keyword tool for that.'], links: [{ href: '#quickwins', label: 'Almost page one' }, { href: '#cannibal', label: 'Competing pages' }]
+      };
+    },
+    content(t, { A }) {
+      const n = countIn(t, 8), gaps = A.content && A.content.gaps ? A.content.gaps.slice(0, n) : [];
+      if (!gaps.length) return { title: 'Content to create', summary: A.contentPending ? 'Content gaps are still being worked out in the background. Ask again in a moment.' : 'No content gaps were found in this data.', rows: [], limits: [], links: [{ href: '#content', label: 'Content & links' }] };
+      return {
+        title: 'Content to create or extend',
+        summary: `${A.content.gaps.length} topics where searches show demand your pages do not fully answer, biggest first.`,
+        evidence: ['A gap is a topic with impressions but no page that ranks well or covers the questions people ask.'],
+        rows: gaps.map(g => row(g.label, null, `${fmtN(g.impr)} impressions · ${fmtN(g.clicks)} clicks · position ${p1(g.pos)}`, g.action || '')),
+        limits: [], links: [{ href: '#content', label: 'Content & links' }]
       };
     },
     near(t, { A }) {

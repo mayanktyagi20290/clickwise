@@ -634,7 +634,7 @@
     try { localStorage.removeItem('cw:nav-open'); } catch (e) { } // state is no longer remembered
     document.querySelectorAll('.nav-grp').forEach(g => {
       const badge = g.querySelector('.nav-badge'); if (badge) badge.textContent = g.querySelectorAll('.nav-sec a').length;
-      setNavGroup(g, false);
+      setNavGroup(g, true);
       g.querySelector('.nav-group').addEventListener('click', () => setNavGroup(g, g.classList.contains('closed')));
     });
   })();
@@ -656,6 +656,7 @@
     const name = sec ? 'sections' : wf ? 'workflows' : base;
     const fn = sec ? (a, d) => V.section(a, d, sec) : wf ? (a, d) => V.wf(a, d, wf) : (V[name] || V.overview);
     destroyCharts();
+    window.CW_STATE = { A, D: A.data || D };
     const out = fn(A, A.data || D);
     const view = $('view');
     view.innerHTML = out.html;
@@ -668,7 +669,9 @@
     $('btn-back').hidden = !prevH;
     if (prevH) { const v = prevH.slice(1).split('?')[0], l = document.querySelector(`.nav a[data-view="${v.startsWith('section=') ? 'sections' : v.startsWith('wf=') ? 'workflows' : v}"] span`); $('btn-back').title = 'Back to ' + (l ? l.textContent : 'the previous page'); }
     $('top-24').classList.toggle('on', name === 'live');
+    if (window.CW_SHELL) window.CW_SHELL.sync(name);
     openNavGroupOf(document.querySelector('.nav a.on'));
+    document.querySelectorAll('.nav .ni').forEach(n => n.classList.toggle('open', !!n.querySelector('a.on')));
     const onLink = document.querySelector('.nav a.on span');
     const h1 = view.querySelector('h1');
     document.title = (sec ? sec + ' — ' : wf && h1 ? h1.textContent + ' — ' : onLink ? onLink.textContent + ' — ' : '') + CFG.appName;
