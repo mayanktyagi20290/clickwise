@@ -171,10 +171,17 @@
     clicks: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
     impr: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     ctr: '<path d="M9 9l11 4-5 2-2 5z"/><path d="M5 3v3M3 5h3M4.5 9.5l-1.4 1.4M10 4.5l1.4-1.4"/>',
-    pos: '<path d="M4 20V14M10 20V9M16 20V4M22 20H2"/>'
+    pos: '<path d="M4 20V14M10 20V9M16 20V4M22 20H2"/>',
+    opps: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    pot: '<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
   };
   const tile = (cls, ico, label, value, sub, delta, sp) => `<div class="tile ${cls}"><div class="tile-top"><span class="tile-i" aria-hidden="true"><svg viewBox="0 0 24 24">${KPI_ICON[ico]}</svg></span><div class="tile-l">${label}</div></div>
       <div class="tile-row"><div><div class="tile-v">${value}</div>${delta || `<span class="tile-s">${sub}</span>`}</div>${sp || ''}</div>${delta ? `<div class="tile-s">${sub}</div>` : ''}</div>`;
+  function extraTiles(A) {
+    const n = A.opps ? A.opps.items.length : (A.plan ? A.plan.length : 0), pt = A.potential;
+    return tile('t-violet', 'opps', 'SEO opportunities', n.toLocaleString(), 'Ranked in the action plan', '') +
+      tile('t-blue', 'pot', 'Potential traffic', pt && pt.hi >= 1 ? '+' + fmtN(pt.lo) + '–' + fmtN(pt.hi) : '—', 'Clicks / month (est.)', '');
+  }
   function tiles(A, D) {
     const nb = A.totNB, p = A.prev, cov = A.coverage, C = D && D.C;
     if (cov) {
@@ -184,6 +191,7 @@
         ${tile('t-green', 'impr', 'Impressions', fmtN(st.impr), 'All searches, from daily totals', tileDelta(st.impr, ps && ps.impr), spark(C, 'impr'))}
         ${tile('t-amber', 'ctr', 'CTR', pctf(st.ctr, 2), 'Whole site, branded included', tileDelta(st.ctr, ps && ps.ctr, false, 'pt'), spark(C, 'ctr'))}
         ${tile('t-red', 'pos', 'Average position', st.pos.toFixed(1), 'Weighted by impressions', tileDelta(st.pos, ps && ps.pos, true), spark(C, 'pos', true))}
+        ${extraTiles(A)}
       </section>`;
     }
     const bench = expCtr(nb.pos);
@@ -192,6 +200,7 @@
       ${tile('t-green', 'impr', 'Non-brand impressions', fmtN(nb.impr), 'Queries in this data only', tileDelta(nb.impr, p && p.nb.impr), spark(C, 'impr'))}
       ${tile('t-amber', 'ctr', 'Non-brand CTR', pctf(nb.ctr, 2), `Benchmark at this position ~${bench.toFixed(1)}%`, tileDelta(nb.ctr, p && p.nb.ctr, false, 'pt'), spark(C, 'ctr'))}
       ${tile('t-red', 'pos', 'Non-brand position', nb.pos.toFixed(1), 'Weighted by impressions', tileDelta(nb.pos, p && p.nb.pos, true), spark(C, 'pos', true))}
+      ${extraTiles(A)}
     </section>`;
   }
   // Non-brand subset and how much of the site the query and page rows cover.

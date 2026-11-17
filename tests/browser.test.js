@@ -116,7 +116,7 @@ function writeComparisonExports(dir) {
   await testAsync('All opportunities: totals match the dashboard, filters, evidence and CSV export work', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
     const headline = (await text('.hero h1, .v-hero h1, #view h1')).match(/\d[\d.,]*K?–[\d.,]+K?/);
-    await go('#opps');
+    await go('#opps-all');
     assert.equal(await text('#view h1'), 'All opportunities');
     const growth = await text('.strip .stat.gain b');
     assert.ok(headline && growth.includes(headline[0]), `growth ${growth} matches headline ${headline && headline[0]}`);
@@ -260,7 +260,7 @@ function writeComparisonExports(dir) {
     await go('#fixes'); await page.click('[data-fxrm]'); await page.waitForTimeout(300);
     assert.equal((await page.$$('tr[data-fx]')).length, 0, 'removed');
     // from All opportunities
-    await go('#opps');
+    await go('#opps-all');
     const link = await page.$eval('#t-opp a[href^="#fixes?add="]', a => a.getAttribute('href'));
     await page.evaluate(h => { location.hash = h; }, link); await page.waitForTimeout(300);
     assert.ok((await page.$eval('#fx-url', e => e.value)).startsWith('https://www.trailcraft.co/'), 'page filled in');
@@ -500,21 +500,41 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
-  await testAsync('sidebar groups start closed, open only on click, and highlight the current screen’s group', async () => {
+  await testAsync('sidebar: four sections open by default, collapsible, every screen reachable, current screen highlighted', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
     const open = g => page.$eval(`.nav-grp[data-grp="${g}"] .nav-group`, b => b.getAttribute('aria-expanded'));
-    for (const g of ['seo-opportunities', 'automation', 'ai-search', 'search-console', 'explore']) assert.equal(await open(g), 'false', g + ' closed on load');
-    assert.ok(await page.isVisible('#btn-settings'), 'whole sidebar reachable without scrolling past open groups');
+    for (const g of ['workspace', 'intelligence', 'execution', 'search-console']) assert.equal(await open(g), 'true', g + ' open on load');
+    for (const v of ['overview', 'opps', 'opps-all', 'plan', 'quickwins', 'ctr', 'cannibal', 'decay', 'tasks', 'priorities', 'fixes', 'stats', 'queries', 'pages', 'sections', 'ask', 'ai', 'genai', 'intent', 'blog', 'content', 'workflows', 'filters', 'live', 'discover', 'news', 'indexing'])
+      assert.ok(await page.$(`.nav a[data-view="${v}"]`), v + ' has a sidebar link');
     await go('#news');
-    assert.equal(await open('search-console'), 'false', 'does not open by itself');
     assert.ok(await page.$('.nav-grp[data-grp="search-console"].has-on'), 'current screen’s group highlighted');
-    await page.click('.nav-grp[data-grp="explore"] .nav-group');
-    assert.ok(await page.isVisible('.nav a[data-view="queries"]'), 'opens on click');
-    await page.click('.nav-grp[data-grp="explore"] .nav-group');
-    assert.ok(!(await page.isVisible('.nav a[data-view="queries"]')), 'closes on click');
-    await page.click('.nav-grp[data-grp="explore"] .nav-group'); await page.reload(); await toApp();
-    assert.equal(await open('explore'), 'false', 'closed again after reload');
-    assert.ok(/\d/.test(await text('.nav-grp[data-grp="automation"] .nav-badge')), 'closed group shows how many screens it holds');
+    await go('#decay');
+    assert.ok(await page.isVisible('.nav a[data-view="decay"]'), 'sub-items of the active item are shown');
+    await page.click('.nav-grp[data-grp="intelligence"] .nav-group');
+    assert.ok(!(await page.isVisible('.nav a[data-view="intent"]')), 'closes on click');
+    await page.click('.nav-grp[data-grp="intelligence"] .nav-group');
+    assert.ok(await page.isVisible('.nav a[data-view="intent"]'), 'opens on click');
+  });
+
+  await testAsync('SEO Opportunities workspace: search, filter, sort, detail drawer, add to Action Center; Ask dock answers the six questions', async () => {
+    errors.length = 0;
+    await page.goto(base + 'app.html?demo#opps'); await toApp(); await page.waitForSelector('#ow-b tr[data-id]');
+    const n0 = await page.locator('#ow-b tr[data-id]').count();
+    assert.ok(n0 > 0, 'rows listed');
+    await page.selectOption('#ow-pri', 'P1');
+    assert.ok(/of/.test(await text('#ow-count')), 'count shown');
+    await page.selectOption('#ow-pri', '');
+    await page.click('[data-sort="pos"]');
+    await page.click('#ow-b tr[data-id]'); await page.waitForSelector('#drawer.open');
+    assert.ok(await page.isVisible('#dr-add'), 'drawer offers Add to Action Center');
+    await page.click('#dr-add'); await page.waitForSelector('#drawer a:has-text("Open task")');
+    await page.keyboard.press('Escape');
+    assert.ok(/Planned/.test(await text('#ow-b')), 'status column reflects the new task');
+    await page.click('#dk-fab');
+    for (const q of ['Which pages should I optimise today?', 'Which keywords can enter Top 10?', 'Which pages are losing traffic?', 'Which pages have CTR problems?', 'What content should I create?', 'Where am I losing against competitors?']) { await page.fill('#dk-in', q); await page.press('#dk-in', 'Enter'); }
+    assert.equal(await page.locator('.dk-a h4').count(), 6, 'all six questions get a grounded answer');
+    await page.click('#dk-x');
+    assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
   await testAsync('Statistics & Trends: own tab and route, direct URL, filters, charts, export, other screens intact', async () => {
@@ -522,7 +542,7 @@ function writeComparisonExports(dir) {
     await page.goto(base + 'app.html?demo#stats'); await toApp(); await page.waitForTimeout(400);
     assert.equal(await page.evaluate(() => location.hash), '#stats', 'direct URL keeps the route');
     assert.equal(await text('#view h1'), 'Statistics & Trends');
-    assert.equal(await text('.nav a.on span'), 'Statistics & Trends', 'its own nav item is active');
+    assert.equal(await text('.nav a.on span'), 'Performance & Trends', 'its own nav item is active');
     assert.equal(await page.$$eval('.nav a[data-view="stats"]', a => a.length), 1, 'one nav item');
     assert.ok(!(await page.$('#view .cc-title')), 'not inside the Command Center');
     // 3 months, weekly by default; totals equal the sum of the daily rows
@@ -564,7 +584,7 @@ function writeComparisonExports(dir) {
     errors.length = 0;
     await page.goto(base + 'app.html?demo#stats?tab=timing'); await toApp(); await page.waitForTimeout(500);
     assert.equal(await text('.st-pagetabs a.on'), 'Best day & time', 'direct URL opens the tab');
-    assert.equal(await text('.nav a.on span'), 'Statistics & Trends', 'same nav item');
+    assert.equal(await text('.nav a.on span'), 'Performance & Trends', 'same nav item');
     assert.ok(/Strongest/.test(await text('.tm-best')) && /Weakest/.test(await text('.tm-best')), 'best day card');
     assert.ok(/not show that publishing/.test(await text('.tm-best')), 'no publishing-time claim');
     assert.equal(await page.$$eval('#t-tm-wd tbody tr', r => r.length), 7, 'seven weekdays');
