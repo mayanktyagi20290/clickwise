@@ -240,7 +240,7 @@
 
   function risks(A, D, P) {
     const extra = (A.signals.bad || []).filter(s => !P.risks.some(r => s.l.includes(r.subject.label)));
-    return `<section class="panel cc-risk"><div class="panel-h"><h2>Risks</h2><a href="#decay">Losing ground</a><p>Data-backed declines and indexing problems, kept apart from growth ranking so they are never buried.</p></div>
+    return `<section class="panel cc-risk"><div class="panel-h"><h2>SEO alerts</h2><a href="#decay">Losing ground</a><p>Data-backed declines and indexing problems, kept apart from growth ranking so they are never buried.</p></div>
       ${P.risks.length ? G().riskList(P.risks, 5) : `<p class="empty">${D.prevStart || (D.prevQ && D.prevQ.length) ? 'No meaningful declines against the previous period.' : 'No comparison period, so declines can’t be detected. Connect with “Compare with the previous period”, or upload two exports.'}${D.source !== 'file' ? ' <a href="#indexing">Inspect indexing</a> to add technical risks.' : ''}</p>`}
       ${extra.length ? `<div class="cc-also"><h3>Also worth a look</h3>${extra.slice(0, 3).map(i => `<a href="#${i.view}"><span>${esc(i.l)}</span><b>${esc(i.v)}</b></a>`).join('')}</div>` : ''}</section>`;
   }
@@ -281,6 +281,63 @@
         ${rows.map(r => `<tr><td class="u">${urlCell(r.p, r.path)}</td><td class="r">${fmtN(r.clicks)}</td><td class="r">${r.ch == null ? (r.clicks && rising && rising.length ? '<span class="gainv">new</span>' : '<span class="flat">—</span>') : `<span class="${r.ch >= 0 ? 'gainv' : 'lossv'}">${r.ch >= 0 ? '↑' : '↓'} ${Math.abs(r.ch).toFixed(0)}%</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No pages in this data.</p>'}</section>`;
   }
 
+  // ── SEO Growth Workflow: five connected stages; every count comes from the loaded data and saved tasks ──
+  function workflow(A, D) {
+    if (!G()) return '';
+    const P = G().prio(A, D); if (!P) return '';
+    const tasks = G().tasks(D.site).list, n = st => tasks.filter(t => t.status === st).length;
+    const planned = n('planned'), prog = n('progress'), done = n('implemented') + n('validated');
+    const fx = G().fixesOf(D.site), fixes = Array.isArray(fx) ? fx.length : 0;
+    const open = P.items.filter(g => !g.task).length, alerts = P.risks.length, p1 = P.items.filter(g => g.priority === 'P1' && !g.task).length;
+    const pl = (k, one, many) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
+    const cur = done > 0 && planned + prog === 0 ? 'measure' : prog > 0 ? 'execute' : planned > 0 ? 'prioritise' : 'discover';
+    const why = { measure: `${pl(done, 'change is', 'changes are')} implemented and nothing is waiting, so the next step is measuring them.`,
+      execute: `${pl(prog, 'task is', 'tasks are')} in progress.`, prioritise: `${pl(planned, 'task is', 'tasks are')} planned but none has started.`,
+      discover: tasks.length ? 'No planned or active work, so the next step is finding the next opportunity.' : 'No tasks yet, so the first step is picking opportunities to work on.' };
+    const IC = { discover: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>', diagnose: '<path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>', prioritise: '<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>', execute: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>', measure: '<path d="M3 3v18h18"/><path d="M7 16v-4M11 16V9M15 16v-3M19 8l-4 4"/>' };
+    const S = [
+      ['discover', 'Discover', 'Find SEO opportunities.', '#opps', 'Opportunities', pl(open, 'open opportunity', 'open opportunities'), [['#opps', 'SEO Opportunities']]],
+      ['diagnose', 'Diagnose', 'Understand why organic performance is changing.', '#ask', 'Ask Clickwise', alerts ? pl(alerts, 'alert to investigate', 'alerts to investigate') : 'No alerts found', [['#ask', 'Ask Clickwise'], ['#stats', 'Statistics & Trends']]],
+      ['prioritise', 'Prioritise', 'Identify the highest-impact actions.', '#priorities', 'Priorities', `${pl(p1, 'P1 not started', 'P1 not started')} · ${pl(planned, 'planned', 'planned')}`, [['#priorities', 'Priorities'], ['#tasks', 'Action Board']]],
+      ['execute', 'Execute', 'Optimise content and technical SEO.', '#content', 'Content & Links', `${pl(prog, 'task in progress', 'tasks in progress')}`, [['#content', 'Content & Links'], ['#workflows', 'Automation & Workflows']]],
+      ['measure', 'Measure', 'Connect SEO work to traffic, leads and revenue.', '#stats', 'Performance & Trends', `${pl(done, 'change implemented', 'changes implemented')}${fixes ? ` · ${pl(fixes, 'fix tracked', 'fixes tracked')}` : ''}`, [['#stats', 'Performance & Trends'], ['#fixes', 'Fix Tracker']]]
+    ];
+    const ci = S.findIndex(x => x[0] === cur);
+    return `<section class="panel wf" aria-labelledby="wf-h"><div class="panel-h"><h2 id="wf-h">SEO Growth Workflow</h2><p>From search data to measurable organic growth.</p></div>
+      <ol class="wf-steps">${S.map((x, i) => `<li class="wf-step${i < ci ? ' past' : ''}${i === ci ? ' current' : ''}"${i === ci ? ' aria-current="step"' : ''}>
+        <span class="wf-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${IC[x[0]]}</svg></span>
+        <a class="wf-main" href="${x[3]}" title="Open ${esc(x[4])}"><span class="wf-n">${String(i + 1).padStart(2, '0')}</span> <b>${x[1]}</b></a>
+        <p>${esc(x[2])}</p><p class="wf-st num">${esc(x[5])}</p>
+        <div class="wf-l">${x[6].map(l => `<a href="${l[0]}">${esc(l[1])}</a>`).join('')}</div></li>`).join('')}</ol>
+      <p class="wf-why"><b>Current stage: ${S[ci][1]}.</b> ${esc(why[cur])} <span class="flat">Leads and revenue need an analytics connection; here the work is measured on Search Console clicks.</span></p></section>`;
+  }
+  // ── Opportunity summary and the single biggest growth opportunity ──
+  function summary(A, D) {
+    if (!G()) return '';
+    const P = G().prio(A, D); if (!P) return '';
+    const items = P.items, c = P.counts, tot = P.totals.growth;
+    const mid = g => g.impact.kind === 'none' || g.impact.recoverable === false ? 0 : ((g.impact.lo || 0) + (g.impact.hi || 0)) / 2;
+    const big = items.filter(g => mid(g) > 0).sort((a, b) => mid(b) - mid(a))[0];
+    const cat = {}; items.forEach(g => { cat[g.category] = (cat[g.category] || 0) + 1; });
+    const cats = Object.entries(cat).sort((a, b) => b[1] - a[1]).slice(0, 6), max = Math.max(1, ...cats.map(x => x[1]));
+    const sum = `<section class="panel cc-sum"><div class="panel-h"><h2>Opportunity summary</h2><a href="#opps">Open opportunities →</a>
+        <p>Clicks are estimates from your own CTR and rankings, shown as a range. They are not guaranteed results.</p></div>
+      <div class="cc-sumg">
+        <div><b class="num">${items.length.toLocaleString()}</b><span>opportunities</span></div>
+        <div><b class="num pri p1">${c.P1}</b><span>P1 · do first</span></div>
+        <div><b class="num pri p2">${c.P2}</b><span>P2 · next</span></div>
+        <div><b class="num pri p3">${c.P3}</b><span>P3 · later</span></div></div>
+      <p class="cc-pot">${tot && tot.hi >= 1 ? `Potential: <b class="gainv num">${range(tot.lo, tot.hi)}</b> clicks a month, each search counted once.` : 'No click estimate in this data.'}</p>
+      <ul class="cc-cats">${cats.map(([k, n]) => `<li><span>${esc(k)}</span><i style="--w:${(n / max * 100).toFixed(0)}%"></i><b class="num">${n}</b></li>`).join('')}</ul></section>`;
+    const bigH = big ? `<section class="panel cc-big"><div class="panel-h"><h2>Biggest growth opportunity</h2><a href="#opp?id=${encodeURIComponent(big.id)}">Full detail →</a></div>
+      <div class="panel-b"><p class="cc-big-t"><span class="tag">${esc(big.typeLabel)}</span> <b>${esc(big.subject.label)}</b></p>
+        <p class="cc-big-n"><b class="gainv num">${range(big.impact.lo, big.impact.hi)}</b> <span class="flat">clicks a month (estimate) · ${esc(big.confidence.level)} confidence · ${esc(big.effort.level)} effort</span></p>
+        <h3>Evidence</h3><p>${esc(big.reason || big.why || '')}</p>
+        <h3>Recommended fix</h3><p>${esc(big.action)}</p>
+        <p><a class="btn-primary sm" href="#opps">See it in the list</a> <span class="flat">Priority ${esc(big.priority)} · score ${big.score}</span></p></div></section>`
+      : `<section class="panel cc-big"><div class="panel-h"><h2>Biggest growth opportunity</h2></div><p class="empty" style="padding:16px 20px">No opportunity with a click estimate in this data yet.</p></section>`;
+    return `<div class="cc-grid even">${sum}${bigH}</div>`;
+  }
   function html(A, D) {
     if (!G()) return '';
     let P = G().prio(A, D); if (!P) return statusBar(A, D);
@@ -435,5 +492,5 @@
   }
   const hasMarkers = D => !!(G() && TK.markers(G().tasks(D.site).list, G().fixesOf(D.site)).some(m => m.d >= D.start && m.d <= D.end));
 
-  window.CW_COMMAND = { html, target, opps, tasksPanel, insights, changes, winners, results, body, mount, markerPlugin, hasMarkers, vsEstimate, DEF, headline };
+  window.CW_COMMAND = { workflow, summary, html, target, opps, tasksPanel, insights, changes, winners, results, body, mount, markerPlugin, hasMarkers, vsEstimate, DEF, headline };
 })();

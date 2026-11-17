@@ -57,6 +57,15 @@
       <div><b class="num gainv">${tot && tot.hi >= 1 ? range(tot.lo, tot.hi) : '—'}</b><span>clicks / month, each search counted once</span></div></div>`;
     const html = `${ui.head('SEO Opportunities', 'Every opportunity found in your Search Console data, ranked by priority. Select a row for the evidence, the reasoning and the next step.')}
       ${strip}
+      <details class="panel cc-how"><summary>How the priority score works</summary><div class="panel-b">
+        <p>Each opportunity gets a 0–100 score from five weighted components. P1 is 60 or more, P2 is 42–59, P3 is below 42. Nothing is hidden: open any row to see its own points.</p>
+        <table class="how-t"><thead><tr><th>Component</th><th class="r">Weight</th><th>What feeds it</th></tr></thead><tbody>
+        ${[['impact', 'Traffic potential', 'Search demand (impressions), current position, CTR gap against what this site earns at the target position, and the resulting estimated extra clicks a month'],
+          ['confidence', 'Evidence confidence', 'Data volume, length of period, how the expected CTR was measured, known results-page effects'],
+          ['relevance', 'Business relevance', 'Whether the page or search is in a priority section or term you set (Priorities screen)'],
+          ['speed', 'Time to impact', 'How soon Search usually reflects this kind of change'],
+          ['effort', 'Implementation difficulty', 'Low, medium or high effort, inverted so easier work scores higher']].map(r => `<tr><td><b>${r[1]}</b></td><td class="r num">${P.wSum ? Math.round((P.weights[r[0]] || 0) / P.wSum * 100) : 0}%</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>
+        <p class="flat">Estimated clicks are a range based on your own data, not a forecast or a guarantee. Google updates, seasonality and competitors can change the outcome.</p></div></details>
       <section class="panel ow" id="ow">
         <div class="ow-bar">
           <label class="ow-search">${ico('search')}<input id="ow-q" type="search" placeholder="Search queries, URLs or types" value="${esc(F.q)}" aria-label="Search opportunities" autocomplete="off"></label>
@@ -111,6 +120,7 @@
   };
 
   // ───────────── detail drawer ─────────────
+  const PARTL = { impact: 'Traffic potential', confidence: 'Evidence confidence', relevance: 'Business relevance', speed: 'Time to impact', effort: 'Implementation difficulty' };
   let drawer, lastFocus;
   function closeDrawer() { if (!drawer) return; drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); document.getElementById('dr-scrim').hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
   function ensureDrawer() {
@@ -138,6 +148,10 @@
         <p>${im.kind === 'none' ? 'No click estimate for this item. It is a signal to watch.' : `<b class="${im.kind === 'growth' ? 'gainv' : 'lossv'}">${range(im.lo, im.hi)} clicks a month</b> (${esc(im.kind)}). ${esc(im.note || '')}${im.basis ? ' ' + esc(im.basis) + '.' : ''}`}</p>
         ${im.overlap ? `<p class="flat">${esc(im.overlap)}.</p>` : ''}
         <h3>Why it was picked</h3><p>${esc(g.reason || g.why || '')}</p>${list(g.evidence)}
+        <h3>Priority score: ${g.score}/100 (${esc(g.priority)})</h3>
+        <table class="how-t"><tbody>${(g.parts || []).map(x => `<tr><td>${esc(PARTL[x.key] || x.key)}</td><td class="r num">${x.points.toFixed(1)} pts</td><td class="flat">${esc(x.why)}</td></tr>`).join('')}</tbody></table>
+        <h3>Tracking history</h3>
+        ${g.task && g.task.history && g.task.history.length ? `<ol class="hist">${g.task.history.slice().reverse().map(h => `<li><b>${esc(TK().STATUS[h.status] || h.status)}</b> <span class="flat">${esc(String(h.at).slice(0, 10))}</span></li>`).join('')}</ol>` : '<p class="flat">Not tracked yet. Add it to the Action Center to start a history of status changes and measure the result.</p>'}
         <h3>Confidence: ${esc(g.confidence.level)} (${g.confidence.score}/100)</h3>
         <ul class="why">${g.confidence.why.map(w => `<li><b class="${w.points >= 0 ? 'up' : 'down'}">${w.points > 0 ? '+' : ''}${w.points}</b> ${esc(w.text)}</li>`).join('')}</ul>
         ${g.warnings && g.warnings.length ? `<h3>Warnings</h3>${list(g.warnings)}` : ''}
@@ -197,6 +211,20 @@
       else if (e.key === 'Escape' && dock.classList.contains('open') && !(drawer && drawer.classList.contains('open'))) openDock(false);
     });
   }
+  // ───────────── in-page tab bars: one sidebar item per area, its screens as tabs ─────────────
+  const TABS = {
+    opps: [['opps', 'All opportunities'], ['priorities', 'Priorities'], ['plan', 'Action plan'], ['quickwins', 'Almost page one'], ['ctr', 'Titles to rewrite'], ['cannibal', 'Competing pages'], ['decay', 'Losing ground'], ['opps-all', 'Evidence list']],
+    tasks: [['tasks', 'Action board'], ['fixes', 'Fix tracker']],
+    perf: [['stats', 'Trends'], ['queries', 'Queries'], ['pages', 'Pages'], ['sections', 'Site clusters']],
+    analyst: [['ask', 'Ask'], ['ai', 'AI search visibility'], ['genai', 'Generative AI report'], ['intent', 'Search intent'], ['blog', 'Content intelligence']],
+    auto: [['workflows', 'Workflows'], ['filters', 'Goals &amp; experiments']]
+  };
+  const bar = (key, here) => `<nav class="tabs" aria-label="Views in this area">${TABS[key].map(t => `<a href="#${t[0]}"${t[0] === here ? ' class="on" aria-current="page"' : ''}>${t[1]}</a>`).join('')}</nav>`;
+  const wrap = (name, key, here) => { const f = V[name]; if (!f) return; V[name] = (...a) => { const o = f(...a); o.html = bar(key, here || name) + o.html; return o; }; };
+  [['opps', 'opps'], ['priorities', 'opps'], ['plan', 'opps'], ['quickwins', 'opps'], ['ctr', 'opps'], ['cannibal', 'opps'], ['decay', 'opps'], ['opps-all', 'opps'], ['opp', 'opps', 'opps'],
+    ['tasks', 'tasks'], ['fixes', 'tasks'], ['stats', 'perf'], ['queries', 'perf'], ['pages', 'perf'], ['sections', 'perf'], ['section', 'perf', 'sections'],
+    ['ask', 'analyst'], ['ai', 'analyst'], ['genai', 'analyst'], ['intent', 'analyst'], ['blog', 'analyst'], ['workflows', 'auto'], ['wf', 'auto', 'workflows'], ['filters', 'auto']].forEach(x => wrap(x[0], x[1], x[2]));
+
   // called by the router after every screen renders
   window.CW_SHELL = {
     sync(name) {

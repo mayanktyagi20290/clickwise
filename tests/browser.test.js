@@ -103,7 +103,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('sample data: every screen and workflow renders without errors', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
-    const views = await page.$$eval('.nav a[data-view]', a => a.map(x => x.dataset.view));
+    const views = ['overview', 'opps', 'opps-all', 'priorities', 'plan', 'quickwins', 'ctr', 'cannibal', 'decay', 'tasks', 'fixes', 'stats', 'queries', 'pages', 'sections', 'ask', 'ai', 'genai', 'intent', 'blog', 'content', 'workflows', 'filters', 'live', 'discover', 'news', 'indexing'];
     for (const v of views) { await go('#' + v); assert.ok(await text('#view h1'), 'heading on ' + v); }
     const wfs = await page.evaluate(() => window.CW_WORKFLOWS.TEMPLATES.map(t => t.id));
     for (const w of wfs) { await go('#wf=' + w); assert.ok(await text('#view h1'), 'workflow ' + w); }
@@ -500,20 +500,40 @@ function writeComparisonExports(dir) {
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
-  await testAsync('sidebar: four sections open by default, collapsible, every screen reachable, current screen highlighted', async () => {
+  await testAsync('navigation: Command Center is the default, every screen is reachable and highlights one sidebar item, refresh and history work', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
+    assert.equal(await page.evaluate(() => location.hash), '#overview', 'lands on #overview');
     const open = g => page.$eval(`.nav-grp[data-grp="${g}"] .nav-group`, b => b.getAttribute('aria-expanded'));
     for (const g of ['workspace', 'intelligence', 'execution', 'search-console']) assert.equal(await open(g), 'true', g + ' open on load');
-    for (const v of ['overview', 'opps', 'opps-all', 'plan', 'quickwins', 'ctr', 'cannibal', 'decay', 'tasks', 'priorities', 'fixes', 'stats', 'queries', 'pages', 'sections', 'ask', 'ai', 'genai', 'intent', 'blog', 'content', 'workflows', 'filters', 'live', 'discover', 'news', 'indexing'])
-      assert.ok(await page.$(`.nav a[data-view="${v}"]`), v + ' has a sidebar link');
-    await go('#news');
-    assert.ok(await page.$('.nav-grp[data-grp="search-console"].has-on'), 'current screen’s group highlighted');
-    await go('#decay');
-    assert.ok(await page.isVisible('.nav a[data-view="decay"]'), 'sub-items of the active item are shown');
+    assert.ok((await page.$$('.nav a[data-view]')).length <= 12, 'sidebar is short');
+    for (const v of ['overview', 'opps', 'opps-all', 'priorities', 'plan', 'quickwins', 'ctr', 'cannibal', 'decay', 'tasks', 'fixes', 'stats', 'queries', 'pages', 'sections', 'ask', 'ai', 'genai', 'intent', 'blog', 'content', 'workflows', 'filters', 'live', 'discover', 'news', 'indexing']) { await go('#' + v); assert.equal(await page.locator('.nav a.on').count(), 1, v + ' highlights exactly one sidebar item'); assert.ok(await text('#view h1'), v + ' has a heading'); }
+    await go('#decay'); assert.ok(await page.isVisible('.tabs a.on'), 'tab bar shows the current view');
+    await go('#ai'); assert.equal(await text('.nav a.on span'), 'AI Analyst', 'AI modules live under one AI Analyst item');
+    await go('#overview'); await go('#opps'); await go('#tasks');
+    await page.goBack(); await page.waitForTimeout(200); assert.equal(await page.evaluate(() => location.hash), '#opps', 'back works');
+    await page.goForward(); await page.waitForTimeout(200); assert.equal(await page.evaluate(() => location.hash), '#tasks', 'forward works');
+    await page.goto(base + 'app.html?demo#overview'); await toApp();
+    assert.equal(await page.evaluate(() => location.hash), '#overview', 'reload keeps #overview');
     await page.click('.nav-grp[data-grp="intelligence"] .nav-group');
-    assert.ok(!(await page.isVisible('.nav a[data-view="intent"]')), 'closes on click');
+    assert.ok(!(await page.isVisible('.nav a[data-view="ask"]')), 'sections collapse');
     await page.click('.nav-grp[data-grp="intelligence"] .nav-group');
-    assert.ok(await page.isVisible('.nav a[data-view="intent"]'), 'opens on click');
+  });
+
+  await testAsync('Command Center: KPIs, trend, summary, biggest opportunity, top actions, changes and alerts', async () => {
+    await page.goto(base + 'app.html?demo#overview'); await toApp(); await page.waitForTimeout(400);
+    for (const sel of ['.tiles .tile', '#ch-trend', '.cc-sum', '.cc-big', '.cc-today', '.cc-changes', '.cc-risk']) assert.ok(await page.$(sel), sel + ' present');
+    assert.equal(await page.locator('.tiles .tile').count(), 6, 'six KPI tiles');
+    assert.ok(/not guaranteed/.test(await text('.cc-sum')), 'estimates are labelled as not guaranteed');
+    assert.ok(/SEO alerts/.test(await text('.cc-risk')), 'alerts panel');
+    assert.equal(await page.locator('.wf-step').count(), 5, 'five workflow stages');
+    assert.equal(await page.locator('.wf-step[aria-current="step"]').count(), 1, 'exactly one current stage');
+    assert.ok(await page.evaluate(() => { const t = document.querySelector('.tiles'), w = document.querySelector('.wf'), c = document.querySelector('#ch-trend'); return !!(t.compareDocumentPosition(w) & 4) && !!(w.compareDocumentPosition(c) & 4); }), 'workflow sits between KPI tiles and charts');
+    const hrefs = await page.$$eval('.wf-main', a => a.map(x => x.getAttribute('href')));
+    assert.equal(hrefs.join(), '#opps,#ask,#priorities,#content,#stats', 'stages link to their modules');
+    const secondary = await page.$$eval('.wf-l a', a => a.map(x => x.getAttribute('href')));
+    assert.equal(secondary.join(), '#opps,#ask,#stats,#priorities,#tasks,#content,#workflows,#stats,#fixes');
+    await page.click('.wf-step:nth-child(3) .wf-main'); await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => location.hash), '#priorities', 'a stage navigates to its module');
   });
 
   await testAsync('SEO Opportunities workspace: search, filter, sort, detail drawer, add to Action Center; Ask dock answers the six questions', async () => {

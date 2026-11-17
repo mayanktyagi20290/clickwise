@@ -661,7 +661,7 @@
     const view = $('view');
     view.innerHTML = out.html;
     if (out.mount) out.mount();
-    document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name));
+    document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.view === name || (a.dataset.also || '').split(' ').includes(name)));
     // Back: remember this page unless it is the one already on top (a refresh or a data update re-renders it)
     const here = '#' + raw;
     if (NAV[NAV.length - 1] !== here) { NAV.push(here); if (NAV.length > 50) NAV.splice(0, NAV.length - 50); sess.set('nav', NAV); }

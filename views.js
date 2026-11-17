@@ -331,8 +331,9 @@
       </section>`;
     const html = `${CC ? CC.html(A, D) : ''}
       ${tiles(A, D)}
+      ${CC && CC.workflow ? CC.workflow(A, D) : ''}
       ${CC && CC.target ? `<div class="cc-grid wide stretch">${trend}${CC.target(A, D)}</div>` : trend}
-      ${banner}
+      ${CC && CC.summary ? CC.summary(A, D) : banner}
       ${CC && CC.opps ? `<div class="cc-grid wide">${CC.opps(A, D)}<div class="cc-col">${CC.tasksPanel(A, D)}${CC.insights(A, D)}</div></div>
       ${CC.results ? CC.results(A, D) : ''}
       <div class="cc-grid wide">${CC.changes(A, D)}${CC.winners(A, D)}</div>
@@ -344,6 +345,7 @@
         <button class="btn-primary" type="submit">Ask</button>
       </form>
 
+      ${CC && CC.summary ? banner : ''}
       ${subsetStrip(A, D)}
 
       <div class="grid-2 even">
