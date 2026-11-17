@@ -282,7 +282,7 @@
   }
 
   // ── SEO Growth Workflow: five connected stages; every count comes from the loaded data and saved tasks ──
-  function workflow(A, D) {
+  function workflow(A, D, compact) {
     if (!G()) return '';
     const P = G().prio(A, D); if (!P) return '';
     const tasks = G().tasks(D.site).list, n = st => tasks.filter(t => t.status === st).length;
@@ -296,13 +296,14 @@
       discover: tasks.length ? 'No planned or active work, so the next step is finding the next opportunity.' : 'No tasks yet, so the first step is picking opportunities to work on.' };
     const IC = { discover: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>', diagnose: '<path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>', prioritise: '<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>', execute: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>', measure: '<path d="M3 3v18h18"/><path d="M7 16v-4M11 16V9M15 16v-3M19 8l-4 4"/>' };
     const S = [
-      ['discover', 'Discover', 'Find SEO opportunities.', '#opps', 'Opportunities', pl(open, 'open opportunity', 'open opportunities'), [['#opps', 'SEO Opportunities']]],
-      ['diagnose', 'Diagnose', 'Understand why organic performance is changing.', '#ask', 'Ask Clickwise', alerts ? pl(alerts, 'alert to investigate', 'alerts to investigate') : 'No alerts found', [['#ask', 'Ask Clickwise'], ['#stats', 'Statistics & Trends']]],
-      ['prioritise', 'Prioritise', 'Identify the highest-impact actions.', '#priorities', 'Priorities', `${pl(p1, 'P1 not started', 'P1 not started')} · ${pl(planned, 'planned', 'planned')}`, [['#priorities', 'Priorities'], ['#tasks', 'Action Board']]],
-      ['execute', 'Execute', 'Optimise content and technical SEO.', '#content', 'Content & Links', `${pl(prog, 'task in progress', 'tasks in progress')}`, [['#content', 'Content & Links'], ['#workflows', 'Automation & Workflows']]],
-      ['measure', 'Measure', 'Connect SEO work to traffic, leads and revenue.', '#stats', 'Performance & Trends', `${pl(done, 'change implemented', 'changes implemented')}${fixes ? ` · ${pl(fixes, 'fix tracked', 'fixes tracked')}` : ''}`, [['#stats', 'Performance & Trends'], ['#fixes', 'Fix Tracker']]]
+      ['discover', 'Discover', 'Find SEO opportunities.', '#opps', 'Opportunities', pl(open, 'open opportunity', 'open opportunities'), [['#opps', 'SEO Opportunities']], `${open.toLocaleString()} open`],
+      ['diagnose', 'Diagnose', 'Understand why organic performance is changing.', '#ask', 'Ask Clickwise', alerts ? pl(alerts, 'alert to investigate', 'alerts to investigate') : 'No alerts found', [['#ask', 'Ask Clickwise'], ['#stats', 'Statistics & Trends']], alerts ? `${alerts} alert${alerts === 1 ? '' : 's'}` : 'no alerts'],
+      ['prioritise', 'Prioritise', 'Identify the highest-impact actions.', '#priorities', 'Priorities', `${pl(p1, 'P1 not started', 'P1 not started')} · ${pl(planned, 'planned', 'planned')}`, [['#priorities', 'Priorities'], ['#tasks', 'Action Board']], `${p1} P1`],
+      ['execute', 'Execute', 'Optimise content and technical SEO.', '#content', 'Content & Links', `${pl(prog, 'task in progress', 'tasks in progress')}`, [['#content', 'Content & Links'], ['#workflows', 'Automation & Workflows']], `${prog} active`],
+      ['measure', 'Measure', 'Connect SEO work to traffic, leads and revenue.', '#stats', 'Performance & Trends', `${pl(done, 'change implemented', 'changes implemented')}${fixes ? ` · ${pl(fixes, 'fix tracked', 'fixes tracked')}` : ''}`, [['#stats', 'Performance & Trends'], ['#fixes', 'Fix Tracker']], `${done} done`]
     ];
     const ci = S.findIndex(x => x[0] === cur);
+    if (compact) return `<nav class="wfc" aria-label="SEO Growth Workflow"><span class="wfc-t">SEO Growth Workflow</span><ol>${S.map((x, i) => `<li${i === ci ? ' aria-current="step" class="current"' : i < ci ? ' class="past"' : ''}><a href="${x[3]}" title="${esc(x[1] + ': ' + x[5] + '. ' + (i === ci ? why[cur] : 'Open ' + x[4]))}"><span class="wfc-n">${i + 1}</span>${x[1]}<small>${esc(x[7])}</small></a></li>`).join('')}</ol></nav>`;
     return `<section class="panel wf" aria-labelledby="wf-h"><div class="panel-h"><h2 id="wf-h">SEO Growth Workflow</h2><p>From search data to measurable organic growth.</p></div>
       <ol class="wf-steps">${S.map((x, i) => `<li class="wf-step${i < ci ? ' past' : ''}${i === ci ? ' current' : ''}"${i === ci ? ' aria-current="step"' : ''}>
         <span class="wf-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${IC[x[0]]}</svg></span>

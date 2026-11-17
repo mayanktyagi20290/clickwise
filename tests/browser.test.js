@@ -115,7 +115,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('All opportunities: totals match the dashboard, filters, evidence and CSV export work', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
-    const headline = (await text('.hero h1, .v-hero h1, #view h1')).match(/\d[\d.,]*K?–[\d.,]+K?/);
+    await go('#analysis'); const headline = (await text('.hero h1, .v-hero h1, #view h1')).match(/\d[\d.,]*K?–[\d.,]+K?/);
     await go('#opps-all');
     assert.equal(await text('#view h1'), 'All opportunities');
     const growth = await text('.strip .stat.gain b');
@@ -140,7 +140,7 @@ function writeComparisonExports(dir) {
     await page.goto(base + 'app.html?demo'); await toApp();
     await page.evaluate(() => localStorage.clear());
     // the Dashboard box hands the request to the Goal builder
-    await go('#overview'); await page.fill('#ov-ask-in', 'titles to rewrite'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
+    await go('#analysis'); await page.fill('#ov-ask-in', 'titles to rewrite'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
     assert.ok(/^#filters\?q=/.test(await page.evaluate(() => location.hash)) && /Low CTR/.test(await text('.chips')), 'dashboard question opens the Goal builder');
     await go('#filters');
     assert.equal(await text('#view h1'), 'Goal builder');
@@ -333,7 +333,7 @@ function writeComparisonExports(dir) {
     await page.goto(base + 'app.html?demo'); await toApp();
     await page.evaluate(() => localStorage.clear());
     await page.goto(base + 'app.html?demo'); await toApp();
-    await go('#overview');
+    await go('#analysis');
     assert.ok(/SEO Growth Command Center/.test(await text('.cc-title')), 'command center title');
     assert.ok(/Sample data/.test(await text('.cc-status')), 'data source shown');
     assert.equal(await page.$$eval('.cc-today .cc-list > li', l => l.length), 5, 'five actions today');
@@ -367,7 +367,7 @@ function writeComparisonExports(dir) {
     assert.ok(/New title/.test(await text('.cp-rows')), 'copilot lists the change');
     await go('#ask?q=' + encodeURIComponent('how is the weather'));
     assert.ok(await page.$('a[href^="#filters?q="]'), 'unknown question offers the Goal builder');
-    await go('#overview'); await page.fill('#ov-ask-in', 'Where am I losing organic clicks?'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
+    await go('#analysis'); await page.fill('#ov-ask-in', 'Where am I losing organic clicks?'); await page.click('#ov-ask button'); await page.waitForTimeout(300);
     assert.ok(/^#ask\?q=/.test(await page.evaluate(() => location.hash)), 'dashboard question opens the copilot');
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
@@ -376,7 +376,7 @@ function writeComparisonExports(dir) {
     errors.length = 0;
     await page.goto(base + 'app.html?demo'); await toApp();
     await page.evaluate(() => localStorage.clear());
-    await page.goto(base + 'app.html?demo'); await toApp();
+    await page.goto(base + 'app.html?demo#analysis'); await toApp();
     // the main priority action is visible without scrolling at 1360 × 900
     const box = await page.$eval('.cc-hero-top', e => { const r = e.getBoundingClientRect(); return { top: r.top, h: r.height }; });
     assert.ok(box.top > 0 && box.top + box.h < 900, 'top priority banner above the fold at y=' + Math.round(box.top));
@@ -519,21 +519,23 @@ function writeComparisonExports(dir) {
     await page.click('.nav-grp[data-grp="intelligence"] .nav-group');
   });
 
-  await testAsync('Command Center: KPIs, trend, summary, biggest opportunity, top actions, changes and alerts', async () => {
+  await testAsync('Command Center: header, four KPIs, biggest opportunity, one trend chart, five priorities, compact workflow; full analysis kept', async () => {
     await page.goto(base + 'app.html?demo#overview'); await toApp(); await page.waitForTimeout(400);
-    for (const sel of ['.tiles .tile', '#ch-trend', '.cc-sum', '.cc-big', '.cc-today', '.cc-changes', '.cc-risk']) assert.ok(await page.$(sel), sel + ' present');
-    assert.equal(await page.locator('.tiles .tile').count(), 6, 'six KPI tiles');
-    assert.ok(/not guaranteed/.test(await text('.cc-sum')), 'estimates are labelled as not guaranteed');
-    assert.ok(/SEO alerts/.test(await text('.cc-risk')), 'alerts panel');
-    assert.equal(await page.locator('.wf-step').count(), 5, 'five workflow stages');
-    assert.equal(await page.locator('.wf-step[aria-current="step"]').count(), 1, 'exactly one current stage');
-    assert.ok(await page.evaluate(() => { const t = document.querySelector('.tiles'), w = document.querySelector('.wf'), c = document.querySelector('#ch-trend'); return !!(t.compareDocumentPosition(w) & 4) && !!(w.compareDocumentPosition(c) & 4); }), 'workflow sits between KPI tiles and charts');
-    const hrefs = await page.$$eval('.wf-main', a => a.map(x => x.getAttribute('href')));
-    assert.equal(hrefs.join(), '#opps,#ask,#priorities,#content,#stats', 'stages link to their modules');
-    const secondary = await page.$$eval('.wf-l a', a => a.map(x => x.getAttribute('href')));
-    assert.equal(secondary.join(), '#opps,#ask,#stats,#priorities,#tasks,#content,#workflows,#stats,#fixes');
-    await page.click('.wf-step:nth-child(3) .wf-main'); await page.waitForTimeout(200);
-    assert.equal(await page.evaluate(() => location.hash), '#priorities', 'a stage navigates to its module');
+    assert.equal(await text('#view h1'), 'Command Center');
+    assert.equal(await page.locator('.ov-k').count(), 4, 'four KPI cards');
+    assert.equal(await page.locator('#view canvas').count(), 1, 'one chart');
+    assert.ok(await page.$('.ov-big'), 'biggest opportunity');
+    assert.ok(/not a promise/.test(await text('.ov-big')), 'estimate is labelled as not guaranteed');
+    const rows = await page.locator('.ov-t tbody tr').count(); assert.ok(rows >= 1 && rows <= 5, 'at most five priorities');
+    assert.equal(await page.locator('.wfc li').count(), 5, 'five workflow stages');
+    assert.equal(await page.locator('.wfc li[aria-current="step"]').count(), 1, 'one current stage');
+    assert.equal((await page.$$eval('.wfc a', a => a.map(x => x.getAttribute('href')))).join(), '#opps,#ask,#priorities,#content,#stats', 'stages link to their modules');
+    await page.click('[data-metric="pos"]'); await page.click('[data-metric="ctr"]');
+    assert.ok(await page.evaluate(() => { const t = document.querySelector('.ov-chart'), w = document.querySelector('.wfc'); return !!(t.compareDocumentPosition(w) & 4); }), 'workflow comes last');
+    await page.click('.ov-t tbody tr a'); await page.waitForTimeout(200);
+    assert.ok(/^#opp\?id=/.test(await page.evaluate(() => location.hash)), 'View details opens the opportunity');
+    await go('#analysis'); assert.ok(await page.$('.cc-grid'), 'the full analysis keeps the removed widgets');
+    assert.ok(await page.$('#ch-dist'), 'position distribution chart kept');
   });
 
   await testAsync('SEO Opportunities workspace: search, filter, sort, detail drawer, add to Action Center; Ask dock answers the six questions', async () => {
@@ -596,7 +598,7 @@ function writeComparisonExports(dir) {
     assert.ok(/Clickwise Statistics & Trends/.test(csv) && /"Month"/.test(csv) && /"Week"/.test(csv), 'report CSV');
     // the rest of the app still works
     for (const v of ['priorities', 'tasks', 'ask', 'opps']) { await go('#' + v); assert.ok(await text('#view h1'), v); }
-    await go('#overview'); assert.ok(await page.$('#view .cc-title'), 'Command Center unchanged');
+    await go('#analysis'); assert.ok(await page.$('#view .cc-title'), 'Command Center unchanged');
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
   });
 
@@ -644,7 +646,7 @@ function writeComparisonExports(dir) {
     assert.equal(await text('#view h1'), 'Queries', 'upload reload keeps the page');
     assert.ok(!/sample/.test(await text('#top-site')), 'the uploaded data, not the sample');
     // New analysis forgets the session: a reload then explains the start screen
-    await page.click('#btn-new'); await page.goto('about:blank'); await page.goto(base + 'app.html#overview');
+    await page.click('#btn-new'); await page.goto('about:blank'); await page.goto(base + 'app.html#analysis');
     assert.ok(await page.isVisible('#start') && await page.isVisible('#start-info'), 'start screen after New analysis');
     assert.equal(errors.filter(e => !/ERR_/.test(e)).length, 0, 'JS errors: ' + errors.join(' | '));
     await page.goto(base + 'app.html?demo'); await toApp(); // leave the app open for the next tests
@@ -683,7 +685,7 @@ function writeComparisonExports(dir) {
 
   if (files.xlsx) await testAsync('Excel upload: site totals, coverage and ranges on the dashboard', async () => {
     await page.click('#btn-new'); await page.setInputFiles('#file-input', files.xlsx); await toApp();
-    await go('#overview');
+    await go('#analysis');
     const tiles = await page.$$eval('.tiles .tile', t => t.map(x => x.textContent.replace(/\s+/g, ' ')));
     assert.ok(/102\.4M\s*Impressions/.test(tiles[1]), 'site impressions tile: ' + tiles[1]);
     const cov = await text('.coverage');
@@ -720,7 +722,7 @@ function writeComparisonExports(dir) {
 
   if (files.xlsx) await testAsync('CSV files selected together load like the Excel download', async () => {
     await page.click('#btn-new'); await page.setInputFiles('#file-input', files.csvs); await toApp();
-    await go('#overview');
+    await go('#analysis');
     assert.ok(/62\.5%/.test(await text('.coverage')), 'coverage from CSVs');
   });
 
@@ -749,13 +751,13 @@ function writeComparisonExports(dir) {
     const left = await page.evaluate(s => ['cw:site:', 'cw:saved:', 'cw:runs:', 'cw:fixes:'].filter(k => localStorage.getItem(k + s) != null), site);
     assert.equal(left.length, 0, 'keys left: ' + left.join(','));
     assert.ok(await page.isVisible('#start'), 'back to start');
-    await page.goto('about:blank'); await page.goto(base + 'app.html#overview');
+    await page.goto('about:blank'); await page.goto(base + 'app.html#analysis');
     assert.ok(await page.isVisible('#start-info'), 'reload explanation shown');
   });
 
   // Every screen that depends on a comparison period, checked for both ways of uploading one.
   const checkComparison = async (label) => {
-    await go('#overview');
+    await go('#analysis');
     assert.ok(await page.$('.tiles .tile .tile-d'), label + ': site tiles show change vs previous');
     assert.ok(await page.$('.subset .chg.good, .subset .chg.bad'), label + ': non-brand panel shows change');
     await go('#decay');
@@ -854,7 +856,7 @@ function writeComparisonExports(dir) {
     assert.ok((await p2.$$('#t-can tbody tr')).length > 0, 'competing pages listed');
     await go2('#decay');
     assert.ok((await p2.$$('#t-dp tbody tr')).length > 0, 'Losing ground filled from the previous period');
-    await go2('#overview');
+    await go2('#analysis');
     assert.ok(await p2.$('.tiles .tile .tile-d'), 'site tiles compare with the previous period');
     assert.equal(errs.length, 0, 'JS errors: ' + errs.join(' | '));
     await ctx2.close();
@@ -941,7 +943,7 @@ function writeComparisonExports(dir) {
 
   await testAsync('sample data: date and site pills explain the range is fixed', async () => {
     await page.goto(base + 'app.html?demo'); await toApp();
-    await page.click('#top-range-btn'); await page.waitForSelector('#scope-dialog[open]');
+    await go('#queries'); await page.click('#top-range-btn'); await page.waitForSelector('#scope-dialog[open]');
     assert.ok(/sample data/.test(await text('#scope-fixed-msg')), 'explains sample data');
     assert.ok(await page.isVisible('#scope-new') && !(await page.isVisible('#scope-go')), 'offers a new analysis');
     await page.click('#scope-cancel');

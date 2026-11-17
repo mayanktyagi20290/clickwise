@@ -885,5 +885,5 @@
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = label, 1500); }).catch(() => { b.textContent = 'Select and copy manually'; });
   });
 
-  window.CW_VIEWS = { V, destroyCharts, esc, ui: { table, drawTable, TABLES, C, head, stat, ledger, accHead, svg, ICON, pctf, posTag, urlCell, serp, gainCell, range, methodNote, tileDelta, chart, cssVar } };
+  window.CW_VIEWS = { V, destroyCharts, esc, ui: { spark, rollup, table, drawTable, TABLES, C, head, stat, ledger, accHead, svg, ICON, pctf, posTag, urlCell, serp, gainCell, range, methodNote, tileDelta, chart, cssVar } };
 })();

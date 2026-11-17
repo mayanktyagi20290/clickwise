@@ -712,6 +712,14 @@
     A = analyse(); counts(); route();
   });
 
+  // Refresh from the Command Center: a Search Console analysis is pulled again with the same options
+  document.addEventListener('cw:refresh', async () => {
+    if (!D) return;
+    if (D.source !== 'api' || typeof LAST === 'undefined' || !LAST) { status(D.source === 'demo' ? 'Sample data does not change' : 'Uploaded data does not change. Connect Search Console to refresh.'); setTimeout(() => status(''), 3500); return; }
+    status('Refreshing from Search Console…');
+    await analyseProperty({ ...LAST }, { error: $('scope-error'), go: {} });
+    if (!$('scope-error').hidden) { status($('scope-error').textContent); setTimeout(() => status(''), 5000); }
+  });
   // events from the automation screens
   document.addEventListener('cw:demo', () => { history.replaceState(null, '', location.pathname + location.hash); loaded(window.CW_DEMO.build()); });
   document.addEventListener('cw:ignore', e => {

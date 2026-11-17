@@ -207,3 +207,73 @@
 .wf-main{display:flex;flex-direction:column;align-items:center}
 .wf-l{justify-content:center}
 @media (max-width:700px){.wf-step{flex-direction:row;flex-wrap:wrap;text-align:left;align-items:flex-start;gap:2px 12px}.wf-main{flex-direction:row;gap:8px}.wf-n{display:inline;margin:0}}
+
+/* ================= Command Center (#overview): simplified ================= */
+.on-overview .top-meta{display:none}
+.on-overview .top-inner{justify-content:flex-end;border:0;box-shadow:none;background:transparent;padding:6px 0}
+.on-overview .top{padding-bottom:0}
+.ov-h{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 6px}
+.ov-h h1{font:700 22px/1.25 var(--display);letter-spacing:-.015em;margin:0}
+.ov-h p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.ov-ctl{display:flex;gap:8px;flex-wrap:wrap}
+.ov-b{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;color:var(--ink);max-width:280px}
+.ov-b span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-b svg{width:15px;height:15px;color:var(--muted);flex:none}
+.ov-b:hover{border-color:#CBD5E1;background:var(--sunk)}
+.ov-ref{color:var(--signal-ink)}.ov-ref svg{color:var(--signal)}
+.ov-meta{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;margin:0 0 16px;font-size:12.5px;color:var(--muted)}
+.ov-load{color:var(--signal-ink)}
+.ov-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ov-k{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.ov-kl{font-size:12.5px;color:var(--muted);font-weight:500}
+.ov-kv{font:700 26px/1.15 var(--display);letter-spacing:-.02em;margin:4px 0 8px}
+.ov-kd{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:26px;font-size:12px}
+.ov-kd .spark{width:84px;height:26px;flex:none;color:var(--signal)}
+.ov-scope{margin:8px 0 16px;font-size:12px;color:var(--muted)}
+.ov-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.ov-ch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;flex-wrap:wrap}
+.ov-ch h2{font:600 15px/1.3 var(--display);margin:0}
+.ov-ch a{font-size:12.5px;font-weight:600;text-decoration:none;color:var(--signal-ink)}
+.ov-big{border-left:3px solid var(--signal)}
+.ov-big .ov-ch{padding-bottom:4px}
+.ov-bg{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;padding:4px 18px 16px}
+.ov-bt h3{font:600 17px/1.3 var(--display);margin:0 0 2px;word-break:break-word}
+.ov-pg{margin:0 0 8px;font-size:12.5px;color:var(--muted)}.ov-pg b{color:var(--ink-2);font-weight:500}
+.ov-bt dl{margin:0;display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13px}
+.ov-bt dt{color:var(--muted);font-size:12px;padding-top:1px}.ov-bt dd{margin:0}.ov-bt ul{margin:0;padding-left:16px}.ov-bt li{margin:0 0 2px}
+.ov-bm{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+.ov-bm>div{background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:8px 10px;display:flex;flex-direction:column}
+.ov-bm span{font-size:11px;color:var(--muted)}.ov-bm b{font-size:16px}
+.ov-bm .btn-primary{grid-column:1/-1;display:inline-flex;justify-content:center;align-items:center;gap:8px;text-decoration:none;font-size:13px;margin-top:4px}
+.ov-bm .btn-primary svg{width:14px;height:14px}
+.ov-chart{height:240px;padding:0 14px 14px;position:relative}
+.ov-t{width:100%;border-collapse:collapse;font-size:13px}
+.ov-t th{text-align:left;font-size:11.5px;font-weight:600;color:var(--muted);padding:8px 14px;background:var(--sunk);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line)}
+.ov-t td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.ov-t tr:last-child td{border-bottom:0}.ov-t .r{text-align:right;white-space:nowrap}.ov-t a{font-weight:600;text-decoration:none;color:var(--signal-ink)}
+.ov-pq{max-width:260px;word-break:break-word}.ov-pq small{display:block;color:var(--muted)}
+.ov-act{color:var(--ink-2);max-width:380px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ov-empty{padding:28px;text-align:center}.ov-empty h2{font-size:16px;margin:0 0 6px}.ov-empty p{margin:0 0 10px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* compact workflow bar */
+.wfc{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 16px;box-shadow:var(--shadow)}
+.wfc-t{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.wfc ol{list-style:none;margin:0;padding:0;display:flex;flex:1;gap:4px;flex-wrap:wrap;align-items:center}
+.wfc li{display:flex;align-items:center}
+.wfc li+li::before{content:"→";color:var(--line);margin:0 6px;font-size:13px}
+.wfc li.past+li::before,.wfc li.current::before{color:var(--signal)}
+.wfc a{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:500;color:var(--ink-2);text-decoration:none}
+.wfc a:hover{background:var(--sunk)}
+.wfc a small{color:var(--muted);font-size:11.5px}
+.wfc-n{width:18px;height:18px;border-radius:50%;background:var(--sunk);color:var(--muted);font-size:11px;font-weight:700;display:grid;place-items:center}
+.wfc li.past .wfc-n{background:var(--signal-soft);color:var(--signal-ink)}
+.wfc li.current a{background:var(--signal-soft);color:var(--signal-ink);font-weight:600}
+.wfc li.current .wfc-n{background:var(--signal);color:#fff}
+@media (max-width:1000px){.ov-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-bg{grid-template-columns:1fr}.ov-bm{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:640px){.ov-bt dl{grid-template-columns:1fr;gap:2px}.ov-bt dt{margin-top:6px}.ov-bm{grid-template-columns:1fr 1fr}
+  .ov-t thead{display:none}.ov-t tr{display:block;padding:10px 14px;border-bottom:1px solid var(--line-soft)}.ov-t td{display:block;padding:2px 0;border:0}.ov-t .r{text-align:left}
+  .wfc ol{flex-direction:column;align-items:flex-start}.wfc li+li::before{content:"↓";margin:0 0 0 14px}.wfc li{flex-wrap:wrap}}
+@media print{.ov-ctl{display:none}}
+.on-overview .top-ask{display:none}
+.ov-chart{height:210px}
+.ov-kpis+.ov-scope{margin-bottom:14px}

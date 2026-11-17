@@ -215,20 +215,21 @@
   const TABS = {
     opps: [['opps', 'All opportunities'], ['priorities', 'Priorities'], ['plan', 'Action plan'], ['quickwins', 'Almost page one'], ['ctr', 'Titles to rewrite'], ['cannibal', 'Competing pages'], ['decay', 'Losing ground'], ['opps-all', 'Evidence list']],
     tasks: [['tasks', 'Action board'], ['fixes', 'Fix tracker']],
-    perf: [['stats', 'Trends'], ['queries', 'Queries'], ['pages', 'Pages'], ['sections', 'Site clusters']],
+    perf: [['stats', 'Trends'], ['analysis', 'Full analysis'], ['queries', 'Queries'], ['pages', 'Pages'], ['sections', 'Site clusters']],
     analyst: [['ask', 'Ask'], ['ai', 'AI search visibility'], ['genai', 'Generative AI report'], ['intent', 'Search intent'], ['blog', 'Content intelligence']],
     auto: [['workflows', 'Workflows'], ['filters', 'Goals &amp; experiments']]
   };
   const bar = (key, here) => `<nav class="tabs" aria-label="Views in this area">${TABS[key].map(t => `<a href="#${t[0]}"${t[0] === here ? ' class="on" aria-current="page"' : ''}>${t[1]}</a>`).join('')}</nav>`;
   const wrap = (name, key, here) => { const f = V[name]; if (!f) return; V[name] = (...a) => { const o = f(...a); o.html = bar(key, here || name) + o.html; return o; }; };
   [['opps', 'opps'], ['priorities', 'opps'], ['plan', 'opps'], ['quickwins', 'opps'], ['ctr', 'opps'], ['cannibal', 'opps'], ['decay', 'opps'], ['opps-all', 'opps'], ['opp', 'opps', 'opps'],
-    ['tasks', 'tasks'], ['fixes', 'tasks'], ['stats', 'perf'], ['queries', 'perf'], ['pages', 'perf'], ['sections', 'perf'], ['section', 'perf', 'sections'],
+    ['tasks', 'tasks'], ['fixes', 'tasks'], ['stats', 'perf'], ['analysis', 'perf'], ['queries', 'perf'], ['pages', 'perf'], ['sections', 'perf'], ['section', 'perf', 'sections'],
     ['ask', 'analyst'], ['ai', 'analyst'], ['genai', 'analyst'], ['intent', 'analyst'], ['blog', 'analyst'], ['workflows', 'auto'], ['wf', 'auto', 'workflows'], ['filters', 'auto']].forEach(x => wrap(x[0], x[1], x[2]));
 
   // called by the router after every screen renders
   window.CW_SHELL = {
     sync(name) {
       ensureDock();
+      document.body.classList.toggle('on-overview', name === 'overview');
       const full = name === 'ask';              // the full Ask page already is the interface
       document.getElementById('dk-fab').hidden = full;
       if (full) openDock(false);
