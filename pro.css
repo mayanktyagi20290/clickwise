@@ -58,3 +58,5 @@
 .dk-fab{right:0!important;bottom:auto!important;top:46%;border-radius:10px 0 0 10px!important;writing-mode:vertical-rl;padding:14px 8px!important;background:#1a1a1a!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)!important;font-size:12px!important}
 .dk-fab svg{display:none}
 .cal-c.fut{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.06);pointer-events:none;opacity:.5}
+:root[data-theme="dark"] a.btn-primary.top-ask{background:transparent!important;color:#fff!important;border:0!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)!important}
+:root[data-theme="dark"] a.btn-primary.top-ask:hover{box-shadow:inset 0 0 0 1px #F59E0B!important}
