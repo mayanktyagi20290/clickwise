@@ -70,9 +70,10 @@
   const brandTest = D => { try { const s = JSON.parse(localStorage.getItem('cw:site:' + D.site)); return s && s.brand && s.brand.length ? CW.makeBrandTest(s.brand) : null; } catch (e) { return null; } };
 
   // the page has two tabs: Trends (this file) and Best day & time (timing-view.js)
-  const tabs = on => `<div class="st-pagetabs" role="tablist" aria-label="Statistics views"><a role="tab" href="#stats" class="${on === 'trends' ? 'on' : ''}" aria-selected="${on === 'trends'}">Trends</a><a role="tab" href="#stats?tab=timing" class="${on === 'timing' ? 'on' : ''}" aria-selected="${on === 'timing'}">Best day &amp; time</a></div>`;
+  const tabs = on => `<div class="st-pagetabs" role="tablist" aria-label="Statistics views"><a role="tab" href="#stats" class="${on === 'trends' ? 'on' : ''}" aria-selected="${on === 'trends'}">Trends</a><a role="tab" href="#stats?tab=timing" class="${on === 'timing' ? 'on' : ''}" aria-selected="${on === 'timing'}">Best day &amp; time</a><a role="tab" href="#stats?tab=daywise" class="${on === 'daywise' ? 'on' : ''}" aria-selected="${on === 'daywise'}">Day-wise</a></div>`;
   V.stats = (A, D) => {
     if (params().get('tab') === 'timing' && window.CW_TIMINGVIEW) return window.CW_TIMINGVIEW.render(A, D);
+    if (params().get('tab') === 'daywise' && window.CW_DAYWISEVIEW) return window.CW_DAYWISEVIEW.render(A, D);
     const S = src();
     const title = 'Statistics & Trends';
     const sub = 'Your search performance over time: totals for any period, week-on-week, month-on-month and year-on-year changes, trends, and what moved.';

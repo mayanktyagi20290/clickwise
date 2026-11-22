@@ -1471,3 +1471,8 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .tk-results .panel-b,.cc-results .panel-b{padding:14px 20px}
 .rp-page .lg-head{font-size:14px}.rp-page .lg-head b{font-size:18px}
 .rp-page .lg-chips li{font-size:11.5px;padding:2px 8px}
+
+.dw-ctl{display:flex;gap:12px;align-items:flex-end;margin:0 0 12px}
+.dw-t td,.dw-t th{white-space:nowrap}
+.dw-t tr.dw-drop td{background:var(--risk-soft,#fef2f2)}
+.dw-n{margin:10px 14px 14px;font-size:12.5px}
