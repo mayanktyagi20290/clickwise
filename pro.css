@@ -8,8 +8,8 @@
   --shadow:none;
 }
 :root[data-theme="dark"] .nav{border-right:1px solid var(--line)!important}
-:root[data-theme="dark"] .nav a.on{background:rgba(245,158,11,.10)!important;color:#FBBF24!important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
-:root[data-theme="dark"] .nav a.on svg{color:#FBBF24!important}
+:root[data-theme="dark"] .nav a.on{background:#17171A!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
+:root[data-theme="dark"] .nav a.on svg{color:#fff!important}
 :root[data-theme="dark"] .nav a.on::before{display:none}
 :root[data-theme="dark"] .logo-mark{background:#18181B!important;color:#FBBF24!important;border:1px solid var(--line)}
 :root[data-theme="dark"] .db-top h1{color:#FBBF24}
