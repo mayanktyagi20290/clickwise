@@ -85,6 +85,11 @@
     return `<section class="db-card"><div class="db-h"><h2>Site sections</h2><a href="#sections">Full view</a></div>${list.length ? `<div class="db-heat">${list.map(s => `<a class="db-hs t-${tone(s.pos)}" href="#section=${encodeURIComponent(s.key)}" style="flex:${Math.max(1, Math.round(s.clicks / mx * 10))} 1 120px"><b>${esc(s.key)}</b><span class="num">${fmtN(s.clicks)} clicks</span><small>pos ${s.pos.toFixed(1)}</small></a>`).join('')}</div><p class="db-note"><i class="t-a"></i>top 5 <i class="t-b"></i>page one <i class="t-c"></i>page two <i class="t-d"></i>deeper · size = clicks</p>` : '<p class="empty">No folders in this data.</p>'}</section>`;
   }
 
+  function pagesTable(A, D) {
+    const prev = new Map((D.prevP || []).map(r => [r.p, r.clicks]));
+    const rows = (A.P || []).slice().sort((a, b) => b.clicks - a.clicks).slice(0, 12);
+    return `<table class="dw-t"><thead><tr><th>Page</th><th class="r">Clicks</th><th class="r">Change</th><th class="r">Avg pos</th></tr></thead><tbody>${rows.map(r => { const w = prev.get(r.p), c = w ? (r.clicks - w) / w * 100 : null; return `<tr><td>${esc(CW.pathOf ? CW.pathOf(r.p) : r.p)}</td><td class="r num">${fmtN(r.clicks)}</td><td class="r num ${c == null ? '' : c >= 0 ? 'up' : 'dn'}">${c == null ? '—' : (c >= 0 ? '+' : '') + c.toFixed(0) + '%'}</td><td class="r num">${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`; }).join('')}</tbody></table>`;
+  }
   function todayCard(A) {
     const w = (A.quickWins || []).slice(0, 3);
     return `<section class="db-card"><div class="db-h"><h2>Today's 3 actions</h2><a href="#tasks">Action Center</a></div>${w.length ? w.map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.q)}">Push “${esc(x.q)}” from #${x.pos.toFixed(1)} to page one</span><span class="db-n num up">+${fmtN(x.gainLo)}–${fmtN(x.gainHi)}/mo</span></div>`).join('') : '<p class="flat">No quick wins found yet.</p>'}</section>`;
@@ -98,12 +103,12 @@
     const nb = A.totNB.clicks, b = A.totB.clicks, t = nb + b || 1, pn = A.prev && A.prev.nb ? A.prev.nb.clicks : null;
     const ch = pn ? (nb - pn) / pn * 100 : null;
     return `<section class="db-card"><div class="db-h"><h2>Brand vs non-brand flow</h2><a href="#stats">Details</a></div><div class="db-bar" style="height:10px;display:flex;border-radius:6px;overflow:hidden"><i style="width:${nb / t * 100}%;background:#22C55E"></i><i style="width:${b / t * 100}%;background:#F59E0B"></i></div>
-      <div class="db-row"><span class="db-q">Non-brand (new demand)</span><span class="db-n num up">${fmtN(nb)}${ch != null ? ' · ' + (ch >= 0 ? '+' : '') + ch.toFixed(1) + '%' : ''}</span></div><div class="db-row"><span class="db-q">Brand (existing fans)</span><span class="db-n num">${fmtN(b)}</span></div></section>`;
+      <div class="db-row db-r2"><span class="db-q">Non-brand (new demand)</span><span class="db-n num up">${fmtN(nb)}${ch != null ? ' · ' + (ch >= 0 ? '+' : '') + ch.toFixed(1) + '%' : ''}</span></div><div class="db-row db-r2"><span class="db-q">Brand (existing fans)</span><span class="db-n num">${fmtN(b)}</span></div></section>`;
   }
   function recordsCard(list) {
     if (!list.length) return '';
     const best = list.reduce((a, r) => r.clicks > a.clicks ? r : a), worst = list.reduce((a, r) => r.clicks < a.clicks ? r : a);
-    const row = (t, r, c) => `<a class="db-row" href="#stats?tab=daywise&day=${esc(r.d)}" style="text-decoration:none;color:inherit"><span class="db-q">${t} · ${esc(r.d)}</span><span class="db-n num ${c}">${fmtN(r.clicks)} clicks</span></a>`;
+    const row = (t, r, c) => `<a class="db-row db-r2" href="#stats?tab=daywise&day=${esc(r.d)}" style="text-decoration:none;color:inherit"><span class="db-q">${t} · ${esc(r.d)}</span><span class="db-n num ${c}">${fmtN(r.clicks)} clicks</span></a>`;
     return `<section class="db-card"><div class="db-h"><h2>Record days <small>· this period</small></h2><a href="#stats?tab=daywise">Day-wise</a></div>${row('Best day', best, 'up')}${row('Weakest day', worst, 'dn')}</section>`;
   }
 
@@ -117,7 +122,7 @@
       <div class="db-grid2">${flowCard(A)}${recordsCard(DW && D.C && D.C.length ? DW.rows(D.C) : [])}</div>
       <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
       ${sections(A)}
-      ${window.CW_TREEMAP ? `<section class="db-card"><div class="db-h"><h2>Pages map <small>· size = clicks, colour = change</small></h2><a href="#treemap">Open full map</a></div>${window.CW_TREEMAP.html(A, D, { h: 260, max: 40, tab: 'all' })}</section>` : ''}
+      ${window.CW_TREEMAP ? `<section class="db-card"><div class="db-h"><div class="db-tabs" role="tablist"><button type="button" class="on" data-pm="map">Map</button><button type="button" data-pm="tbl">Table</button></div><a href="#treemap">Open full map</a></div><div id="db-pm-map">${window.CW_TREEMAP.html(A, D, { h: 300, max: 14, tab: 'all' })}</div><div id="db-pm-tbl" hidden>${pagesTable(A, D)}</div></section>` : ''}
       ${window.CW_WATCH ? window.CW_WATCH.card(A, D) : ''}
       ${DW && D.C && D.C.length ? DW.chartHtml(D, null) : ''}
       ${list.length ? `<section class="db-card"><div class="db-h"><h2>Day-wise heatmap <small>· click a day to see what happened</small></h2><a href="#stats?tab=daywise">Open full table</a></div>${DW.tableHtml(list)}</section>` : ''}
@@ -127,6 +132,10 @@
       v.querySelectorAll('[data-mv]').forEach(b => b.addEventListener('click', () => {
         v.querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
         const el = tpl.content.querySelector(`[data-k="${b.dataset.mv}"]`); body.innerHTML = el ? el.innerHTML : '';
+      }));
+      v.querySelectorAll('[data-pm]').forEach(b => b.addEventListener('click', () => {
+        v.querySelectorAll('[data-pm]').forEach(x => x.classList.toggle('on', x === b));
+        document.getElementById('db-pm-map').hidden = b.dataset.pm !== 'map'; document.getElementById('db-pm-tbl').hidden = b.dataset.pm !== 'tbl';
       }));
       const nb = document.getElementById('db-name');
       if (nb) nb.addEventListener('click', () => { const n = window.prompt('Your name for the greeting (leave empty to remove)', getName()); if (n === null) return; try { localStorage.setItem(nameKey, n.trim().slice(0, 40)); } catch (e) { } window.dispatchEvent(new HashChangeEvent('hashchange')); });
