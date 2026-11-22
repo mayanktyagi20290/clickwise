@@ -115,8 +115,12 @@
       ${split(A)}
       <div class="db-grid2">${todayCard(A)}${alertsCard(A, D)}</div>
       <div class="db-grid2">${flowCard(A)}${recordsCard(DW && D.C && D.C.length ? DW.rows(D.C) : [])}</div>
-      <div class="db-grid2">${breadth(A)}${sections(A)}</div>
-      ${window.CW_WATCH && window.CW_WATCH.items && window.CW_WATCH.items(A, D).length ? window.CW_WATCH.card(A, D) : ''}
+      <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
+      ${sections(A)}
+      ${window.CW_TREEMAP ? `<section class="db-card"><div class="db-h"><h2>Pages map <small>· size = clicks, colour = change</small></h2><a href="#treemap">Open full map</a></div>${window.CW_TREEMAP.html(A, D, { h: 260, max: 40, tab: 'all' })}</section>` : ''}
+      ${window.CW_WATCH ? window.CW_WATCH.card(A, D) : ''}
+      ${DW && D.C && D.C.length ? DW.chartHtml(D, null) : ''}
+      ${list.length ? `<section class="db-card"><div class="db-h"><h2>Day-wise heatmap <small>· click a day to see what happened</small></h2><a href="#stats?tab=daywise">Open full table</a></div>${DW.tableHtml(list)}</section>` : ''}
     </div>`;
     return { html, mount: () => {
       const v = document.getElementById('view'), body = document.getElementById('db-mv-body'), tpl = document.getElementById('db-mv-t');
