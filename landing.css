@@ -180,3 +180,8 @@
 .hero-grid>*,.show>*{min-width:0}
 .cmp th{text-transform:none;letter-spacing:0}
 .cmp thead th{font-size:13px}
+
+.more{padding:56px 0;border-top:1px solid var(--line-soft)}
+.more-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:22px}
+.more-c{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surface,transparent)}
+.more-c h3{margin:0 0 6px;font-size:15px}.more-c p{margin:0;font-size:13.5px;line-height:1.5;color:var(--muted)}
