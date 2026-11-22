@@ -44,21 +44,35 @@
     else list = rows.map(x => ({ ...x, v: x.clicks }));
     list = list.sort((a, b) => b.v - a.v).slice(0, o.max || 60);
     if (!list.length) return '<p class="empty">Nothing to show for this tab.</p>';
-    const R = squarify(list, W, H), WL = window.CW_WATCH;
+    const all = squarify(list, W, H), R = all.filter(r => r.w > 70 && r.h > 34), WL = window.CW_WATCH, hid = all.length - R.length;
     return `<div class="tm-map" style="height:${H}px">${R.map(r => { const x = r.it, big = r.w > 110 && r.h > 54, mid = r.w > 70 && r.h > 34;
       const chg = x.isNew ? 'New' : x.pc != null ? (x.pc > 0 ? '+' : '') + x.pc.toFixed(0) + '%' : '';
-      return `<a class="tm-t" href="${esc(x.p)}" target="_blank" rel="noopener" title="${esc(x.label)}: ${fmtN(x.clicks)} clicks${x.was != null ? `, before ${fmtN(Math.round(x.was))}` : ''}, position ${x.pos.toFixed(1)}" style="left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%;background:${colour(x, hasPrev)}">${mid ? `<b>${esc(x.label.length > 26 ? (x.label.split('/').filter(Boolean).pop() || x.label).slice(0, 26) : x.label)}</b><span class="num">${fmtN(x.clicks)}${chg ? ' · ' + chg : ''}</span>` : ''}${big && WL ? WL.star('p', x.p) : ''}</a>`; }).join('')}</div>`;
+      return `<a class="tm-t" href="${esc(x.p)}" target="_blank" rel="noopener" title="${esc(x.label)}: ${fmtN(x.clicks)} clicks${x.was != null ? `, before ${fmtN(Math.round(x.was))}` : ''}, position ${x.pos.toFixed(1)}" style="left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%;background:${colour(x, hasPrev)}">${mid ? `<b style="padding-right:16px">${esc(x.label.length > 26 ? (x.label.split('/').filter(Boolean).pop() || x.label).slice(0, 26) : x.label)}</b><span class="num">${fmtN(x.clicks)}${chg ? ' · ' + chg : ''}</span>` : ''}${big && WL ? WL.star('p', x.p) : ''}</a>`; }).join('')}</div>${hid > 0 ? `<p class="flat" style="margin:8px 2px 0">${hid} smaller page${hid > 1 ? 's' : ''} not drawn. Switch to Table to see every page.</p>` : ''}`;
+  }
+
+  function tableHtml(A, D, o) {
+    const { hasPrev, rows } = data(A, D); let l = rows.slice();
+    if (o.tab === 'gain') l = l.filter(x => x.d > 0); else if (o.tab === 'lose') l = l.filter(x => x.d < 0); else if (o.tab === 'new') l = l.filter(x => x.isNew);
+    const q = (o.q || '').toLowerCase(); if (q) l = l.filter(x => x.label.toLowerCase().includes(q));
+    const key = o.sort || 'clicks', dir = o.dir === 'asc' ? 1 : -1, val = x => key === 'label' ? x.label : key === 'd' ? (x.d == null ? -1e9 : x.d) : key === 'pc' ? (x.pc == null ? -1e9 : x.pc) : key === 'pos' ? x.pos : x.clicks;
+    l.sort((a, b) => { const A1 = val(a), B1 = val(b); return (A1 < B1 ? -1 : A1 > B1 ? 1 : 0) * dir * (key === 'label' ? -1 : 1); });
+    const mx = Math.max(1, ...l.map(x => Math.abs(x.d || 0))), WL = window.CW_WATCH;
+    const th = (k, t, r) => `<th class="${r ? 'r ' : ''}" scope="col"><button type="button" class="tm-sort" data-sort="${k}">${t}${key === k ? (dir === -1 ? ' ▼' : ' ▲') : ''}</button></th>`;
+    return `<div class="tw"><table class="sp-t"><thead><tr>${th('label', 'Page')}${th('clicks', 'Clicks', 1)}${hasPrev ? '<th class="r" scope="col">Before</th>' + th('d', 'Change', 1) + th('pc', 'Change %', 1) : ''}${th('pos', 'Avg pos', 1)}</tr></thead><tbody>${l.slice(0, 200).map(x => `<tr><td class="sp-q" title="${esc(x.label)}">${WL ? WL.star('p', x.p) + ' ' : ''}<a href="${esc(x.p)}" target="_blank" rel="noopener">${esc(x.label)}</a></td><td class="r num">${fmtN(x.clicks)}</td>${hasPrev ? `<td class="r num flat">${x.was != null ? fmtN(Math.round(x.was)) : '—'}</td><td class="r num"${x.d ? ` data-h="${x.d > 0 ? 'g' : 'r'}" style="--a:${(.12 + Math.min(1, Math.abs(x.d) / mx) * .5).toFixed(2)}"` : ''}>${x.isNew ? 'New' : x.d == null ? '—' : (x.d > 0 ? '+' : '') + fmtN(Math.round(x.d))}</td><td class="r num">${x.pc != null ? (x.pc > 0 ? '+' : '') + x.pc.toFixed(0) + '%' : '—'}</td>` : ''}<td class="r num">${x.pos != null ? x.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>${l.length ? '' : '<p class="empty">Nothing matches.</p>'}`;
   }
 
   V.treemap = (A, D) => {
-    const { hasPrev } = data(A, D); let tab = 'all';
+    const { hasPrev } = data(A, D); let tab = 'all', view = 'map', q = '', sort = 'clicks', dir = 'desc';
     const tabs = [['all', 'All pages'], ['gain', 'Gainers'], ['lose', 'Losers'], ['new', 'New pages']];
     const html = ui.head('Pages map', 'Every page as a tile: size is clicks, colour is the change against the previous period. Tile text shows clicks and change. Click a tile to open the page, ☆ to watch it.')
-      + `<section class="panel"><div class="panel-h"><div class="db-tabs" role="tablist">${tabs.map(t => `<button type="button" data-tm="${t[0]}" class="${t[0] === 'all' ? 'on' : ''}"${!hasPrev && t[0] !== 'all' ? ' disabled title="Needs a comparison period"' : ''}>${t[1]}</button>`).join('')}</div>
-      <span class="flat">${hasPrev ? 'Green up, red down, blue new · Gainers and Losers are sized by clicks gained or lost' : 'No comparison period loaded: colour shows position (green top 5, red below 20)'}</span></div><div class="panel-b" id="tm-host">${mapHtml(A, D, { tab: 'all' })}</div></section>`;
+      + `<section class="panel"><div class="panel-h"><div class="db-tabs" role="tablist" aria-label="View"><button type="button" class="on" data-vw="map">Map</button><button type="button" data-vw="tbl">Table</button></div><div class="db-tabs" role="tablist">${tabs.map(t => `<button type="button" data-tm="${t[0]}" class="${t[0] === 'all' ? 'on' : ''}"${!hasPrev && t[0] !== 'all' ? ' disabled title="Needs a comparison period"' : ''}>${t[1]}</button>`).join('')}</div>
+      <input type="search" id="tm-q" placeholder="Filter pages" hidden style="background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit"><span class="flat" id="tm-note">${hasPrev ? 'Green up, red down, blue new · Gainers and Losers are sized by clicks gained or lost' : 'No comparison period loaded: colour shows position (green top 5, red below 20)'}</span></div><div class="panel-b" id="tm-host">${mapHtml(A, D, { tab: 'all' })}</div></section>`;
     return { html, mount: () => {
       const v = document.getElementById('view'), host = document.getElementById('tm-host');
-      v.querySelectorAll('[data-tm]').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tm; v.querySelectorAll('[data-tm]').forEach(x => x.classList.toggle('on', x === b)); host.innerHTML = mapHtml(A, D, { tab }); }));
+      const draw = () => { host.innerHTML = view === 'map' ? mapHtml(A, D, { tab }) : tableHtml(A, D, { tab, q, sort, dir }); if (window.CW_WATCH) window.CW_WATCH.bindStars(host); host.querySelectorAll('[data-sort]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.sort; dir = sort === k && dir === 'desc' ? 'asc' : 'desc'; sort = k; draw(); })); };
+      v.querySelectorAll('[data-tm]').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tm; v.querySelectorAll('[data-tm]').forEach(x => x.classList.toggle('on', x === b)); draw(); }));
+      v.querySelectorAll('[data-vw]').forEach(b => b.addEventListener('click', () => { view = b.dataset.vw; v.querySelectorAll('[data-vw]').forEach(x => x.classList.toggle('on', x === b)); document.getElementById('tm-q').hidden = view !== 'tbl'; document.getElementById('tm-note').hidden = view !== 'map'; draw(); }));
+      document.getElementById('tm-q').addEventListener('input', e => { q = e.target.value; draw(); });
       if (window.CW_WATCH) window.CW_WATCH.bindStars(host);
     } };
   };
