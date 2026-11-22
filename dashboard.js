@@ -46,7 +46,7 @@
     const t = (l, v, d, key, inv) => `<div class="db-tile"><span class="db-l">${l}</span><b class="db-v num">${v}</b><div class="db-s">${chip(d, inv)}${C.length > 3 && key ? spark(C, key, inv) : ''}</div></div>`;
     return `<div class="db-tiles">${t('Clicks', fmtN(m.clicks), pv && pc(m.clicks, pv.clicks), 'clicks')}${t('Impressions', fmtN(m.impr), pv && pc(m.impr, pv.impr), 'impr')}
       ${t('CTR', pctf(m.ctr, 2), pv && pv.ctr ? pc(m.ctr, pv.ctr) : null, 'ctr')}${t('Avg position', m.pos ? m.pos.toFixed(1) : '—', pv && pv.pos ? pc(m.pos, pv.pos) : null, 'pos', true)}
-      ${t('Pages with clicks', fmtN((A.P || []).filter(p => p.clicks > 0).length), null, null)}</div>`;
+      ${t('Pages with clicks', fmtN((A.P || []).filter(p => p.clicks > 0).length), null, null)}${t('Searches tracked', fmtN((A.Q || []).length), null, null)}</div>`;
   }
 
   function split(A) {
