@@ -52,18 +52,34 @@
   function shift(d, n) { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); }
   function daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5); }
 
+  // D / W / M / Y: roll the daily rows into weeks (Monday start), months or years
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function rollup(C, g) {
+    const days = rows(C); if (g === 'd' || g === 'c') return days;
+    const keyOf = r => { if (g === 'm') return r.d.slice(0, 7); if (g === 'y') return r.d.slice(0, 4); const x = new Date(r.d + 'T00:00:00'); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+    const m = new Map();
+    days.forEach(r => { const k = keyOf(r), a = m.get(k) || { d: k, clicks: 0, impr: 0, pw: 0, n: 0 }; a.clicks += r.clicks; a.impr += r.impr; if (r.pos != null) { a.pw += r.pos * (r.impr || 1); a.n += r.impr || 1; } a.days = (a.days || 0) + 1; m.set(k, a); });
+    const out = [...m.values()].sort((a, b) => a.d.localeCompare(b.d)), full = g === 'w' ? 7 : 0;
+    return out.map((a, i) => ({ d: a.d, wd: g === 'w' ? 'Week' : g === 'm' ? MON[+a.d.slice(5) - 1] : 'Year', clicks: a.clicks, impr: a.impr, ctr: a.impr ? a.clicks / a.impr * 100 : 0, pos: a.n ? a.pw / a.n : null, prev: out[i - 1] ? { clicks: out[i - 1].clicks, impr: out[i - 1].impr, pos: out[i - 1].n ? out[i - 1].pw / out[i - 1].n : null } : null, wk: null, partial: !!(full && a.days < full) || (g !== 'w' && (i === 0 || i === out.length - 1) && a.days < (g === 'm' ? 28 : 360)), days: a.days }));
+  }
+  // a stock-style rating from the move in clicks against the period before
+  const RATES = ['Strong', 'Good', 'Mixed', 'Weak', 'Poor'];
+  function rate(r) { if (!r.prev || !r.prev.clicks) return null; const c = pct(r.clicks, r.prev.clicks); return c >= 20 ? 'Strong' : c >= 5 ? 'Good' : c > -5 ? 'Mixed' : c > -20 ? 'Weak' : 'Poor'; }
+  const RCLS = { Strong: 'up', Good: 'up', Mixed: 'flat', Weak: 'dn', Poor: 'dn' };
+
   function csv(list) {
     const h = ['Date', 'Day', 'Clicks', 'Impressions', 'CTR %', 'Avg position', 'Clicks vs previous day %', 'Clicks vs same day last week %'];
     const f = v => v == null || !isFinite(v) ? '' : (+v).toFixed(2);
     return [h].concat(list.map(r => [r.d, r.wd, r.clicks, r.impr, f(r.ctr), f(r.pos), f(r.prev ? pct(r.clicks, r.prev.clicks) : null), f(r.wk ? pct(r.clicks, r.wk.clicks) : null)])).map(a => a.join(',')).join('\n');
   }
 
-  function tableHtml(list) {
+  function tableHtml(list, mode, order) {
+    mode = mode || 'd'; const isD = mode === 'd' || mode === 'c', lab = { d: 'prev day', c: 'prev day', w: 'prev week', m: 'prev month', y: 'prev year' }[mode];
     const chg = r => pct(r.clicks, r.prev.clicks);
     const fC = scale(list.map(r => r.clicks)), fI = scale(list.map(r => r.impr)), fR = scale(list.map(r => r.ctr)), fP = scale(list.map(r => r.pos));
     const dp = list.map(r => r.prev ? chg(r) : null), dw = list.map(r => r.wk ? pct(r.clicks, r.wk.clicks) : null), fD = dscale(dp.concat(dw));
-    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="2">Rank &amp; signal</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th><th scope="col">Signal</th></tr></thead><tbody>
-        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr class="dw-r" data-d="${esc(r.d)}" tabindex="0" title="Click to see what happened on this day"><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td><td>${(g => g ? `<span class="dw-pill ${g.up ? 'up' : 'dn'}">${g.label}</span>` : '')(sigOf(r))}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="3">Rank &amp; signal</th></tr><tr><th scope="col">${mode === 'w' ? 'Week from' : mode === 'm' ? 'Month' : mode === 'y' ? 'Year' : 'Date'}</th><th scope="col">${isD ? 'Day' : ''}</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs ${lab}</th>${isD ? '<th class="r" scope="col">vs same day last wk</th>' : '<th></th>'}<th class="r" scope="col">Avg pos</th><th scope="col">Rating</th><th scope="col">Signal</th></tr></thead><tbody>
+        ${(order || list.map((r, i) => i).reverse()).map(i => ({ r: list[i], i })).map(({ r, i }) => `<tr${isD ? ` class="dw-r" data-d="${esc(r.d)}" tabindex="0" title="Click to see what happened on this day"` : ''}><td>${esc(r.d)}${r.partial ? ' <small class="flat" title="Part of this period is outside your data">partial</small>' : ''}</td><td>${isD ? esc(r.wd) : ''}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${isD ? dcell(dw[i], fD) : '<td></td>'}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td><td>${(k => k ? `<span class="dw-pill ${RCLS[k]}">${k}</span>` : '')(rate(r))}</td><td>${(g => g ? `<span class="dw-pill ${g.up ? 'up' : 'dn'}">${g.label}</span>` : '')(sigOf(r))}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
 
@@ -174,10 +190,20 @@
     const sub = 'Every day in your data, with the change against the day before and against the same weekday last week.';
     const tabs = SV().tabs('daywise');
     if (!D.C || !D.C.length) return { html: head(title, sub) + tabs + '<section class="panel"><p class="empty">No daily data here. Export from Search Console with the Dates tab, or connect Search Console.</p></section>' };
-    const sel = SV().params().get('dw'); const n = OPTS.some(o => o[0] === sel) ? sel : '28';
-    const sigOn = SV().params().get('sig') === '1';
-    let list = rows(D.C); if (n !== 'all') list = list.slice(-(+n));
+    const P = SV().params(), sel = P.get('dw'), n = OPTS.some(o => o[0] === sel) ? sel : '28';
+    const g = ['d', 'w', 'm', 'y', 'c'].includes(P.get('g')) ? P.get('g') : 'd', sigOn = P.get('sig') === '1', rf = RATES.includes(P.get('r')) ? P.get('r') : '', ord = ['new', 'old', 'up', 'down'].includes(P.get('o')) ? P.get('o') : 'new';
+    const mn = D.C.reduce((a, r) => r.d < a ? r.d : a, D.C[0].d), mx = D.C.reduce((a, r) => r.d > a ? r.d : a, D.C[0].d);
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(P.get('from') || '') ? P.get('from') : mn, to = /^\d{4}-\d{2}-\d{2}$/.test(P.get('to') || '') ? P.get('to') : mx;
+    let list = rollup(D.C, g);
+    if (g === 'd' && n !== 'all') list = list.slice(-(+n));
+    if (g === 'c') list = list.filter(r => r.d >= from && r.d <= to);
+    if (g === 'w') list = list.slice(-26); else if (g === 'm') list = list.slice(-24);
+    const counts = Object.fromEntries(RATES.map(k => [k, list.filter(r => rate(r) === k).length]));
+    if (rf) list = list.filter(r => rate(r) === rf);
     if (sigOn) list = list.filter(r => sigOf(r));
+    const isDay = g === 'd' || g === 'c', unit = { d: 'Days', c: 'Days', w: 'Weeks', m: 'Months', y: 'Years' }[g], u1 = unit.slice(0, -1).toLowerCase();
+    const idxs = list.map((r, i) => i), cl = r => r.prev && r.prev.clicks ? pct(r.clicks, r.prev.clicks) : -1e9;
+    const order = ord === 'old' ? idxs : ord === 'up' ? idxs.slice().sort((a, b) => cl(list[b]) - cl(list[a])) : ord === 'down' ? idxs.slice().sort((a, b) => cl(list[a]) - cl(list[b])) : idxs.slice().reverse();
     const newest = list.slice().reverse();
     const withP = list.filter(r => r.prev);
     const chg = r => pct(r.clicks, r.prev.clicks);
@@ -188,19 +214,28 @@
     const dayTag = r => r ? `${esc(r.wd)} ${esc(r.d.slice(5))}` : '—';
     const day = SV().params().get('day');
     const html = head(title, sub) + tabs + (day ? detailHtml(D, day) : '') + chartHtml(D, day) + `
-      <div class="dw-ctl"><label class="ow-f"><span>Period</span><select id="dw-n">${OPTS.map(o => `<option value="${o[0]}"${o[0] === n ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
+      <div class="dw-ctl"><div class="db-tabs" role="tablist" aria-label="Group by">${[['d', 'D'], ['w', 'W'], ['m', 'M'], ['y', 'Y'], ['c', 'Custom']].map(x => `<button type="button" data-g="${x[0]}" class="${x[0] === g ? 'on' : ''}" title="${{ d: 'Daily', w: 'Weekly', m: 'Monthly', y: 'Yearly', c: 'Custom dates' }[x[0]]}">${x[1]}</button>`).join('')}</div>
+        ${g === 'd' ? `<label class="ow-f"><span>Show</span><select id="dw-n">${OPTS.map(o => `<option value="${o[0]}"${o[0] === n ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>` : ''}
+        ${g === 'c' ? `<label class="ow-f"><span>From</span><input type="date" id="dw-from" min="${mn}" max="${mx}" value="${from}"></label><label class="ow-f"><span>To</span><input type="date" id="dw-to" min="${mn}" max="${mx}" value="${to}"></label>` : ''}
+        <label class="ow-f"><span>Sort</span><select id="dw-o">${[['new', 'Latest first'], ['old', 'Oldest first'], ['up', 'Biggest gain'], ['down', 'Biggest drop']].map(o => `<option value="${o[0]}"${o[0] === ord ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
         <label class="dw-sigt"><input type="checkbox" id="dw-sig"${sigOn ? ' checked' : ''}> Signal days only</label><button type="button" class="btn-quiet" id="dw-csv">Download CSV</button></div>
+      <div class="dw-rates" role="group" aria-label="Filter by rating"><button type="button" data-r="" class="${rf ? '' : 'on'}">All <em>${Object.values(counts).reduce((a, b) => a + b, 0)}</em></button>${RATES.map(k => `<button type="button" data-r="${k}" class="${rf === k ? 'on' : ''}">${k} <em>${counts[k]}</em></button>`).join('')}<span class="flat">Rating = move in clicks vs the ${isDay ? 'day' : u1} before: Strong +20% or more · Good +5% · Mixed ±5% · Weak −5% · Poor −20% or worse</span></div>
       <section class="panel"><div class="panel-b st-sms">
-        ${tile('Days shown', list.length)}${tile('Clicks', fmtN(tot.c))}${tile('Overall CTR', tot.i ? pctf(tot.c / tot.i * 100, 2) : '—')}
-        ${tile('Days down vs day before', `${down} of ${withP.length}`)}
-        ${tile('Best day', dayTag(best), best ? `<small class="dw-pill up">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
-        ${tile('Worst day', dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
-      <section class="panel">${tableHtml(list)}
+        ${tile(unit + ' shown', list.length)}${tile('Clicks', fmtN(tot.c))}${tile('Overall CTR', tot.i ? pctf(tot.c / tot.i * 100, 2) : '—')}
+        ${tile(unit + ' down vs ' + (isDay ? 'day' : u1) + ' before', `${down} of ${withP.length}`)}
+        ${tile('Best ' + (isDay ? 'day' : u1), dayTag(best), best ? `<small class="dw-pill up">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
+        ${tile('Worst ' + (isDay ? 'day' : u1), dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
+      <section class="panel">${tableHtml(list, g, order)}
         <p class="flat dw-n">Cells are coloured within each column: green is better, red is worse (for position, lower is better). Search Console's most recent days can still be revised.</p></section>`;
     const goDay = d => { const p = SV().params(); p.set('tab', 'daywise'); p.set('day', d); location.hash = '#stats?' + p.toString(); window.scrollTo(0, 0); };
     return { html, mount: () => {
       bindRows(document.getElementById('view'), goDay); chartMount(D, day, goDay);
-      document.getElementById('dw-n').addEventListener('change', e => go(e.target.value));
+      const setP = ch => { const p = SV().params(); p.set('tab', 'daywise'); Object.entries(ch).forEach(([k, v]) => v ? p.set(k, v) : p.delete(k)); location.hash = '#stats?' + p.toString(); };
+      document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => setP({ g: b.dataset.g === 'd' ? '' : b.dataset.g, r: '' })));
+      document.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => setP({ r: b.dataset.r })));
+      document.getElementById('dw-o').addEventListener('change', e => setP({ o: e.target.value === 'new' ? '' : e.target.value }));
+      ['dw-from', 'dw-to'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', () => setP({ from: (document.getElementById('dw-from') || {}).value, to: (document.getElementById('dw-to') || {}).value })); });
+      const dn = document.getElementById('dw-n'); if (dn) dn.addEventListener('change', e => go(e.target.value));
       document.getElementById('dw-sig').addEventListener('change', e => { const p = SV().params(); p.set('tab', 'daywise'); if (e.target.checked) p.set('sig', '1'); else p.delete('sig'); location.hash = '#stats?' + p.toString(); });
       document.getElementById('dw-csv').addEventListener('click', () => {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv(list)], { type: 'text/csv' }));

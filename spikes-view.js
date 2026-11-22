@@ -67,7 +67,8 @@
       <p class="sp-more"><button type="button" class="btn-quiet" id="sp-more">Show more</button></p>
       <p class="flat dw-n">Signals need at least ${MIN.clicks} clicks or ${MIN.impr} impressions in one of the periods. Rows without a signal are still listed, by size of change.</p></section>`;
     return { html, mount: () => {
-      const body = document.getElementById('sp-body'), v = document.getElementById('view');
+      const body = document.getElementById('sp-body'), v = document.getElementById('view'), W = window.CW_WATCH;
+      if (W) W.bindStars(body);
       const draw = () => {
         const all = sets[st.tab], t = st.text.trim().toLowerCase();
         const list = all.filter(x => (!st.kind || (x.s && x.s.k === st.kind)) && (!t || x.label.toLowerCase().includes(t))).sort((a, b) => (!!b.s - !!a.s) || Math.abs(b.d) - Math.abs(a.d));
@@ -75,7 +76,7 @@
         document.getElementById('sp-cards').innerHTML = cards(all);
         document.getElementById('sp-count').textContent = `${fmtN(list.length)} rows${st.tab === 'p' && !all.length ? ' (no previous page data)' : ''}`;
         body.innerHTML = list.slice(0, st.limit).map(x => { const ip = x.p ? pct(x.c.impr, x.p.impr) : null, ctrd = x.p ? x.c.ctr - x.p.ctr : null, dp = x.p && x.c.pos != null && x.p.pos != null ? x.c.pos - x.p.pos : null;
-          return `<tr><td class="sp-q" title="${esc(x.label)}">${esc(x.label)}</td><td class="r num">${fmtN(x.c.clicks)}</td><td class="r num flat">${x.p ? fmtN(Math.round(x.p.clicks)) : '—'}</td><td class="r num"${heat(x.d, mx)}>${sgn(x.d, 0)}</td><td class="r num"${heat(ip, 100)}>${ip == null ? '—' : sgn(ip, 0) + '%'}</td><td class="r num"${heat(ctrd, 2)}>${x.c.impr ? x.c.ctr.toFixed(2) + '%' : '—'}</td><td class="r num"${heat(dp == null ? null : -dp, 5)}>${x.c.pos != null ? x.c.pos.toFixed(1) : '—'}</td><td>${x.s ? `<span class="dw-pill ${x.s.up ? 'up' : 'dn'}">${esc(x.s.label)}</span>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Nothing matches.</td></tr>';
+          return `<tr><td class="sp-q" title="${esc(x.label)}">${W ? W.star(st.tab, x.k) + ' ' : ''}${esc(x.label)}</td><td class="r num">${fmtN(x.c.clicks)}</td><td class="r num flat">${x.p ? fmtN(Math.round(x.p.clicks)) : '—'}</td><td class="r num"${heat(x.d, mx)}>${sgn(x.d, 0)}</td><td class="r num"${heat(ip, 100)}>${ip == null ? '—' : sgn(ip, 0) + '%'}</td><td class="r num"${heat(ctrd, 2)}>${x.c.impr ? x.c.ctr.toFixed(2) + '%' : '—'}</td><td class="r num"${heat(dp == null ? null : -dp, 5)}>${x.c.pos != null ? x.c.pos.toFixed(1) : '—'}</td><td>${x.s ? `<span class="dw-pill ${x.s.up ? 'up' : 'dn'}">${esc(x.s.label)}</span>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Nothing matches.</td></tr>';
         document.getElementById('sp-more').hidden = list.length <= st.limit;
       };
       v.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.limit = 100; v.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b)); draw(); }));
