@@ -60,3 +60,12 @@
 .cal-c.fut{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.06);pointer-events:none;opacity:.5}
 :root[data-theme="dark"] a.btn-primary.top-ask{background:transparent!important;color:#fff!important;border:0!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)!important}
 :root[data-theme="dark"] a.btn-primary.top-ask:hover{box-shadow:inset 0 0 0 1px #F59E0B!important}
+/* section tiles: dark tint, light text, coloured edge */
+:root[data-theme="dark"] .db-hs{color:#fff!important;border:1px solid rgba(255,255,255,.1);border-left-width:3px}
+:root[data-theme="dark"] .db-hs span,:root[data-theme="dark"] .db-hs small{color:#9CA3AF!important}
+:root[data-theme="dark"] .t-a{background:linear-gradient(135deg,rgba(34,197,94,.22),rgba(34,197,94,.06));border-color:rgba(34,197,94,.3);border-left-color:#22C55E}
+:root[data-theme="dark"] .t-b{background:linear-gradient(135deg,rgba(74,222,128,.16),rgba(74,222,128,.04));border-color:rgba(74,222,128,.25);border-left-color:#4ADE80}
+:root[data-theme="dark"] .t-c{background:linear-gradient(135deg,rgba(234,179,8,.2),rgba(234,179,8,.05));border-color:rgba(234,179,8,.28);border-left-color:#EAB308}
+:root[data-theme="dark"] .t-d{background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(239,68,68,.06));border-color:rgba(239,68,68,.3);border-left-color:#EF4444}
+/* one place per function: Ask lives in the side tab, Last 24 hours in the sidebar */
+.top-ask,#top-24{display:none!important}

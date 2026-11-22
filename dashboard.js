@@ -85,12 +85,36 @@
     return `<section class="db-card"><div class="db-h"><h2>Site sections</h2><a href="#sections">Full view</a></div>${list.length ? `<div class="db-heat">${list.map(s => `<a class="db-hs t-${tone(s.pos)}" href="#section=${encodeURIComponent(s.key)}" style="flex:${Math.max(1, Math.round(s.clicks / mx * 10))} 1 120px"><b>${esc(s.key)}</b><span class="num">${fmtN(s.clicks)} clicks</span><small>pos ${s.pos.toFixed(1)}</small></a>`).join('')}</div><p class="db-note"><i class="t-a"></i>top 5 <i class="t-b"></i>page one <i class="t-c"></i>page two <i class="t-d"></i>deeper · size = clicks</p>` : '<p class="empty">No folders in this data.</p>'}</section>`;
   }
 
+  function todayCard(A) {
+    const w = (A.quickWins || []).slice(0, 3);
+    return `<section class="db-card"><div class="db-h"><h2>Today's 3 actions</h2><a href="#tasks">Action Center</a></div>${w.length ? w.map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.q)}">Push “${esc(x.q)}” from #${x.pos.toFixed(1)} to page one</span><span class="db-n num up">+${fmtN(x.gainLo)}–${fmtN(x.gainHi)}/mo</span></div>`).join('') : '<p class="flat">No quick wins found yet.</p>'}</section>`;
+  }
+  function alertsCard(A, D) {
+    const hasPrev = !!(D.prevQ && D.prevQ.length);
+    const l = hasPrev ? movers(A.Q, D.prevQ, 'q').filter(x => x.hasPrev && x.d < 0).sort((a, b) => a.d - b.d).slice(0, 3) : [];
+    return `<section class="db-card"><div class="db-h"><h2>Needs attention</h2><a href="#spikes">Spike Scanner</a></div>${l.length ? l.map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.k)}">${esc(x.k)}</span><span class="db-n num dn">${fmtN(x.d)}</span></div>`).join('') : '<p class="flat">Nothing is falling against the previous period.</p>'}</section>`;
+  }
+  function flowCard(A) {
+    const nb = A.totNB.clicks, b = A.totB.clicks, t = nb + b || 1, pn = A.prev && A.prev.nb ? A.prev.nb.clicks : null;
+    const ch = pn ? (nb - pn) / pn * 100 : null;
+    return `<section class="db-card"><div class="db-h"><h2>Brand vs non-brand flow</h2><a href="#stats">Details</a></div><div class="db-bar" style="height:10px;display:flex;border-radius:6px;overflow:hidden"><i style="width:${nb / t * 100}%;background:#22C55E"></i><i style="width:${b / t * 100}%;background:#F59E0B"></i></div>
+      <div class="db-row"><span class="db-q">Non-brand (new demand)</span><span class="db-n num up">${fmtN(nb)}${ch != null ? ' · ' + (ch >= 0 ? '+' : '') + ch.toFixed(1) + '%' : ''}</span></div><div class="db-row"><span class="db-q">Brand (existing fans)</span><span class="db-n num">${fmtN(b)}</span></div></section>`;
+  }
+  function recordsCard(list) {
+    if (!list.length) return '';
+    const best = list.reduce((a, r) => r.clicks > a.clicks ? r : a), worst = list.reduce((a, r) => r.clicks < a.clicks ? r : a);
+    const row = (t, r, c) => `<a class="db-row" href="#stats?tab=daywise&day=${esc(r.d)}" style="text-decoration:none;color:inherit"><span class="db-q">${t} · ${esc(r.d)}</span><span class="db-n num ${c}">${fmtN(r.clicks)} clicks</span></a>`;
+    return `<section class="db-card"><div class="db-h"><h2>Record days <small>· this period</small></h2><a href="#stats?tab=daywise">Day-wise</a></div>${row('Best day', best, 'up')}${row('Weakest day', worst, 'dn')}</section>`;
+  }
+
   V.dashboard = (A, D) => {
     const DW = window.CW_DAYWISEVIEW, list = DW && D.C && D.C.length ? DW.rows(D.C).slice(-14) : [];
     const html = `<div class="db">
       <header class="db-top"><div><h1>${hello()}${getName() ? ', ' + esc(getName()) : ''}! <button type="button" class="db-name" id="db-name" title="Set your name" aria-label="Set your name">✎</button></h1><p>Here is what is happening in search for <b>${esc(D.site)}</b>${D.source === 'demo' ? ' (sample data)' : ''}.</p></div><div class="db-clk"><span id="db-cd">${esc(clock().d)}</span><b id="db-ct">${esc(clock().t)}</b>${D.start && D.end ? `<small>Data: ${esc(fmtD(D.start))} – ${esc(fmtD(D.end))}</small>` : ''}</div></header>
       <div class="db-grid1"><section class="db-card db-brief"><div class="db-h"><h2><i class="db-dot"></i> Site Brief</h2><small>Built from your data · not AI-generated</small></div>${brief(A, D)}</section>${tiles(A, D)}</div>
       ${split(A)}
+      <div class="db-grid2">${todayCard(A)}${alertsCard(A, D)}</div>
+      <div class="db-grid2">${flowCard(A)}${recordsCard(DW && D.C && D.C.length ? DW.rows(D.C) : [])}</div>
       <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
       ${sections(A)}
       ${window.CW_TREEMAP ? `<section class="db-card"><div class="db-h"><h2>Pages map <small>· size = clicks, colour = change</small></h2><a href="#treemap">Open full map</a></div>${window.CW_TREEMAP.html(A, D, { h: 260, max: 40, tab: 'all' })}</section>` : ''}
