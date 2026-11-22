@@ -90,7 +90,7 @@
       ${split(A)}
       <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
       ${sections(A)}
-      ${list.length ? `<section class="db-card"><div class="db-h"><h2>Day-wise heatmap</h2><a href="#stats?tab=daywise">Open full table</a></div>${DW.tableHtml(list)}</section>` : ''}
+      ${list.length ? `<section class="db-card"><div class="db-h"><h2>Day-wise heatmap <small>· click a day to see what happened</small></h2><a href="#stats?tab=daywise">Open full table</a></div>${DW.tableHtml(list)}</section>` : ''}
     </div>`;
     return { html, mount: () => {
       const v = document.getElementById('view'), body = document.getElementById('db-mv-body'), tpl = document.getElementById('db-mv-t');
@@ -98,6 +98,7 @@
         v.querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
         const el = tpl.content.querySelector(`[data-k="${b.dataset.mv}"]`); body.innerHTML = el ? el.innerHTML : '';
       }));
+      if (DW) DW.bindRows(v, day => { location.hash = '#stats?tab=daywise&day=' + day; });
       const ps = A.posDist || [];
       if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
     } };
