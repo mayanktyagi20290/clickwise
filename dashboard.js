@@ -42,7 +42,7 @@
 
   function tiles(A, D) {
     const C = D.C || [], cov = A.coverage && A.site;
-    const m = cov ? A.site : A.totNB, pv = cov ? A.prevSite : A.prev && A.prev.nb;
+    const m = cov ? A.site : A.totNB, pv = cov && A.prevSite ? A.prevSite : A.prev && A.prev.nb;
     const t = (l, v, d, key, inv) => `<div class="db-tile"><span class="db-l">${l}</span><b class="db-v num">${v}</b><div class="db-s">${chip(d, inv)}${C.length > 3 && key ? spark(C, key, inv) : ''}</div></div>`;
     return `<div class="db-tiles">${t('Clicks', fmtN(m.clicks), pv && pc(m.clicks, pv.clicks), 'clicks')}${t('Impressions', fmtN(m.impr), pv && pc(m.impr, pv.impr), 'impr')}
       ${t('CTR', pctf(m.ctr, 2), pv && pv.ctr ? pc(m.ctr, pv.ctr) : null, 'ctr')}${t('Avg position', m.pos ? m.pos.toFixed(1) : '—', pv && pv.pos ? pc(m.pos, pv.pos) : null, 'pos', true)}
@@ -67,7 +67,7 @@
       lose: hasPrev ? mv.filter(x => x.hasPrev && x.d < 0).sort((a, b) => a.d - b.d) : [],
       top: mv.slice().sort((a, b) => b.clicks - a.clicks)
     };
-    const body = k => sets[k].slice(0, 10).map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.k)}">${esc(x.k)}</span><span class="db-n num">${k === 'top' ? fmtN(x.clicks) : (x.d > 0 ? '+' : '') + fmtN(x.d)}</span></div>`).join('') || `<p class="empty">${hasPrev || k === 'top' ? 'Nothing here.' : 'Load a comparison period to see movers.'}</p>`;
+    const body = k => sets[k].slice(0, 10).map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.k)}">${esc(x.k)}</span><span class="db-n num ${k === 'gain' ? 'up' : k === 'lose' ? 'dn' : ''}">${k === 'top' ? fmtN(x.clicks) : (x.d > 0 ? '+' : '') + fmtN(x.d)}</span></div>`).join('') || `<p class="empty">${hasPrev || k === 'top' ? 'Nothing here.' : 'Load a comparison period to see movers.'}</p>`;
     return `<section class="db-card"><div class="db-h"><div class="db-tabs" role="tablist"><button type="button" class="on" data-mv="gain">Gainers</button><button type="button" data-mv="lose">Losers</button><button type="button" data-mv="top">Top</button></div><a href="#queries">View all</a></div>
       <div id="db-mv-body">${body('gain')}</div><template id="db-mv-t">${['gain', 'lose', 'top'].map(k => `<div data-k="${k}">${body(k)}</div>`).join('')}</template></section>`;
   }

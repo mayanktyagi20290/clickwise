@@ -1515,3 +1515,11 @@ td[data-h="g"]{--rgb:34,197,94}td[data-h="r"]{--rgb:239,68,68}
 :where(a,button,input,select,.dw-r,.cal-c):focus-visible{outline:2px solid var(--signal);outline-offset:2px;border-radius:6px}
 .db-card,.panel{transition:border-color .15s}.db-card:hover,.panel:hover{border-color:color-mix(in srgb,var(--signal) 35%,var(--line))}
 .dw-t th{position:sticky;top:0;background:var(--surface);z-index:1}
+/* design pass against a market terminal: calmer top bar, coloured movers, quieter accents */
+.db-n.up{color:var(--good-ink)}.db-n.dn{color:var(--risk-ink)}
+.db-s svg{color:var(--muted);opacity:.9}
+:root[data-theme="dark"] .top-range{background:transparent!important;color:var(--signal-ink)!important;border:1px solid rgba(245,158,11,.5)!important}
+:root[data-theme="dark"] .top-ask{background:transparent!important;color:var(--signal-ink)!important;border:1px solid rgba(245,158,11,.5)}
+:root[data-theme="dark"] .top-ask:hover{background:rgba(245,158,11,.12)!important}
+.db-tile,.db-tint{min-height:92px}.db-tile .db-v{letter-spacing:-.01em}
+.db-s .spark polyline{stroke:var(--signal)}.db-s .spark polygon{fill:var(--signal);opacity:.14}
