@@ -6,6 +6,13 @@
   --signal:#F59E0B;--signal-ink:#FBBF24;--signal-soft:rgba(245,158,11,.12);
   --side:#0A0A0A;--side-2:#1A1A1A;--side-ink:#9CA3AF;--side-mute:#6B7280;
   --shadow:none;
+  /* one palette, as measured on ProScreener: white, greys, green, red, yellow */
+  --good:#22C55E;--good-ink:#4ADE80;--good-soft:rgba(34,197,94,.15);
+  --risk:#EF4444;--risk-ink:#F87171;--risk-soft:rgba(239,68,68,.12);
+  --watch:#EAB308;--watch-ink:#FACC15;--watch-soft:rgba(234,179,8,.15);
+  --teal:#4ADE80;--teal-soft:rgba(34,197,94,.12);--orange:#FACC15;--orange-soft:rgba(234,179,8,.12);
+  --sky:#FACC15;--sky-soft:rgba(250,204,21,.12);
+  --muted:#9CA3AF;--ink-2:#D1D5DB;
 }
 :root[data-theme="dark"] .nav{border-right:1px solid var(--line)!important}
 :root[data-theme="dark"] .nav a.on{background:#1A1A1A!important;color:#fff!important;font-weight:500;box-shadow:inset 0 0 0 1.6px #F59E0B}
@@ -32,3 +39,11 @@
 :root[data-theme="dark"] .nav a svg{color:#6B7280!important}
 :root[data-theme="dark"] .nav a:hover svg,:root[data-theme="dark"] .nav a.on svg{color:#fff!important}
 :root[data-theme="dark"] .nav-group{color:#6B7280!important}
+
+:root[data-theme="dark"] .db-l,:root[data-theme="dark"] .tile-l,:root[data-theme="dark"] .st-sm span,:root[data-theme="dark"] .dw-t th{color:#7C8594}
+:root[data-theme="dark"] .db-tint.up,:root[data-theme="dark"] .sp-card.up{background:linear-gradient(to bottom right,rgba(34,197,94,.20),rgba(34,197,94,.04));border-color:rgba(34,197,94,.30)}
+:root[data-theme="dark"] .db-tint.dn,:root[data-theme="dark"] .sp-card.dn{background:linear-gradient(to bottom right,rgba(239,68,68,.18),rgba(239,68,68,.04));border-color:rgba(239,68,68,.30)}
+:root[data-theme="dark"] .db-chip.up,:root[data-theme="dark"] .dw-pill.up{color:#4ADE80;background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.30)}
+:root[data-theme="dark"] .db-chip.dn,:root[data-theme="dark"] .dw-pill.dn{color:#F87171;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.30)}
+:root[data-theme="dark"] .gainv,:root[data-theme="dark"] .db-n.up{color:#4ADE80}
+:root[data-theme="dark"] .lossv,:root[data-theme="dark"] .db-n.dn{color:#F87171}

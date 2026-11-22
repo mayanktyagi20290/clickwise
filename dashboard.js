@@ -74,7 +74,7 @@
 
   function breadth(A) {
     const ps = A.posDist || [], tot = ps.reduce((s, x) => s + x.clicks, 0) || 1, n = ps.reduce((s, x) => s + x.n, 0) || 1, p1 = ps.slice(0, 2).reduce((s, x) => s + x.n, 0);
-    const col = ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'];
+    const col = ['#22c55e', '#4ade80', '#eab308', '#f87171', '#ef4444'];
     return `<section class="db-card"><div class="db-h"><h2>Position breadth</h2></div><div class="db-br"><div class="db-donut"><canvas id="db-donut" aria-label="Searches by position"></canvas><div class="db-dc"><b>${Math.round(p1 / n * 100)}%</b><span>on page one</span></div></div>
       <div class="db-bars">${ps.map((x, i) => `<div><span>${esc(x.label)}</span><div class="db-bar"><i style="width:${Math.max(2, x.clicks / tot * 100)}%;background:${col[i % 5]}"></i></div><em class="num">${fmtN(x.n)}</em></div>`).join('')}<small>Searches by average position · bars show share of clicks</small></div></div></section>`;
   }
@@ -110,7 +110,7 @@
       if (window.CW_WATCH) window.CW_WATCH.bindStars(v, () => window.dispatchEvent(new HashChangeEvent('hashchange')));
       if (DW) { const go = day => { location.hash = '#stats?tab=daywise&day=' + day; }; DW.bindRows(v, go); DW.chartMount(D, null, go); }
       const ps = A.posDist || [];
-      if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
+      if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#4ade80', '#eab308', '#f87171', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
     } };
   };
 })();
