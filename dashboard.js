@@ -11,6 +11,9 @@
   const sgn = v => v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
   const chip = (v, inv) => { if (v == null || !isFinite(v)) return ''; const good = inv ? v < 0 : v > 0; return `<span class="db-chip ${Math.abs(v) < .05 ? '' : good ? 'up' : 'dn'}">${sgn(v)}</span>`; };
   const hello = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+  const nameKey = 'cw:name';
+  const getName = () => { try { return (localStorage.getItem(nameKey) || '').slice(0, 40); } catch (e) { return ''; } };
+  const clock = () => { const n = new Date(); return { d: n.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }), t: n.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }).toLowerCase() }; };
   const fmtD = s => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 
   // query / page movers against the previous period (by clicks)
@@ -85,7 +88,7 @@
   V.dashboard = (A, D) => {
     const DW = window.CW_DAYWISEVIEW, list = DW && D.C && D.C.length ? DW.rows(D.C).slice(-14) : [];
     const html = `<div class="db">
-      <header class="db-top"><div><h1>${hello()}!</h1><p>Here is what is happening in search for <b>${esc(D.site)}</b>${D.source === 'demo' ? ' (sample data)' : ''}.</p></div><div class="db-date">${D.start && D.end ? esc(fmtD(D.start)) + ' – ' + esc(fmtD(D.end)) : ''}</div></header>
+      <header class="db-top"><div><h1>${hello()}${getName() ? ', ' + esc(getName()) : ''}! <button type="button" class="db-name" id="db-name" title="Set your name" aria-label="Set your name">✎</button></h1><p>Here is what is happening in search for <b>${esc(D.site)}</b>${D.source === 'demo' ? ' (sample data)' : ''}.</p></div><div class="db-clk"><span id="db-cd">${esc(clock().d)}</span><b id="db-ct">${esc(clock().t)}</b>${D.start && D.end ? `<small>Data: ${esc(fmtD(D.start))} – ${esc(fmtD(D.end))}</small>` : ''}</div></header>
       <div class="db-grid1"><section class="db-card db-brief"><div class="db-h"><h2><i class="db-dot"></i> Site Brief</h2><small>Built from your data · not AI-generated</small></div>${brief(A, D)}</section>${tiles(A, D)}</div>
       ${split(A)}
       <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
@@ -101,6 +104,9 @@
         v.querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
         const el = tpl.content.querySelector(`[data-k="${b.dataset.mv}"]`); body.innerHTML = el ? el.innerHTML : '';
       }));
+      const nb = document.getElementById('db-name');
+      if (nb) nb.addEventListener('click', () => { const n = window.prompt('Your name for the greeting (leave empty to remove)', getName()); if (n === null) return; try { localStorage.setItem(nameKey, n.trim().slice(0, 40)); } catch (e) { } window.dispatchEvent(new HashChangeEvent('hashchange')); });
+      const tick = setInterval(() => { const a = document.getElementById('db-cd'), b = document.getElementById('db-ct'); if (!a || !b) return clearInterval(tick); const c = clock(); a.textContent = c.d; b.textContent = c.t; }, 20000);
       if (window.CW_WATCH) window.CW_WATCH.bindStars(v, () => window.dispatchEvent(new HashChangeEvent('hashchange')));
       if (DW) { const go = day => { location.hash = '#stats?tab=daywise&day=' + day; }; DW.bindRows(v, go); DW.chartMount(D, null, go); }
       const ps = A.posDist || [];

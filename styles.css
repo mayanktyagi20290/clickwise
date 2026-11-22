@@ -1501,3 +1501,4 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .dw-t td,.sp-t td,.db-hs{color:var(--ink)}
 .dw-pill.up,.db-chip.up{color:var(--good-ink)}.dw-pill.dn,.db-chip.dn{color:var(--risk-ink)}
 .dw-t td.r{border-left-color:var(--surface)}
+.db-clk{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}.db-clk span{color:var(--muted);font-size:13px}.db-clk b{font-size:22px}.db-clk small{color:var(--muted);font-size:11.5px;margin-top:2px}.db-name{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;opacity:.6}.db-name:hover{opacity:1}
