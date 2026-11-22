@@ -69,3 +69,4 @@
 :root[data-theme="dark"] .t-d{background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(239,68,68,.06));border-color:rgba(239,68,68,.3);border-left-color:#EF4444}
 /* one place per function: Ask lives in the side tab, Last 24 hours in the sidebar */
 .top-ask,#top-24{display:none!important}
+.tm-sort{background:none;border:0;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;padding:0}.tm-sort:hover{color:#F59E0B}
