@@ -26,6 +26,20 @@
   const dscale = (vals) => { const m = Math.max(1, ...vals.filter(x => x != null && isFinite(x)).map(Math.abs)); return x => x == null || !isFinite(x) ? null : .5 + Math.max(-1, Math.min(1, x / m)) / 2; };
   const dcell = (c, f, inv) => c == null || !isFinite(c) ? '<td class="r flat">—</td>' : `<td class="r num"${heat(f(c), inv)}>${c > 0 ? '+' : ''}${c.toFixed(1)}%</td>`;
 
+  // the signal for one day against the day before: spike or drop in clicks, else an impression, CTR or position move
+  function sigOf(r) {
+    if (!r.prev) return null;
+    const c = pct(r.clicks, r.prev.clicks), ip = pct(r.impr, r.prev.impr), k0 = r.prev.impr ? r.prev.clicks / r.prev.impr : 0, k1 = r.impr ? r.clicks / r.impr : 0, kp = k0 ? (k1 - k0) / k0 * 100 : null;
+    const dpos = r.pos != null && r.prev.pos ? r.pos - r.prev.pos : null;
+    if (c != null && c >= 20) return { label: 'Spike', up: true };
+    if (c != null && c <= -20) return { label: 'Drop', up: false };
+    if (ip != null && ip >= 25) return { label: 'Impression jump', up: true };
+    if (ip != null && ip <= -25) return { label: 'Impression fall', up: false };
+    if (kp != null && kp <= -20) return { label: 'CTR fall', up: false };
+    if (dpos != null && dpos >= 2) return { label: 'Position drop', up: false };
+    return null;
+  }
+
   function rows(C) {
     const m = new Map(); (C || []).forEach(r => m.set(r.d, r));
     const all = [...m.values()].sort((a, b) => a.d.localeCompare(b.d));
@@ -48,8 +62,8 @@
     const chg = r => pct(r.clicks, r.prev.clicks);
     const fC = scale(list.map(r => r.clicks)), fI = scale(list.map(r => r.impr)), fR = scale(list.map(r => r.ctr)), fP = scale(list.map(r => r.pos));
     const dp = list.map(r => r.prev ? chg(r) : null), dw = list.map(r => r.wk ? pct(r.clicks, r.wk.clicks) : null), fD = dscale(dp.concat(dw));
-    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="1">Rank</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
-        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr class="dw-r" data-d="${esc(r.d)}" tabindex="0" title="Click to see what happened on this day"><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="2">Rank &amp; signal</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th><th scope="col">Signal</th></tr></thead><tbody>
+        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr class="dw-r" data-d="${esc(r.d)}" tabindex="0" title="Click to see what happened on this day"><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td><td>${(g => g ? `<span class="dw-pill ${g.up ? 'up' : 'dn'}">${g.label}</span>` : '')(sigOf(r))}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
 
@@ -161,7 +175,9 @@
     const tabs = SV().tabs('daywise');
     if (!D.C || !D.C.length) return { html: head(title, sub) + tabs + '<section class="panel"><p class="empty">No daily data here. Export from Search Console with the Dates tab, or connect Search Console.</p></section>' };
     const sel = SV().params().get('dw'); const n = OPTS.some(o => o[0] === sel) ? sel : '28';
+    const sigOn = SV().params().get('sig') === '1';
     let list = rows(D.C); if (n !== 'all') list = list.slice(-(+n));
+    if (sigOn) list = list.filter(r => sigOf(r));
     const newest = list.slice().reverse();
     const withP = list.filter(r => r.prev);
     const chg = r => pct(r.clicks, r.prev.clicks);
@@ -173,7 +189,7 @@
     const day = SV().params().get('day');
     const html = head(title, sub) + tabs + (day ? detailHtml(D, day) : '') + chartHtml(D, day) + `
       <div class="dw-ctl"><label class="ow-f"><span>Period</span><select id="dw-n">${OPTS.map(o => `<option value="${o[0]}"${o[0] === n ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
-        <button type="button" class="btn-quiet" id="dw-csv">Download CSV</button></div>
+        <label class="dw-sigt"><input type="checkbox" id="dw-sig"${sigOn ? ' checked' : ''}> Signal days only</label><button type="button" class="btn-quiet" id="dw-csv">Download CSV</button></div>
       <section class="panel"><div class="panel-b st-sms">
         ${tile('Days shown', list.length)}${tile('Clicks', fmtN(tot.c))}${tile('Overall CTR', tot.i ? pctf(tot.c / tot.i * 100, 2) : '—')}
         ${tile('Days down vs day before', `${down} of ${withP.length}`)}
@@ -185,6 +201,7 @@
     return { html, mount: () => {
       bindRows(document.getElementById('view'), goDay); chartMount(D, day, goDay);
       document.getElementById('dw-n').addEventListener('change', e => go(e.target.value));
+      document.getElementById('dw-sig').addEventListener('change', e => { const p = SV().params(); p.set('tab', 'daywise'); if (e.target.checked) p.set('sig', '1'); else p.delete('sig'); location.hash = '#stats?' + p.toString(); });
       document.getElementById('dw-csv').addEventListener('click', () => {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv(list)], { type: 'text/csv' }));
         a.download = 'clickwise-day-wise.csv'; document.body.appendChild(a); a.click(); a.remove();
