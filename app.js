@@ -647,14 +647,14 @@
   }
   function route() {
     if (!A) return;
-    let raw = location.hash.slice(1) || 'overview';
+    let raw = location.hash.slice(1) || 'dashboard';
     // the old regex tool was replaced by Smart filters; keep old links working
     if (raw.split('?')[0] === 'regex') { history.replaceState(null, '', '#filters'); raw = 'filters'; }
     const base = raw.split('?')[0];
     const sec = base.startsWith('section=') ? decodeURIComponent(base.slice(8)) : null;
     const wf = base.startsWith('wf=') ? decodeURIComponent(base.slice(3)) : null;
     const name = sec ? 'sections' : wf ? 'workflows' : base;
-    const fn = sec ? (a, d) => V.section(a, d, sec) : wf ? (a, d) => V.wf(a, d, wf) : (V[name] || V.overview);
+    const fn = sec ? (a, d) => V.section(a, d, sec) : wf ? (a, d) => V.wf(a, d, wf) : (V[name] || V.dashboard || V.overview);
     destroyCharts();
     window.CW_STATE = { A, D: A.data || D };
     const out = fn(A, A.data || D);

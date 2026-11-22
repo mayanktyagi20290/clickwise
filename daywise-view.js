@@ -20,6 +20,12 @@
     return `<span class="dw-pill ${good ? 'up' : 'dn'}">${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%</span>`;
   };
 
+  // Heatmap fill: red (low) to green (high) within a column, like a breadth table. inv: lower is better.
+  const heat = (t, inv) => { if (t == null || !isFinite(t)) return ''; const g = inv ? 1 - t : t, a = (.1 + Math.abs(g - .5) * 1.1).toFixed(2); return ` style="background:rgba(${g >= .5 ? '34,197,94' : '239,68,68'},${a})"`; };
+  const scale = (vals) => { const v = vals.filter(x => x != null && isFinite(x)), lo = Math.min(...v), hi = Math.max(...v); return x => x == null || !isFinite(x) || hi === lo ? null : (x - lo) / (hi - lo); };
+  const dscale = (vals) => { const m = Math.max(1, ...vals.filter(x => x != null && isFinite(x)).map(Math.abs)); return x => x == null || !isFinite(x) ? null : .5 + Math.max(-1, Math.min(1, x / m)) / 2; };
+  const dcell = (c, f, inv) => c == null || !isFinite(c) ? '<td class="r flat">—</td>' : `<td class="r num"${heat(f(c), inv)}>${c > 0 ? '+' : ''}${c.toFixed(1)}%</td>`;
+
   function rows(C) {
     const m = new Map(); (C || []).forEach(r => m.set(r.d, r));
     const all = [...m.values()].sort((a, b) => a.d.localeCompare(b.d));
@@ -36,6 +42,14 @@
     const h = ['Date', 'Day', 'Clicks', 'Impressions', 'CTR %', 'Avg position', 'Clicks vs previous day %', 'Clicks vs same day last week %'];
     const f = v => v == null || !isFinite(v) ? '' : (+v).toFixed(2);
     return [h].concat(list.map(r => [r.d, r.wd, r.clicks, r.impr, f(r.ctr), f(r.pos), f(r.prev ? pct(r.clicks, r.prev.clicks) : null), f(r.wk ? pct(r.clicks, r.wk.clicks) : null)])).map(a => a.join(',')).join('\n');
+  }
+
+  function tableHtml(list) {
+    const chg = r => pct(r.clicks, r.prev.clicks);
+    const fC = scale(list.map(r => r.clicks)), fI = scale(list.map(r => r.impr)), fR = scale(list.map(r => r.ctr)), fP = scale(list.map(r => r.pos));
+    const dp = list.map(r => r.prev ? chg(r) : null), dw = list.map(r => r.wk ? pct(r.clicks, r.wk.clicks) : null), fD = dscale(dp.concat(dw));
+    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="1">Rank</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
+        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function render(A, D) {
@@ -61,9 +75,8 @@
         ${tile('Days down vs day before', `${down} of ${withP.length}`)}
         ${tile('Best day', dayTag(best), best ? `<small class="dw-pill up">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
         ${tile('Worst day', dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
-      <section class="panel"><div class="tw"><table class="dw-t"><thead><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
-        ${newest.map(r => `<tr class="${r.prev && r.clicks < r.prev.clicks * .8 ? 'dw-drop' : ''}"><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num">${fmtN(r.clicks)}</td><td class="r">${r.prev ? dlt(r.clicks, r.prev.clicks) : '<span class="flat">—</span>'}</td><td class="r">${r.wk ? dlt(r.clicks, r.wk.clicks) : '<span class="flat">—</span>'}</td><td class="r num">${fmtN(r.impr)}</td><td class="r num">${pctf(r.ctr, 2)}</td><td class="r num">${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>
-        <p class="flat dw-n">Highlighted rows are days where clicks fell more than 20% from the day before. Search Console's most recent days can still be revised.</p></section>`;
+      <section class="panel">${tableHtml(list)}
+        <p class="flat dw-n">Cells are coloured within each column: green is better, red is worse (for position, lower is better). Search Console's most recent days can still be revised.</p></section>`;
     return { html, mount: () => {
       document.getElementById('dw-n').addEventListener('change', e => go(e.target.value));
       document.getElementById('dw-csv').addEventListener('click', () => {
@@ -72,5 +85,5 @@
       });
     } };
   }
-  window.CW_DAYWISEVIEW = { render, rows };
+  window.CW_DAYWISEVIEW = { render, rows, tableHtml };
 })();
