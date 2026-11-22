@@ -90,6 +90,8 @@
       ${split(A)}
       <div class="db-grid2">${moversCard(A, D)}${breadth(A)}</div>
       ${sections(A)}
+      ${window.CW_TREEMAP ? `<section class="db-card"><div class="db-h"><h2>Pages map <small>· size = clicks, colour = change</small></h2><a href="#treemap">Open full map</a></div>${window.CW_TREEMAP.html(A, D, { h: 260, max: 40, tab: 'all' })}</section>` : ''}
+      ${window.CW_WATCH ? window.CW_WATCH.card(A, D) : ''}
       ${DW && D.C && D.C.length ? DW.chartHtml(D, null) : ''}
       ${list.length ? `<section class="db-card"><div class="db-h"><h2>Day-wise heatmap <small>· click a day to see what happened</small></h2><a href="#stats?tab=daywise">Open full table</a></div>${DW.tableHtml(list)}</section>` : ''}
     </div>`;
@@ -99,6 +101,7 @@
         v.querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
         const el = tpl.content.querySelector(`[data-k="${b.dataset.mv}"]`); body.innerHTML = el ? el.innerHTML : '';
       }));
+      if (window.CW_WATCH) window.CW_WATCH.bindStars(v, () => window.dispatchEvent(new HashChangeEvent('hashchange')));
       if (DW) { const go = day => { location.hash = '#stats?tab=daywise&day=' + day; }; DW.bindRows(v, go); DW.chartMount(D, null, go); }
       const ps = A.posDist || [];
       if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
