@@ -27,7 +27,7 @@
       const k = iso(Y, m0, d), r = by.get(k), n = notes[k] || [];
       let tint = '';
       if (r && r.prev && r.prev.clicks) { const c = (r.clicks - r.prev.clicks) / r.prev.clicks * 100, a = (.1 + Math.min(1, Math.abs(c) / 40) * .45).toFixed(2); tint = ` style="background:rgba(${c >= 0 ? '34,197,94' : '239,68,68'},${a})"`; }
-      cells.push(`<button type="button" class="cal-c${r ? ' has' : ''}${k === t ? ' today' : ''}${k === sel ? ' sel' : ''}" data-d="${k}"${tint}><span class="cal-n">${d}</span>${r ? `<b class="num">${fmtN(r.clicks)}</b>` : ''}${n.length ? `<i class="cal-dot" title="${n.length} note${n.length > 1 ? 's' : ''}"></i>` : ''}</button>`);
+      cells.push(`<button type="button" class="cal-c${r ? ' has' : ' fut'}${k === t ? ' today' : ''}${k === sel ? ' sel' : ''}" data-d="${k}"${tint}><span class="cal-n">${d}</span>${r ? `<b class="num">${fmtN(r.clicks)}</b>` : ''}${n.length ? `<i class="cal-dot" title="${n.length} note${n.length > 1 ? 's' : ''}"></i>` : ''}</button>`);
     }
     const selR = sel && by.get(sel), selN = sel ? notes[sel] || [] : [];
     const monthNotes = Object.keys(notes).filter(k => k.startsWith(ym)).sort().flatMap(k => notes[k].map(x => [k, x]));

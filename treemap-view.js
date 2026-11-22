@@ -47,7 +47,7 @@
     const R = squarify(list, W, H), WL = window.CW_WATCH;
     return `<div class="tm-map" style="height:${H}px">${R.map(r => { const x = r.it, big = r.w > 110 && r.h > 54, mid = r.w > 70 && r.h > 34;
       const chg = x.isNew ? 'New' : x.pc != null ? (x.pc > 0 ? '+' : '') + x.pc.toFixed(0) + '%' : '';
-      return `<a class="tm-t" href="${esc(x.p)}" target="_blank" rel="noopener" title="${esc(x.label)}: ${fmtN(x.clicks)} clicks${x.was != null ? `, before ${fmtN(Math.round(x.was))}` : ''}, position ${x.pos.toFixed(1)}" style="left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%;background:${colour(x, hasPrev)}">${mid ? `<b>${esc(x.label.length > 28 ? '…' + x.label.slice(-27) : x.label)}</b><span class="num">${fmtN(x.clicks)}${chg ? ' · ' + chg : ''}</span>` : ''}${big && WL ? WL.star('p', x.p) : ''}</a>`; }).join('')}</div>`;
+      return `<a class="tm-t" href="${esc(x.p)}" target="_blank" rel="noopener" title="${esc(x.label)}: ${fmtN(x.clicks)} clicks${x.was != null ? `, before ${fmtN(Math.round(x.was))}` : ''}, position ${x.pos.toFixed(1)}" style="left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%;background:${colour(x, hasPrev)}">${mid ? `<b>${esc(x.label.length > 26 ? (x.label.split('/').filter(Boolean).pop() || x.label).slice(0, 26) : x.label)}</b><span class="num">${fmtN(x.clicks)}${chg ? ' · ' + chg : ''}</span>` : ''}${big && WL ? WL.star('p', x.p) : ''}</a>`; }).join('')}</div>`;
   }
 
   V.treemap = (A, D) => {
