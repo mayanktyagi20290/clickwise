@@ -44,6 +44,14 @@
     return [h].concat(list.map(r => [r.d, r.wd, r.clicks, r.impr, f(r.ctr), f(r.pos), f(r.prev ? pct(r.clicks, r.prev.clicks) : null), f(r.wk ? pct(r.clicks, r.wk.clicks) : null)])).map(a => a.join(',')).join('\n');
   }
 
+  function tableHtml(list) {
+    const chg = r => pct(r.clicks, r.prev.clicks);
+    const fC = scale(list.map(r => r.clicks)), fI = scale(list.map(r => r.impr)), fR = scale(list.map(r => r.ctr)), fP = scale(list.map(r => r.pos));
+    const dp = list.map(r => r.prev ? chg(r) : null), dw = list.map(r => r.wk ? pct(r.clicks, r.wk.clicks) : null), fD = dscale(dp.concat(dw));
+    return `<div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="1">Rank</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
+        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
   function render(A, D) {
     const title = 'Day-wise performance';
     const sub = 'Every day in your data, with the change against the day before and against the same weekday last week.';
@@ -57,8 +65,6 @@
     const best = withP.slice().sort((a, b) => chg(b) - chg(a))[0], worst = withP.slice().sort((a, b) => chg(a) - chg(b))[0];
     const down = withP.filter(r => r.clicks < r.prev.clicks).length;
     const tot = list.reduce((s, r) => ({ c: s.c + r.clicks, i: s.i + r.impr }), { c: 0, i: 0 });
-    const fC = scale(list.map(r => r.clicks)), fI = scale(list.map(r => r.impr)), fR = scale(list.map(r => r.ctr)), fP = scale(list.map(r => r.pos));
-    const dp = list.map(r => r.prev ? chg(r) : null), dw = list.map(r => r.wk ? pct(r.clicks, r.wk.clicks) : null), fD = dscale(dp.concat(dw));
     const tile = (l, v, s) => `<div class="st-sm"><span>${l}</span><b>${v}</b>${s || ''}</div>`;
     const dayTag = r => r ? `${esc(r.wd)} ${esc(r.d.slice(5))}` : '—';
     const html = head(title, sub) + tabs + `
@@ -69,8 +75,7 @@
         ${tile('Days down vs day before', `${down} of ${withP.length}`)}
         ${tile('Best day', dayTag(best), best ? `<small class="dw-pill up">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
         ${tile('Worst day', dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
-      <section class="panel"><div class="tw"><table class="dw-t"><thead><tr class="dw-g"><th colspan="2"></th><th colspan="3">Traffic</th><th colspan="2">Change in clicks</th><th colspan="1">Rank</th></tr><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
-        ${list.map((r, i) => ({ r, i })).reverse().map(({ r, i }) => `<tr><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num"${heat(fC(r.clicks))}>${fmtN(r.clicks)}</td><td class="r num"${heat(fI(r.impr))}>${fmtN(r.impr)}</td><td class="r num"${heat(fR(r.ctr))}>${pctf(r.ctr, 2)}</td>${dcell(dp[i], fD)}${dcell(dw[i], fD)}<td class="r num"${heat(fP(r.pos), true)}>${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <section class="panel">${tableHtml(list)}
         <p class="flat dw-n">Cells are coloured within each column: green is better, red is worse (for position, lower is better). Search Console's most recent days can still be revised.</p></section>`;
     return { html, mount: () => {
       document.getElementById('dw-n').addEventListener('change', e => go(e.target.value));
@@ -80,5 +85,5 @@
       });
     } };
   }
-  window.CW_DAYWISEVIEW = { render, rows };
+  window.CW_DAYWISEVIEW = { render, rows, tableHtml };
 })();
