@@ -1,15 +1,22 @@
 /* Pro look: near-black surfaces and an amber accent, like a market terminal. Applies in dark mode only;
    light mode keeps the standard palette. Remove this file to return to the previous dark look. */
 :root[data-theme="dark"]{
-  --bg:#050505;--surface:#0E0E10;--sunk:#0A0A0B;--ink:#F4F4F5;--ink-2:#D4D4D8;--muted:#A1A1AA;
-  --line:#26262A;--line-soft:#1B1B1E;
+  --bg:#050505;--surface:#121212;--sunk:#0B0B0B;--ink:#F4F4F5;--ink-2:#D4D4D8;--muted:#A1A1AA;
+  --line:rgba(255,255,255,.10);--line-soft:rgba(255,255,255,.06);--r:16px;
   --signal:#F59E0B;--signal-ink:#FBBF24;--signal-soft:rgba(245,158,11,.12);
-  --side:#050505;--side-2:#17171A;--side-ink:#D4D4D8;--side-mute:#8B8B93;
+  --side:#0A0A0A;--side-2:#1A1A1A;--side-ink:#9CA3AF;--side-mute:#6B7280;
   --shadow:none;
+  /* one palette, as measured on ProScreener: white, greys, green, red, yellow */
+  --good:#22C55E;--good-ink:#4ADE80;--good-soft:rgba(34,197,94,.15);
+  --risk:#EF4444;--risk-ink:#F87171;--risk-soft:rgba(239,68,68,.12);
+  --watch:#EAB308;--watch-ink:#FACC15;--watch-soft:rgba(234,179,8,.15);
+  --teal:#4ADE80;--teal-soft:rgba(34,197,94,.12);--orange:#FACC15;--orange-soft:rgba(234,179,8,.12);
+  --sky:#FACC15;--sky-soft:rgba(250,204,21,.12);
+  --muted:#9CA3AF;--ink-2:#D1D5DB;
 }
 :root[data-theme="dark"] .nav{border-right:1px solid var(--line)!important}
-:root[data-theme="dark"] .nav a.on{background:rgba(245,158,11,.10)!important;color:#FBBF24!important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
-:root[data-theme="dark"] .nav a.on svg{color:#FBBF24!important}
+:root[data-theme="dark"] .nav a.on{background:#1A1A1A!important;color:#fff!important;font-weight:500;box-shadow:inset 0 0 0 1.6px #F59E0B}
+:root[data-theme="dark"] .nav a.on svg{color:#fff!important}
 :root[data-theme="dark"] .nav a.on::before{display:none}
 :root[data-theme="dark"] .logo-mark{background:#18181B!important;color:#FBBF24!important;border:1px solid var(--line)}
 :root[data-theme="dark"] .db-top h1{color:#FBBF24}
@@ -25,3 +32,29 @@
 .cal-n{font-size:12px;color:var(--muted)}.cal-c b{font-size:13px}.cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#F59E0B;margin-right:4px}.cal-c .cal-dot{position:absolute;right:6px;top:6px;margin:0}
 .cal-note{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13px}.cal-add{display:flex;gap:8px;margin-top:10px}.cal-add input{flex:1;min-width:0;background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}.cal-sum{margin:0 0 8px;font-size:13px}
 @media (max-width:1000px){.cal-wrap{grid-template-columns:1fr}.cal-c{min-height:54px;padding:4px}}
+
+:root[data-theme="dark"] .nav a{color:#9CA3AF!important;border-radius:13px!important}
+:root[data-theme="dark"] .nav a:hover{background:#141414!important;color:#fff!important}
+:root[data-theme="dark"] .nav a.on{color:#fff!important}
+:root[data-theme="dark"] .nav a svg{color:#6B7280!important}
+:root[data-theme="dark"] .nav a:hover svg,:root[data-theme="dark"] .nav a.on svg{color:#fff!important}
+:root[data-theme="dark"] .nav-group{color:#6B7280!important}
+
+:root[data-theme="dark"] .db-l,:root[data-theme="dark"] .tile-l,:root[data-theme="dark"] .st-sm span,:root[data-theme="dark"] .dw-t th{color:#7C8594}
+:root[data-theme="dark"] .db-tint.up,:root[data-theme="dark"] .sp-card.up{background:linear-gradient(to bottom right,rgba(34,197,94,.20),rgba(34,197,94,.04));border-color:rgba(34,197,94,.30)}
+:root[data-theme="dark"] .db-tint.dn,:root[data-theme="dark"] .sp-card.dn{background:linear-gradient(to bottom right,rgba(239,68,68,.18),rgba(239,68,68,.04));border-color:rgba(239,68,68,.30)}
+:root[data-theme="dark"] .db-chip.up,:root[data-theme="dark"] .dw-pill.up{color:#4ADE80;background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.30)}
+:root[data-theme="dark"] .db-chip.dn,:root[data-theme="dark"] .dw-pill.dn{color:#F87171;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.30)}
+:root[data-theme="dark"] .gainv,:root[data-theme="dark"] .db-n.up{color:#4ADE80}
+:root[data-theme="dark"] .lossv,:root[data-theme="dark"] .db-n.dn{color:#F87171}
+
+/* v5: calmer top bar, slim Ask tab, quiet empty days */
+:root[data-theme="dark"] .top-range.top-btn{background:transparent!important;color:var(--ink)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+:root[data-theme="dark"] .top-range.top-btn:hover{background:rgba(255,255,255,.06)!important;box-shadow:inset 0 0 0 1px #F59E0B}
+#top-sample{display:none!important}
+.top-24 span{display:none}.top-24{padding:8px 10px}
+.top-ask{background:transparent!important;color:var(--ink)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.top-ask:hover{box-shadow:inset 0 0 0 1px #F59E0B}
+.dk-fab{right:0!important;bottom:auto!important;top:46%;border-radius:10px 0 0 10px!important;writing-mode:vertical-rl;padding:14px 8px!important;background:#1a1a1a!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)!important;font-size:12px!important}
+.dk-fab svg{display:none}
+.cal-c.fut{background:transparent;border-style:dashed;border-color:rgba(255,255,255,.06);pointer-events:none;opacity:.5}

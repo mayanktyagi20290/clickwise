@@ -42,7 +42,7 @@
 
   function tiles(A, D) {
     const C = D.C || [], cov = A.coverage && A.site;
-    const m = cov ? A.site : A.totNB, pv = cov ? A.prevSite : A.prev && A.prev.nb;
+    const m = cov ? A.site : A.totNB, pv = cov && A.prevSite ? A.prevSite : A.prev && A.prev.nb;
     const t = (l, v, d, key, inv) => `<div class="db-tile"><span class="db-l">${l}</span><b class="db-v num">${v}</b><div class="db-s">${chip(d, inv)}${C.length > 3 && key ? spark(C, key, inv) : ''}</div></div>`;
     return `<div class="db-tiles">${t('Clicks', fmtN(m.clicks), pv && pc(m.clicks, pv.clicks), 'clicks')}${t('Impressions', fmtN(m.impr), pv && pc(m.impr, pv.impr), 'impr')}
       ${t('CTR', pctf(m.ctr, 2), pv && pv.ctr ? pc(m.ctr, pv.ctr) : null, 'ctr')}${t('Avg position', m.pos ? m.pos.toFixed(1) : '—', pv && pv.pos ? pc(m.pos, pv.pos) : null, 'pos', true)}
@@ -67,14 +67,14 @@
       lose: hasPrev ? mv.filter(x => x.hasPrev && x.d < 0).sort((a, b) => a.d - b.d) : [],
       top: mv.slice().sort((a, b) => b.clicks - a.clicks)
     };
-    const body = k => sets[k].slice(0, 10).map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.k)}">${esc(x.k)}</span><span class="db-n num">${k === 'top' ? fmtN(x.clicks) : (x.d > 0 ? '+' : '') + fmtN(x.d)}</span></div>`).join('') || `<p class="empty">${hasPrev || k === 'top' ? 'Nothing here.' : 'Load a comparison period to see movers.'}</p>`;
+    const body = k => sets[k].slice(0, 10).map((x, i) => `<div class="db-row"><span class="db-i">${i + 1}</span><span class="db-q" title="${esc(x.k)}">${esc(x.k)}</span><span class="db-n num ${k === 'gain' ? 'up' : k === 'lose' ? 'dn' : ''}">${k === 'top' ? fmtN(x.clicks) : (x.d > 0 ? '+' : '') + fmtN(x.d)}</span></div>`).join('') || `<p class="empty">${hasPrev || k === 'top' ? 'Nothing here.' : 'Load a comparison period to see movers.'}</p>`;
     return `<section class="db-card"><div class="db-h"><div class="db-tabs" role="tablist"><button type="button" class="on" data-mv="gain">Gainers</button><button type="button" data-mv="lose">Losers</button><button type="button" data-mv="top">Top</button></div><a href="#queries">View all</a></div>
       <div id="db-mv-body">${body('gain')}</div><template id="db-mv-t">${['gain', 'lose', 'top'].map(k => `<div data-k="${k}">${body(k)}</div>`).join('')}</template></section>`;
   }
 
   function breadth(A) {
     const ps = A.posDist || [], tot = ps.reduce((s, x) => s + x.clicks, 0) || 1, n = ps.reduce((s, x) => s + x.n, 0) || 1, p1 = ps.slice(0, 2).reduce((s, x) => s + x.n, 0);
-    const col = ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'];
+    const col = ['#22c55e', '#4ade80', '#eab308', '#f87171', '#ef4444'];
     return `<section class="db-card"><div class="db-h"><h2>Position breadth</h2></div><div class="db-br"><div class="db-donut"><canvas id="db-donut" aria-label="Searches by position"></canvas><div class="db-dc"><b>${Math.round(p1 / n * 100)}%</b><span>on page one</span></div></div>
       <div class="db-bars">${ps.map((x, i) => `<div><span>${esc(x.label)}</span><div class="db-bar"><i style="width:${Math.max(2, x.clicks / tot * 100)}%;background:${col[i % 5]}"></i></div><em class="num">${fmtN(x.n)}</em></div>`).join('')}<small>Searches by average position · bars show share of clicks</small></div></div></section>`;
   }
@@ -110,7 +110,7 @@
       if (window.CW_WATCH) window.CW_WATCH.bindStars(v, () => window.dispatchEvent(new HashChangeEvent('hashchange')));
       if (DW) { const go = day => { location.hash = '#stats?tab=daywise&day=' + day; }; DW.bindRows(v, go); DW.chartMount(D, null, go); }
       const ps = A.posDist || [];
-      if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
+      if (document.getElementById('db-donut') && ps.length) chart('db-donut', { type: 'doughnut', data: { labels: ps.map(x => x.label), datasets: [{ data: ps.map(x => x.n), backgroundColor: ['#22c55e', '#4ade80', '#eab308', '#f87171', '#ef4444'], borderColor: cssVar('--surface'), borderWidth: 2 }] }, options: { maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false } } } });
     } };
   };
 })();
