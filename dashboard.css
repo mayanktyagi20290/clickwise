@@ -29,3 +29,4 @@
 .t-a{background:rgba(34,197,94,.55)}.t-b{background:rgba(132,204,22,.5)}.t-c{background:rgba(234,179,8,.5)}.t-d{background:rgba(239,68,68,.5)}
 .db-note{font-size:11.5px;color:var(--muted);margin:10px 0 0}.db-note i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
 @media (max-width:1000px){.db-grid1,.db-grid2{grid-template-columns:1fr}.db-tints{grid-template-columns:repeat(2,1fr)}.db-tiles{grid-template-columns:repeat(2,1fr)}.db-br{grid-template-columns:1fr}}
+.db-r2{grid-template-columns:1fr auto!important}.db-r2 .db-q{white-space:normal}
