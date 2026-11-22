@@ -67,3 +67,5 @@
 :root[data-theme="dark"] .t-b{background:linear-gradient(135deg,rgba(74,222,128,.16),rgba(74,222,128,.04));border-color:rgba(74,222,128,.25);border-left-color:#4ADE80}
 :root[data-theme="dark"] .t-c{background:linear-gradient(135deg,rgba(234,179,8,.2),rgba(234,179,8,.05));border-color:rgba(234,179,8,.28);border-left-color:#EAB308}
 :root[data-theme="dark"] .t-d{background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(239,68,68,.06));border-color:rgba(239,68,68,.3);border-left-color:#EF4444}
+/* one place per function: Ask lives in the side tab, Last 24 hours in the sidebar */
+.top-ask,#top-24{display:none!important}
