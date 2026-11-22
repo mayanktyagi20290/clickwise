@@ -17,7 +17,7 @@
     if (c == null || !isFinite(c)) return '<span class="flat">—</span>';
     if (Math.abs(c) < 0.5) return '<span class="flat">0%</span>';
     const good = invert ? c < 0 : c > 0;
-    return `<span class="${good ? 'gainv' : 'lossv'}">${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%</span>`;
+    return `<span class="dw-pill ${good ? 'up' : 'dn'}">${c > 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(1)}%</span>`;
   };
 
   function rows(C) {
@@ -59,8 +59,8 @@
       <section class="panel"><div class="panel-b st-sms">
         ${tile('Days shown', list.length)}${tile('Clicks', fmtN(tot.c))}${tile('Overall CTR', tot.i ? pctf(tot.c / tot.i * 100, 2) : '—')}
         ${tile('Days down vs day before', `${down} of ${withP.length}`)}
-        ${tile('Best day', dayTag(best), best ? `<small class="gainv">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
-        ${tile('Worst day', dayTag(worst), worst ? `<small class="lossv">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
+        ${tile('Best day', dayTag(best), best ? `<small class="dw-pill up">▲ ${chg(best).toFixed(1)}% clicks</small>` : '')}
+        ${tile('Worst day', dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
       <section class="panel"><div class="tw"><table class="dw-t"><thead><tr><th scope="col">Date</th><th scope="col">Day</th><th class="r" scope="col">Clicks</th><th class="r" scope="col">vs prev day</th><th class="r" scope="col">vs same day last wk</th><th class="r" scope="col">Impressions</th><th class="r" scope="col">CTR</th><th class="r" scope="col">Avg pos</th></tr></thead><tbody>
         ${newest.map(r => `<tr class="${r.prev && r.clicks < r.prev.clicks * .8 ? 'dw-drop' : ''}"><td>${esc(r.d)}</td><td>${esc(r.wd)}</td><td class="r num">${fmtN(r.clicks)}</td><td class="r">${r.prev ? dlt(r.clicks, r.prev.clicks) : '<span class="flat">—</span>'}</td><td class="r">${r.wk ? dlt(r.clicks, r.wk.clicks) : '<span class="flat">—</span>'}</td><td class="r num">${fmtN(r.impr)}</td><td class="r num">${pctf(r.ctr, 2)}</td><td class="r num">${r.pos != null ? r.pos.toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table></div>
         <p class="flat dw-n">Highlighted rows are days where clicks fell more than 20% from the day before. Search Console's most recent days can still be revised.</p></section>`;
