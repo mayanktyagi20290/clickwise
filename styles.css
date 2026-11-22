@@ -1480,3 +1480,4 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .dw-pill.up{color:#15803d;background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.4)}
 .dw-pill.dn{color:#dc2626;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.4)}
 .dw-t tr.dw-drop td{background:rgba(239,68,68,.07)}
+.dw-t td{color:#0f172a}.dw-t .dw-g th{text-align:center;font-size:11px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line)}.dw-t td.r{border-left:1px solid rgba(255,255,255,.6)}
