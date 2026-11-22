@@ -1503,3 +1503,15 @@ ol.steps{margin:0;padding-left:18px;display:grid;gap:3px}
 .dw-t td.r{border-left-color:var(--surface)}
 .db-clk{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}.db-clk span{color:var(--muted);font-size:13px}.db-clk b{font-size:22px}.db-clk small{color:var(--muted);font-size:11.5px;margin-top:2px}.db-name{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;opacity:.6}.db-name:hover{opacity:1}
 .dw-rates{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px}.dw-rates button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:4px 12px;font:600 12.5px var(--body);cursor:pointer}.dw-rates button.on{background:rgba(245,158,11,.14);border-color:var(--signal);color:var(--signal-ink)}.dw-rates em{font-style:normal;opacity:.7;margin-left:3px}.dw-rates .flat{font-size:11.5px;margin-left:6px}.dw-ctl input[type=date]{background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font:inherit}
+/* heat cells: one rule for both themes; dark uses deeper, more saturated fills with light text (terminal-style) */
+.dw-t td[data-h],.sp-t td[data-h]{background:rgba(var(--rgb),calc(var(--a) * var(--m,1)));font-weight:600}
+td[data-h="g"]{--rgb:34,197,94}td[data-h="r"]{--rgb:239,68,68}
+:root[data-theme="dark"] td[data-h="g"]{--rgb:22,163,74;--m:1.6}:root[data-theme="dark"] td[data-h="r"]{--rgb:220,38,38;--m:1.6}
+:root[data-theme="dark"] .dw-t td,:root[data-theme="dark"] .sp-t td{color:#F4F4F5}
+.dw-t td:nth-child(-n+2){color:var(--ink)}
+/* comfort: soft entrance, clear hover and focus, calmer borders */
+@media (prefers-reduced-motion:no-preference){.view>*{animation:cw-in .22s ease both}@keyframes cw-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}}
+.dw-r:hover td,.sp-t tbody tr:hover td{filter:brightness(1.12)}
+:where(a,button,input,select,.dw-r,.cal-c):focus-visible{outline:2px solid var(--signal);outline-offset:2px;border-radius:6px}
+.db-card,.panel{transition:border-color .15s}.db-card:hover,.panel:hover{border-color:color-mix(in srgb,var(--signal) 35%,var(--line))}
+.dw-t th{position:sticky;top:0;background:var(--surface);z-index:1}

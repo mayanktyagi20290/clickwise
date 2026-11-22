@@ -21,7 +21,7 @@
   };
 
   // Heatmap fill: red (low) to green (high) within a column, like a breadth table. inv: lower is better.
-  const heat = (t, inv) => { if (t == null || !isFinite(t)) return ''; const g = inv ? 1 - t : t, a = (.1 + Math.abs(g - .5) * 1.1).toFixed(2); return ` style="background:rgba(${g >= .5 ? '34,197,94' : '239,68,68'},${a})"`; };
+  const heat = (t, inv) => { if (t == null || !isFinite(t)) return ''; const g = inv ? 1 - t : t, a = (.12 + Math.abs(g - .5) * 1.1).toFixed(2); return ` data-h="${g >= .5 ? 'g' : 'r'}" style="--a:${a}"`; };
   const scale = (vals) => { const v = vals.filter(x => x != null && isFinite(x)), lo = Math.min(...v), hi = Math.max(...v); return x => x == null || !isFinite(x) || hi === lo ? null : (x - lo) / (hi - lo); };
   const dscale = (vals) => { const m = Math.max(1, ...vals.filter(x => x != null && isFinite(x)).map(Math.abs)); return x => x == null || !isFinite(x) ? null : .5 + Math.max(-1, Math.min(1, x / m)) / 2; };
   const dcell = (c, f, inv) => c == null || !isFinite(c) ? '<td class="r flat">—</td>' : `<td class="r num"${heat(f(c), inv)}>${c > 0 ? '+' : ''}${c.toFixed(1)}%</td>`;

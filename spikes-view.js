@@ -48,7 +48,7 @@
     return out;
   }
 
-  const heat = (v, max) => { if (v == null || !isFinite(v) || !v) return ''; const a = (.1 + Math.min(1, Math.abs(v) / max) * .5).toFixed(2); return ` style="background:rgba(${v > 0 ? '34,197,94' : '239,68,68'},${a})"`; };
+  const heat = (v, max) => { if (v == null || !isFinite(v) || !v) return ''; const a = (.12 + Math.min(1, Math.abs(v) / max) * .5).toFixed(2); return ` data-h="${v > 0 ? 'g' : 'r'}" style="--a:${a}"`; };
   const sgn = (v, dp) => v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : '') + v.toFixed(dp);
   const KINDS = [['', 'All signals'], ['surge', 'Click surge'], ['drop', 'Click drop'], ['imprup', 'Impression jump'], ['imprdn', 'Impression fall'], ['ctrfall', 'CTR fall'], ['posdrop', 'Position drop'], ['posup', 'Position gain'], ['new', 'New in results'], ['lost', 'Lost from results']];
 
