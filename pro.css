@@ -1,0 +1,27 @@
+/* Pro look: near-black surfaces and an amber accent, like a market terminal. Applies in dark mode only;
+   light mode keeps the standard palette. Remove this file to return to the previous dark look. */
+:root[data-theme="dark"]{
+  --bg:#050505;--surface:#0E0E10;--sunk:#0A0A0B;--ink:#F4F4F5;--ink-2:#D4D4D8;--muted:#A1A1AA;
+  --line:#26262A;--line-soft:#1B1B1E;
+  --signal:#F59E0B;--signal-ink:#FBBF24;--signal-soft:rgba(245,158,11,.12);
+  --side:#050505;--side-2:#17171A;--side-ink:#D4D4D8;--side-mute:#8B8B93;
+  --shadow:none;
+}
+:root[data-theme="dark"] .nav{border-right:1px solid var(--line)!important}
+:root[data-theme="dark"] .nav a.on{background:rgba(245,158,11,.10)!important;color:#FBBF24!important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
+:root[data-theme="dark"] .nav a.on svg{color:#FBBF24!important}
+:root[data-theme="dark"] .nav a.on::before{display:none}
+:root[data-theme="dark"] .logo-mark{background:#18181B!important;color:#FBBF24!important;border:1px solid var(--line)}
+:root[data-theme="dark"] .db-top h1{color:#FBBF24}
+:root[data-theme="dark"] .tile{border-top-color:var(--signal)}
+:root[data-theme="dark"] .btn-primary,:root[data-theme="dark"] .btn-primary.sm{background:#F59E0B!important;color:#111!important}
+:root[data-theme="dark"] .btn-primary:hover{background:#FBBF24!important}
+:root[data-theme="dark"] .top-range{background:#F59E0B!important;color:#111!important}
+/* calendar */
+.cal-wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px}.cal-nav{display:flex;align-items:center;gap:10px}.cal-nav h2{margin:0;font-size:18px}
+.cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.cal-h{text-align:center;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0}
+.cal-c{position:relative;min-height:68px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink);text-align:left;padding:6px 8px;display:flex;flex-direction:column;gap:4px;font:inherit}.cal-c.off{border:0;background:none}
+.cal-c.has{cursor:pointer}.cal-c:not(.off):hover{outline:1px solid var(--signal)}.cal-c.today{box-shadow:inset 0 0 0 2px var(--signal)}.cal-c.sel{outline:2px solid var(--signal)}
+.cal-n{font-size:12px;color:var(--muted)}.cal-c b{font-size:13px}.cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#F59E0B;margin-right:4px}.cal-c .cal-dot{position:absolute;right:6px;top:6px;margin:0}
+.cal-note{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13px}.cal-add{display:flex;gap:8px;margin-top:10px}.cal-add input{flex:1;min-width:0;background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}.cal-sum{margin:0 0 8px;font-size:13px}
+@media (max-width:1000px){.cal-wrap{grid-template-columns:1fr}.cal-c{min-height:54px;padding:4px}}
