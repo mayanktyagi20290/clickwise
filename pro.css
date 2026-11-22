@@ -1,14 +1,14 @@
 /* Pro look: near-black surfaces and an amber accent, like a market terminal. Applies in dark mode only;
    light mode keeps the standard palette. Remove this file to return to the previous dark look. */
 :root[data-theme="dark"]{
-  --bg:#050505;--surface:#0E0E10;--sunk:#0A0A0B;--ink:#F4F4F5;--ink-2:#D4D4D8;--muted:#A1A1AA;
-  --line:#26262A;--line-soft:#1B1B1E;
+  --bg:#050505;--surface:#121212;--sunk:#0B0B0B;--ink:#F4F4F5;--ink-2:#D4D4D8;--muted:#A1A1AA;
+  --line:rgba(255,255,255,.10);--line-soft:rgba(255,255,255,.06);--r:16px;
   --signal:#F59E0B;--signal-ink:#FBBF24;--signal-soft:rgba(245,158,11,.12);
-  --side:#050505;--side-2:#17171A;--side-ink:#D4D4D8;--side-mute:#8B8B93;
+  --side:#0A0A0A;--side-2:#1A1A1A;--side-ink:#9CA3AF;--side-mute:#6B7280;
   --shadow:none;
 }
 :root[data-theme="dark"] .nav{border-right:1px solid var(--line)!important}
-:root[data-theme="dark"] .nav a.on{background:#17171A!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
+:root[data-theme="dark"] .nav a.on{background:#1A1A1A!important;color:#fff!important;font-weight:500;box-shadow:inset 0 0 0 1.6px #F59E0B}
 :root[data-theme="dark"] .nav a.on svg{color:#fff!important}
 :root[data-theme="dark"] .nav a.on::before{display:none}
 :root[data-theme="dark"] .logo-mark{background:#18181B!important;color:#FBBF24!important;border:1px solid var(--line)}
@@ -25,3 +25,10 @@
 .cal-n{font-size:12px;color:var(--muted)}.cal-c b{font-size:13px}.cal-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#F59E0B;margin-right:4px}.cal-c .cal-dot{position:absolute;right:6px;top:6px;margin:0}
 .cal-note{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13px}.cal-add{display:flex;gap:8px;margin-top:10px}.cal-add input{flex:1;min-width:0;background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}.cal-sum{margin:0 0 8px;font-size:13px}
 @media (max-width:1000px){.cal-wrap{grid-template-columns:1fr}.cal-c{min-height:54px;padding:4px}}
+
+:root[data-theme="dark"] .nav a{color:#9CA3AF!important;border-radius:13px!important}
+:root[data-theme="dark"] .nav a:hover{background:#141414!important;color:#fff!important}
+:root[data-theme="dark"] .nav a.on{color:#fff!important}
+:root[data-theme="dark"] .nav a svg{color:#6B7280!important}
+:root[data-theme="dark"] .nav a:hover svg,:root[data-theme="dark"] .nav a.on svg{color:#fff!important}
+:root[data-theme="dark"] .nav-group{color:#6B7280!important}
