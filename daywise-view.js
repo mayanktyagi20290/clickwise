@@ -132,6 +132,24 @@
       <h3 class="dw-h3">What to do</h3><div class="dw-acts">${A2.items.map(a => `<div class="dw-a"><b>${a[0]}</b><p>${a[1]}</p></div>`).join('')}</div></div></section>`;
   }
 
+  // daily clicks as bars: click a bar (or use the date box) to open that day
+  function chartHtml(D, sel) {
+    const all = rows(D.C); if (!all.length) return '';
+    const mn = all[0].d, mx = all[all.length - 1].d;
+    return `<section class="panel"><div class="panel-h"><h2>Daily clicks</h2><div class="dw-pick"><span class="flat">Click a bar, or pick a date</span><input type="date" id="dw-date" min="${mn}" max="${mx}" value="${sel && sel >= mn && sel <= mx ? sel : ''}" aria-label="Pick a date"></div></div><div class="panel-b"><div class="dw-chart"><canvas id="dw-chart" aria-label="Daily clicks"></canvas></div></div></section>`;
+  }
+  function chartMount(D, sel, go) {
+    const all = rows(D.C), el = document.getElementById('dw-chart'), ui2 = window.CW_VIEWS.ui;
+    const dt = document.getElementById('dw-date');
+    if (dt) dt.addEventListener('change', () => { if (dt.value && all.some(r => r.d === dt.value)) go(dt.value); else if (dt.value) dt.setCustomValidity('No data for that date'), dt.reportValidity(); });
+    if (!el || !all.length || !ui2.chart) return;
+    const col = r => r.d === sel ? '#f59e0b' : r.prev && r.clicks < r.prev.clicks ? 'rgba(239,68,68,.65)' : 'rgba(34,197,94,.65)';
+    ui2.chart('dw-chart', { type: 'bar', data: { labels: all.map(r => r.d), datasets: [{ label: 'Clicks', data: all.map(r => r.clicks), backgroundColor: all.map(col), borderRadius: 2 }] },
+      options: { maintainAspectRatio: false, onClick: (e, els) => { if (els && els.length) go(all[els[0].index].d); }, onHover: (e, els) => { if (e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: c => { const r = all[c.dataIndex]; return r.prev ? `${r.wd}, ${pct(r.clicks, r.prev.clicks) >= 0 ? '+' : ''}${pct(r.clicks, r.prev.clicks).toFixed(1)}% vs previous day` : r.wd; } } } },
+        scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } } } });
+  }
+
   function bindRows(root, go) {
     if (!root) return;
     root.querySelectorAll('tr.dw-r').forEach(tr => { const f = () => go(tr.dataset.d); tr.addEventListener('click', f); tr.addEventListener('keydown', e => { if (e.key === 'Enter') f(); }); });
@@ -153,7 +171,7 @@
     const tile = (l, v, s) => `<div class="st-sm"><span>${l}</span><b>${v}</b>${s || ''}</div>`;
     const dayTag = r => r ? `${esc(r.wd)} ${esc(r.d.slice(5))}` : '—';
     const day = SV().params().get('day');
-    const html = head(title, sub) + tabs + (day ? detailHtml(D, day) : '') + `
+    const html = head(title, sub) + tabs + (day ? detailHtml(D, day) : '') + chartHtml(D, day) + `
       <div class="dw-ctl"><label class="ow-f"><span>Period</span><select id="dw-n">${OPTS.map(o => `<option value="${o[0]}"${o[0] === n ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
         <button type="button" class="btn-quiet" id="dw-csv">Download CSV</button></div>
       <section class="panel"><div class="panel-b st-sms">
@@ -163,8 +181,9 @@
         ${tile('Worst day', dayTag(worst), worst ? `<small class="dw-pill dn">▼ ${Math.abs(chg(worst)).toFixed(1)}% clicks</small>` : '')}</div></section>
       <section class="panel">${tableHtml(list)}
         <p class="flat dw-n">Cells are coloured within each column: green is better, red is worse (for position, lower is better). Search Console's most recent days can still be revised.</p></section>`;
+    const goDay = d => { const p = SV().params(); p.set('tab', 'daywise'); p.set('day', d); location.hash = '#stats?' + p.toString(); window.scrollTo(0, 0); };
     return { html, mount: () => {
-      bindRows(document.getElementById('view'), d => { const p = SV().params(); p.set('tab', 'daywise'); p.set('day', d); location.hash = '#stats?' + p.toString(); window.scrollTo(0, 0); });
+      bindRows(document.getElementById('view'), goDay); chartMount(D, day, goDay);
       document.getElementById('dw-n').addEventListener('change', e => go(e.target.value));
       document.getElementById('dw-csv').addEventListener('click', () => {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv(list)], { type: 'text/csv' }));
@@ -172,5 +191,5 @@
       });
     } };
   }
-  window.CW_DAYWISEVIEW = { render, rows, tableHtml, bindRows };
+  window.CW_DAYWISEVIEW = { render, rows, tableHtml, bindRows, chartHtml, chartMount };
 })();
