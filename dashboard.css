@@ -33,3 +33,9 @@
 .db-grid2>.db-card{display:flex;flex-direction:column}.db-grid2>.db-card .db-br{margin:auto 0}
 .db-card .empty,.db-card>.flat{padding:10px 0;margin:0}
 @media (min-width:1001px){#view{padding-right:34px}}
+
+/* Why traffic changed (#why) */
+.why-ans{white-space:pre-wrap;font-size:14px;line-height:1.6;background:var(--bg,#f8fafc);border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:14px 16px;margin:12px 0}
+.why-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.why-bars{width:100%;height:auto;display:block;margin:8px 0 12px}
+.sp-t td.up{color:#15803d}.sp-t td.dn{color:#b91c1c}
