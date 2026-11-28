@@ -181,13 +181,41 @@
     return L.join('\n\n');
   }
 
-  window.CW_WHY = { compute, narrative, cause, join, weekly, sectionKey };
+  window.CW_WHY = { deep, tier, compute, narrative, cause, join, weekly, sectionKey };
   if (!window.CW_VIEWS) return;
 
   // ── screen ──
   const { V, esc, ui } = window.CW_VIEWS;
   const { head } = ui;
-  const TABS = [['answer', 'Answer'], ['brand', 'Brand vs non-brand'], ['names', 'Brand names'], ['sections', 'Sections'], ['pages', 'Landing pages'], ['queries', 'Searches'], ['trend', 'Weekly trend']];
+
+  // ── deep dive: losing pages and searches in traffic tiers (high → low, by clicks before), each page with its searches, plus a mail ──
+  function tier(list, key) {
+    const l = list.filter(x => x.d < 0 && x.p && x.p.clicks > 0).sort((a, b) => b.p.clicks - a.p.clicks);
+    const n = l.length, a = Math.ceil(n * .1), b = Math.ceil(n * .4);
+    return [['High traffic', l.slice(0, a)], ['Mid traffic', l.slice(a, b)], ['Low traffic', l.slice(b)]]
+      .map(([name, rows]) => ({ name, rows: rows.sort((x, y) => x.d - y.d), loss: rows.reduce((s, x) => s + x.d, 0) }));
+  }
+  function deep(R, D) {
+    const qMap = new Map(R.queries.map(x => [x.k, x])), by = new Map();
+    (D.QP || []).forEach(r => { const k = r.p; (by.get(k) || by.set(k, []).get(k)).push(r); });
+    const pt = tier(R.pages), qt = tier(R.queries);
+    const qOf = pg => (by.get(pg.k) || by.get(pg.c && pg.c.p) || []).slice().sort((a, b) => b.clicks - a.clicks).slice(0, 5)
+      .map(r => { const q = qMap.get(r.q); return { q: r.q, clicks: r.clicks, pos: r.pos, d: q ? q.d : null, s: q ? q.s : null }; });
+    pt.forEach(t => t.rows.slice(0, 15).forEach(x => { x.qs = qOf(x); }));
+    const L = [`Subject: Why organic traffic is down (${R.cur.clicks != null ? 'deep dive' : ''})`, '',
+      `Clicks ${fmtN(R.prev.clicks)} → ${fmtN(R.cur.clicks)} (${sn(R.dClicks)}, ${sgn(pct(R.cur.clicks, R.prev.clicks), 0)}).`,
+      `Of that, ${sn(R.eff.impr)} is impressions and ${sn(R.eff.ctr)} is CTR.`, ''];
+    pt.forEach(t => {
+      if (!t.rows.length) return;
+      L.push(`${t.name} pages (${t.rows.length} losing, ${sn(t.loss)} clicks):`);
+      t.rows.slice(0, 5).forEach(x => L.push(`- ${x.label}: ${fmtN(x.p.clicks)} → ${fmtN(x.c.clicks)} (${sn(x.d)})${x.s ? ', ' + x.s.label.toLowerCase() : ''}`));
+    });
+    const q = qt[0].rows.slice(0, 5);
+    if (q.length) { L.push('', 'Biggest searches lost:'); q.forEach(x => L.push(`- ${x.label}: ${fmtN(x.p.clicks)} → ${fmtN(x.c.clicks)} (${sn(x.d)})${x.s ? ', ' + x.s.label.toLowerCase() : ''}`)); }
+    return { pt, qt, text: L.join('\n'), hasQP: !!(D.QP && D.QP.length) };
+  }
+
+  const TABS = [['answer', 'Answer'], ['brand', 'Brand vs non-brand'], ['names', 'Brand names'], ['sections', 'Sections'], ['pages', 'Landing pages'], ['queries', 'Searches'], ['trend', 'Weekly trend'], ['deep', 'Deep dive · 28 Nov']];
   const pill = v => v == null || !isFinite(v) ? '<span class="flat">—</span>' : Math.abs(v) < .5 ? '<span class="flat">0%</span>' : `<span class="dw-pill ${v > 0 ? 'up' : 'dn'}">${v > 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(Math.abs(v) < 10 ? 1 : 0)}%</span>`;
   const dcell = d => `<td class="r num ${d > 0 ? 'up' : d < 0 ? 'dn' : 'flat'}">${sn(d)}</td>`;
   const shr = v => v == null || !isFinite(v) ? '<td class="r flat">—</td>' : `<td class="r num">${Math.round(v)}%</td>`;
@@ -252,6 +280,14 @@
         <section class="panel"><h2>Searches that lost clicks</h2>${tbl(QC, rowsFor.queries(lo), 'No losing searches match.')}${R.queries.filter(x => x.d < 0 && f(x)).length > st.limit ? '<p class="sp-more"><button type="button" class="btn-quiet" id="why-more">Show more</button></p>' : ''}</section>
         <section class="panel"><h2>Searches that gained clicks</h2>${tbl(QC, rowsFor.queries(wi), 'No gaining searches match.')}</section>`;
     }
+    if (st.tab === 'deep') {
+      const X = R.deepX, C = ['Landing page', 'Before', 'Now', 'Change', '%', 'Impressions', 'Position', 'Likely cause'];
+      const sec = (t, kind) => `<section class="panel"><h2>${t.name} · ${t.rows.length} losing · ${sn(t.loss)} clicks</h2>${kind === 'p' ? tbl(C, rowsFor.pages(t.rows.slice(0, 15)).map((r, i) => { const x = t.rows[i]; return r + (x.qs && x.qs.length ? `<tr><td colspan="8" class="flat">Top searches: ${x.qs.map(q => `${esc(q.q)} (${fmtN(q.clicks)}${q.d != null ? ', ' + sn(q.d) + ' site-wide' : ''})`).join(' · ')}</td></tr>` : ''); }), 'None.') : tbl(['Search', 'Type', 'Before', 'Now', 'Change', 'Position', 'Likely cause'], rowsFor.queries(t.rows.slice(0, 15)), 'None.')}</section>`;
+      if (!R.hasPages) return '<section class="panel"><p class="empty">No page rows for the compare period.</p></section>';
+      return `<section class="panel"><div class="sp-ctl"><h2 style="margin:0">Mail to paste</h2><button type="button" class="btn" id="why-copy">Copy mail</button><span class="flat" id="why-copied" aria-live="polite"></span></div><div class="why-ans" id="why-ans">${esc(X.text)}</div>${X.hasQP ? '' : '<p class="flat dw-n">Per-page searches need query×page data (API mode). Not loaded here.</p>'}</section>
+        <h2>Landing pages, high to low traffic</h2>${X.pt.map(t => sec(t, 'p')).join('')}
+        <h2>Searches, high to low traffic</h2>${X.qt.map(t => sec(t, 'q')).join('')}`;
+    }
     const wk = R.weeks;
     return `<section class="panel"><h2>Weekly clicks</h2>${R.hasWeeks ? bars(wk) : '<p class="empty">Needs daily totals for the chosen dates.</p>'}
       ${R.hasWeeks ? tbl(['Week of', 'Clicks', 'Impressions', 'vs previous week'], wk.map((w, i) => `<tr><td>${esc(w.w)}${w.partial ? ' <span class="flat">(partial)</span>' : ''}</td><td class="r num">${fmtN(w.clicks)}</td><td class="r num">${fmtN(w.impr)}</td><td class="r">${i ? pill(pct(w.clicks, wk[i - 1].clicks)) : '<span class="flat">—</span>'}</td></tr>`).reverse()) : ''}
@@ -262,6 +298,7 @@
     const title = 'Why traffic changed', sub = 'What moved against the compare period, and why: impressions vs CTR, brand vs non-brand, sections, landing pages and searches, with a written answer you can paste.';
     const R = compute(A, D);
     if (!R.ok) return { html: head(title, sub) + '<section class="panel"><p class="empty">No comparison period is loaded, so there is nothing to compare. Choose dates with a compare period (the previous period, or the same dates last year).</p></section>' };
+    R.deepX = deep(R, D);
     const st = { tab: 'answer', text: '', limit: 25, grp: '' };
     const html = head(title, sub) + `<div class="sp-ctl"><div class="seg" role="tablist">${TABS.map((t, i) => `<button type="button"${i ? '' : ' class="on"'} data-wt="${t[0]}">${t[1]}</button>`).join('')}</div></div><div id="why-body"></div>`;
     return { html, mount: () => {
@@ -271,7 +308,7 @@
         const cp = document.getElementById('why-copy');
         if (cp) cp.addEventListener('click', () => {
           const done = ok => { const el = document.getElementById('why-copied'); if (el) el.textContent = ok ? 'Copied' : 'Select the text and copy it'; };
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(R.text).then(() => done(true), () => done(false));
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(st.tab === 'deep' ? R.deepX.text : R.text).then(() => done(true), () => done(false));
           else { const r = document.createRange(); r.selectNodeContents(document.getElementById('why-ans')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); done(false); }
         });
         const tx = document.getElementById('why-text');

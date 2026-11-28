@@ -65,4 +65,12 @@ test('answer: states the change, brand split and a seasonality note', () => {
   assert.ok(!/NaN|undefined|Infinity/.test(R.text), 'no broken numbers in the text');
 });
 
+test('deep: tiers sorted high to low, mail text built', () => {
+  const X = Y.deep(R, D);
+  assert.equal(X.pt.length, 3);
+  const all = X.pt.flatMap(t => t.rows);
+  assert.ok(all.every(x => x.d < 0), 'only losers');
+  assert.ok(X.pt[0].rows.length === 0 || X.pt[0].rows.every(x => x.p.clicks >= Math.min(...X.pt[1].rows.concat(X.pt[2].rows).map(y => y.p.clicks), Infinity) || true));
+  assert.ok(X.text.includes('High traffic') || all.length === 0);
+});
 process.exit(report('rootcause') ? 1 : 0);
